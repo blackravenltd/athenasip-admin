@@ -4,7 +4,7 @@
 
 **Project Status: ALPHA - DO NOT USE**
 
-An open source administration frontend intended for use with [AthenaSIP](https://github.com/blackravenltd/athenasip).
+An OSS React administration frontend intended for use with [AthenaSIP](https://github.com/blackravenltd/athenasip).
 
 ## Key Features
 * **React** - Implemented in basic React for ease of use.
