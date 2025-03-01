@@ -5,7 +5,7 @@ export default function Home() {
 
   const realms = [
     { id: 217190283123, name: 'sip.athenasip.org', description: 'The main AthenaSIP realm', subscribers: 16 },
-    { id: 219812931232, name: 'blackraven.co.nz', description: 'The main AthenaSIP realm', subscribers: 16 },
+    { id: 219812931232, name: 'blackraven.co.nz', description: 'The main AthenaSIP realm', subscribers: 5 },
   ]
 
   let active = 2, items = [];
