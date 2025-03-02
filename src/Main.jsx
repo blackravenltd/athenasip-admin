@@ -1,13 +1,23 @@
-import { Container, Navbar, Nav, NavDropdown, Row, Col } from 'react-bootstrap';
-import { Navigation, Sidebar, Home } from './components'
+import { Container } from 'react-bootstrap';
+import { Navigation, Sidebar, Home, Realms } from './components'
+import { useAppState } from  "./hooks"
+
+const routes = {
+	'/realms': <Realms />,
+}
 
 export default function Main() {
-  return (
+	const [ appState ] = useAppState();
+  	return (
 		<>
 			<Navigation />
-			<div class="main-view">
+			<div className="main-view">
 				<Sidebar />
-				<Home />
+				<div className="main-panel">
+					<Container>
+						{routes[appState.route] || <Home />}
+					</Container>
+				</div>
 			</div>
 		</>
 	)

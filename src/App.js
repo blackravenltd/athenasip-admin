@@ -1,16 +1,16 @@
-import { AppStateProvider, initAppState } from "./components"
-import { useAppState } from  "./hooks"
-
+import { AppStateProvider, HistoryNavigator, initAppState } from "./components"
 import Main from "./Main"
 
 initAppState({
-
+  route: '/',
 });
 
 function App() {
   return (
     <AppStateProvider>
-    <Main />
+      <HistoryNavigator>
+        <Main />
+      </HistoryNavigator>
     </AppStateProvider>
   );
 }

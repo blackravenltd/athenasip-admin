@@ -23,11 +23,13 @@ For more information, please see the [docs](docs/) directory.
 
 ### React
 
-Uses React, a popular, performant SPA framework.
+Uses React, a popular, performant web framework.
 
 ### Low Dependency
 
-Uses Reactm a popular, performant SPA framework.
+Relies only on popular, mature dependencies:
+* [Bootstrap](https://getbootstrap.com/)
+* [React Bootstrap](https://react-bootstrap.netlify.app/)
 
 ## License
 
