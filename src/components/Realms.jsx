@@ -18,8 +18,7 @@ export default function Realms() {
   }
 
   return (
-	 	<div className="main-panel">
-	 	<Container>
+	 	<>
 	 		<h2>Realms</h2>
 	 		<p>Realms are the SIP domains this server is responsible for. Consider this SIP identity:</p>
 	 		<div className="code">
@@ -53,7 +52,6 @@ export default function Realms() {
     <div className="fill-h center">
     <Pagination size="sm">{items}</Pagination>
     </div>
-</Container>
-	 	</div>
+  </>
 	)
 }
