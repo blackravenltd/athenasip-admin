@@ -1,22 +1,30 @@
 import AppStateProvider, { initAppState } from './AppStateProvider'
 import HistoryNavigator from './HistoryNavigator'
 import Navigation from './Navigation'
-import Sidebar from './Sidebar'
+import SIPSidebar from './SIPSidebar'
+import SecuritySidebar from './SecuritySidebar'
+import MediaSidebar from './MediaSidebar'
 import Home from './Home'
 import Realms from './Realms'
 import Settings from './Settings'
 import Security from './Security'
+import RTPRelay from './RTPRelay'
 import Media from './Media'
+import Calls from './Calls'
 
 export {
   AppStateProvider,
   initAppState,
   HistoryNavigator,
   Navigation,
-  Sidebar,
   Home,
+  SIPSidebar,
   Realms,
-  Settings,
+  SecuritySidebar,
   Security,
+  MediaSidebar,
+  RTPRelay,
   Media,
+  Settings,
+  Calls,
 }

@@ -5,6 +5,13 @@ export default function HistoryNavigator({ children }) {
   const containerRef = useRef(null);
   const [ appState, setAppState ] = useAppState();
 
+  // Catch initial naviagte
+  useEffect(() => {
+    const path = window.location.pathname;
+    setAppState({ route: window.location.pathname })
+  }, []);
+
+  // Catch Navigate in page
   useEffect(() => {
     const handleClick = (event) => {
       let target = event.target;
@@ -14,7 +21,6 @@ export default function HistoryNavigator({ children }) {
           const targetAttr = target.getAttribute('target');
           if (href && href.startsWith('/') && !targetAttr) {
             event.preventDefault();
-            // Update the browser history using pushState
             window.history.pushState({}, '', href);
             setAppState({ route: href })
           }
@@ -32,6 +38,17 @@ export default function HistoryNavigator({ children }) {
       container && container.removeEventListener('click', handleClick);
     };
   }, [ setAppState ]);
+
+  // Catch navigate by browser back/forward button
+  useEffect(()=> {
+    const handlePopState = (event) => {
+      setAppState({ route: window.location.pathname })
+    }
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  })
 
   return <div style={{ width: '100%', height: '100%' }} ref={containerRef}>{children}</div>;
 };

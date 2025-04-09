@@ -3,7 +3,7 @@ import { ReactComponent as AthenaLogo } from '../assets/athenasip_small_white.sv
 
 export default function Navigation() {
   return (
-    <Navbar expand="lg" className="bg-body-tertiary" data-bs-theme="dark">
+    <Navbar expand="lg" fixed="top" className="bg-body-tertiary" data-bs-theme="dark">
       <Container>
         <Navbar.Brand href="/"><AthenaLogo className="small-logo"/> AthenaSIP</Navbar.Brand>
         <Navbar.Toggle aria-controls="basic-navbar-nav" />
