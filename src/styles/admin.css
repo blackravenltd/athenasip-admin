@@ -1,0 +1,124 @@
+/*
+ * Admin surfaces: the panel a screen lives in, and the record list that is
+ * this client's one way of showing managed things.
+ *
+ * A row states what a record is and opens a dialogue to change it. Nothing in
+ * a row is an input, so a list never holds half-saved state and a reader can
+ * scan one without reading it.
+ */
+.admin-screen { width: min(1180px, 100%); margin: 0 auto; }
+.admin-screen > h1 { margin-bottom: .8rem; }
+
+.panel {
+  padding: 1.15rem;
+  border: 1px solid var(--border-soft);
+  border-radius: .8rem;
+  background: #111113d4;
+  backdrop-filter: var(--glass-blur);
+}
+.panel + .panel { margin-top: 1rem; }
+.panel-heading { display: flex; justify-content: space-between; align-items: start; gap: 1rem; margin-bottom: 1rem; }
+.panel-heading h2 { margin: 0 0 .4rem; }
+.panel-heading p { max-width: 76ch; margin: 0; color: var(--text-dim); }
+.panel-actions { display: flex; gap: .6rem; flex-wrap: wrap; margin-top: 1rem; }
+
+/* A worked example set in the copy of a screen, as Realms uses. */
+.example {
+  display: block;
+  margin: .6rem 0 1rem;
+  padding: .7rem .85rem;
+  border: 1px solid var(--border-soft);
+  border-radius: .55rem;
+  background: #00000040;
+  color: #d3d3d8;
+  font-size: .95em;
+  overflow-wrap: anywhere;
+}
+
+/* Records -------------------------------------------------------------- */
+.record-list { list-style: none; margin: 1rem 0 0; padding: 0; display: grid; gap: .4rem; }
+.record-row {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  padding: .15rem .5rem .15rem .15rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #ffffff08;
+}
+.record-main {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: baseline;
+  gap: .25rem 1rem;
+  flex-wrap: wrap;
+  min-width: 0;
+  margin: 0;
+  padding: .55rem .7rem;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.record-main:hover { background: #ffffff0d; }
+.record-main:focus-visible { outline: none; border-color: var(--focus); box-shadow: 0 0 0 1px var(--focus); }
+.record-main:disabled { cursor: default; }
+.record-main:disabled:hover { background: transparent; }
+.record-name { font-weight: 600; display: flex; align-items: center; gap: .5rem; min-width: 0; overflow-wrap: anywhere; }
+.record-detail { color: var(--text-dim); font-size: .85rem; overflow-wrap: anywhere; }
+.record-actions { flex: 0 0 auto; display: flex; gap: .4rem; }
+.record-actions button { padding: .4rem .6rem; }
+.record-tag {
+  font-size: .7rem;
+  font-weight: 500;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  padding: .1rem .4rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+/*
+ * State, said in colour so it does not have to be read. These are the only
+ * three places colour carries meaning; everything else is the accent, which
+ * means "here", not "good".
+ */
+.state-dot { display: inline-block; width: .55rem; height: .55rem; border-radius: 50%; flex: 0 0 auto; }
+.state-ok { background: var(--ok); }
+.state-warn { background: var(--warn); }
+.state-down { background: var(--danger); }
+.record-tag.state-tag-ok { color: var(--ok); border-color: #58c07c55; background: var(--ok-surface); }
+.record-tag.state-tag-warn { color: var(--warn); border-color: #e0a75855; background: var(--warn-surface); }
+.record-tag.state-tag-down { color: var(--danger); border-color: var(--danger-border); background: var(--danger-surface); }
+
+/* Pagination ----------------------------------------------------------- */
+.pagination { display: flex; align-items: center; justify-content: center; gap: .75rem; margin-top: .9rem; }
+.pagination span { min-width: 8rem; color: var(--text-dim); text-align: center; font-variant-numeric: tabular-nums; }
+
+/* Key/value readouts, as Home and Security use. */
+.readout { display: grid; grid-template-columns: minmax(9rem, auto) 1fr; gap: .45rem 1.2rem; margin: 0; }
+.readout dt { color: var(--text-faint); font-size: .82rem; text-transform: uppercase; letter-spacing: .06em; }
+.readout dd { margin: 0; overflow-wrap: anywhere; }
+
+/* Settings-style forms ------------------------------------------------- */
+.settings-form { display: grid; gap: .9rem; }
+.settings-form fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: .6rem; }
+.settings-form legend { padding: 0 0 .3rem; font-size: .8rem; color: var(--text-faint); text-transform: uppercase; letter-spacing: .08em; }
+
+/* Softphone ------------------------------------------------------------ */
+.softphone { display: grid; gap: 1rem; }
+.call-state { display: flex; align-items: center; gap: .6rem; font-size: 1.05rem; }
+.meter-label { display: grid; gap: .3rem; font-size: .8rem; color: var(--text-dim); }
+.meter-bar { height: .5rem; border-radius: 999px; background: #00000059; overflow: hidden; }
+.meter-level { height: 100%; width: 0; background: var(--focus); transition: width 90ms linear; }
+
+@media (max-width: 720px) {
+  .panel-heading { align-items: stretch; flex-direction: column; }
+  .record-row { align-items: stretch; flex-wrap: wrap; }
+  .readout { grid-template-columns: 1fr; gap: .1rem .5rem; }
+  .readout dd { margin-bottom: .5rem; }
+}
