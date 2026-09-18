@@ -1,0 +1,103 @@
+/*
+ * The AthenaSIP palette.
+ *
+ * Structure is macha-client's: a near-black ground, three layered surfaces, a
+ * three-step text ramp, and an accent ramp that lives almost entirely in the
+ * bottom of its own hue so that "accented" reads as a faint glow on black
+ * rather than as a block of colour. Only the hue differs — macha is crimson,
+ * this is a blue-steel — so the two applications read as the same design
+ * language without being mistaken for one another.
+ *
+ * The AthenaSIP logo is monochrome (#000000, #d1d1d1, #ffffff), so there is no
+ * brand colour to inherit and the accent is a choice rather than a constraint.
+ * Blue-steel because this is the console for a security-first SIP server, and
+ * because it leaves green and red free to mean something.
+ *
+ * That last point is the rule worth keeping: the accent marks *where you are*
+ * — the active nav item, the focused control, the primary action. It never
+ * means "good". Green, amber and red are reserved for state a reader must not
+ * have to interpret: a registration that is up, an expiry that is close, a
+ * transport that is down.
+ *
+ * Dark only, deliberately. An operations console is read in a dim room beside
+ * a terminal, and a second theme is a second set of contrast decisions to get
+ * wrong. `color-scheme: dark` tells the browser so form controls and
+ * scrollbars follow.
+ */
+:root {
+  color-scheme: dark;
+
+  /* Ground and layered surfaces. */
+  --ground: #0e0e0f;
+  --surface: #171719;
+  --surface-2: #222226;
+  --surface-3: #2a2a2e;
+
+  /* Text ramp: body, secondary, and the faint step for metadata. */
+  --text: #e2e2e5;
+  --text-dim: #aaaab2;
+  /*
+   * Lifted from macha's #77777f, which measures 4.03:1 on a record row and
+   * 4.35:1 on the bare ground -- under AA for text at any size. It is fine on a
+   * television, where it carries captions read at distance; here it labels the
+   * readout column ("NODE", "VERSION", "UPTIME"), which says what the value
+   * beside it means and is not decoration. 5.23:1 at worst now, and still
+   * visibly the faintest of the three steps.
+   */
+  --text-faint: #8a8a93;
+
+  /* Hairlines. Always white at low alpha, so they hold on any surface. */
+  --border-soft: #ffffff12;
+  --border: #ffffff1a;
+  --border-strong: #ffffff24;
+
+  /* Accent: blue-steel, near-black through most of the ramp. */
+  --steel-950: #000203;
+  --steel-900: #000508;
+  --steel-800: #000a11;
+  --steel-700: #00101d;
+  --steel-600: #00182b;
+  --steel-500: #00223d;
+  --steel-400: #063458;
+  --accent: var(--steel-500);
+  --accent-surface: #00101da8;
+  --accent-surface-strong: #00223dc2;
+  --accent-focus-wash: #06345824;
+  --accent-glow: #0d5a9428;
+
+  /*
+   * The focus ring is the one deliberate departure from macha, which puts its
+   * ring at the bottom of the accent ramp. That is legible on a television
+   * two metres away showing one focused thing at a time; it is not legible on
+   * a form with nine inputs, and this console is keyboard-driven.
+   *
+   * This token is only ever an outline, a border, the spinner arc, the meter
+   * fill or a checkbox `accent-color` -- never text -- so the bar it has to
+   * clear is 3:1 (WCAG 1.4.11, non-text contrast), not 4.5:1. It cleared that
+   * at #3d7fb5, whose worst case was 3.47:1 against the top of the body
+   * gradient.
+   *
+   * Raised anyway, to the value AthenaPhone settled on: same hue, 4.23:1 at
+   * worst and 5.09:1 on a record row, which is headroom rather than a fix. The
+   * two clients share this palette, and a ring that differs between them by a
+   * shade nobody chose is worse than either shade.
+   */
+  --focus: #4d8ec3;
+
+  /*
+   * Semantic state. Never decorative, and never the accent: these three mean
+   * up, watch, and broken, and nothing else in the interface is allowed to
+   * use them.
+   */
+  --ok: #58c07c;
+  --ok-surface: #0c2a18;
+  --warn: #e0a758;
+  --warn-surface: #2e2110;
+  --danger: #ff9b9b;
+  --danger-surface: #3a0a10;
+  --danger-border: #8a303b;
+
+  --glass-blur: blur(10px) saturate(118%);
+  --navigation-surface: linear-gradient(#0e0e0ff7, #0e0e0fdf);
+  --navigation-blur: blur(12px);
+}

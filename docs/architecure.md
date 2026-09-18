@@ -1,3 +1,0 @@
-# AthenaSIP Admin - Architecture
-
-**TBC**
