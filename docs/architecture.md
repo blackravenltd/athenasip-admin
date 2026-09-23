@@ -11,6 +11,8 @@ src/
   components/       Shared UI: SectionNav, Modal, Status, VolumeMeter.
   hooks/            useRefreshableAsync, useSubmit, usePagination.
   screens/          One file per screen, each taking its AdminApi as a prop.
+  softphone/        The WebRTC endpoint: a controller with no React in it, the JsSIP seam,
+                    the page contract, and the entry for softphone.html.
   styles/           tokens.css (the palette), base.css (shell), admin.css (surfaces).
 ```
 
@@ -28,8 +30,9 @@ do. There are two implementations:
 One implementation for development and for tests, so a test cannot pass against a fixture the
 running application never sees.
 
-The endpoints `HttpAdminApi` calls are the ones specified under "Admin API, part 1" in the
-server's `TODO/ACTIVE.md`. None of them exist yet.
+The server's `/api/v1` exists and is described by its `docs/api/openapi.yaml`. `HttpAdminApi`
+was written against the plan for it and has not yet been reconciled with the document; that
+is Milestone 2 in `TODO/ACTIVE.md`.
 
 ## Records and dialogues
 
@@ -45,6 +48,13 @@ spinner, from a refresh, which already has a list on screen and keeps it. Replac
 list with a spinner to fetch the same list back is how a page that is working looks broken.
 
 Aborts are not failures. Every request is cancelled on unmount and superseded on refresh.
+
+## The softphone
+
+`src/softphone/Softphone.ts` owns the JsSIP user agent and session and publishes an immutable
+snapshot after every change. `SoftphoneScreen` renders it in the console and on
+`softphone.html`, the page the end-to-end run opens; `src/softphone/page.ts` is the contract
+that run drives it through. [softphone.md](softphone.md) has the whole of it.
 
 ## Styling
 

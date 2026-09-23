@@ -16,7 +16,9 @@ Vite environment variables, read at build time and compiled in. All optional.
 | `VITE_SIP_TARGET` | empty | A call target to prefill on the softphone. |
 
 No credential is ever a build-time variable. The softphone's password is typed into the page,
-held in memory and gone on reload.
+or arrives in its query string for the end-to-end run, and is held in memory and gone on
+reload. The query string and the end-to-end run's own environment are in
+[softphone.md](softphone.md).
 
 ## Development
 

@@ -32,8 +32,8 @@ configure for. Serving it from the SIP server is the supported arrangement.
 npm run dev
 ```
 
-There is no admin API on the server yet, so the dev server runs against an in-memory fake.
-To run against a real node:
+The dev server runs against an in-memory fake of the admin API by default. To run against a
+real node:
 
 ```
 VITE_ATHENASIP_LIVE=true npm run dev
