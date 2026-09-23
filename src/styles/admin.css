@@ -115,6 +115,10 @@
 .meter-label { display: grid; gap: .3rem; font-size: .8rem; color: var(--text-dim); }
 .meter-bar { height: .5rem; border-radius: 999px; background: #00000059; overflow: hidden; }
 .meter-level { height: 100%; width: 0; background: var(--focus); transition: width 90ms linear; }
+.softphone details { font-size: .85rem; }
+.softphone summary { cursor: pointer; color: var(--text-dim); }
+.softphone .sdp { margin: .5rem 0 0; padding: .6rem .8rem; border-radius: .5rem; background: #00000059; font-size: .75rem; line-height: 1.4; overflow-x: auto; white-space: pre; }
+.softphone-page main { padding-top: 1.5rem; }
 
 @media (max-width: 720px) {
   .panel-heading { align-items: stretch; flex-direction: column; }

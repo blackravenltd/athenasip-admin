@@ -16,6 +16,7 @@ import { SettingsScreen } from './screens/SettingsScreen';
 import { DiagnosticsScreen } from './screens/DiagnosticsScreen';
 import { NotFoundScreen } from './screens/NotFoundScreen';
 import { Loading } from './components/Status';
+import { pageOptions } from './softphone/page';
 
 /**
  * The softphone is the only screen that is loaded on demand.
@@ -83,7 +84,7 @@ export default function App({ api }: { api: AdminApi }) {
             <Route path={routes.settings} element={<SettingsScreen />} />
 
             <Route path={routes.diagnostics} element={<DiagnosticsScreen />} />
-            <Route path={routes.softphone} element={<Suspense fallback={<Loading />}><SoftphoneScreen /></Suspense>} />
+            <Route path={routes.softphone} element={<Suspense fallback={<Loading />}><SoftphoneScreen options={pageOptions(location.search)} /></Suspense>} />
 
             {/* An unknown path says so. The previous router silently rendered
                 Home, so a mistyped URL and the front page were the same page. */}

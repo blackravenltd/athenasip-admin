@@ -24,9 +24,20 @@ export default defineConfig({
   build: {
     outDir: 'build',
     emptyOutDir: true,
+    rollupOptions: {
+      // Two pages: the console, and the softphone on its own for the
+      // end-to-end run, where it is opened directly as a file the node serves.
+      input: {
+        index: 'index.html',
+        softphone: 'softphone.html',
+      },
+    },
   },
   test: {
     environment: 'node',
     setupFiles: './src/test/setup.ts',
+    // The end-to-end spec is Playwright's, run by `npm run test:e2e` against
+    // a real node; Vitest must not pick it up.
+    exclude: ['node_modules/**', 'e2e/**'],
   },
 });
