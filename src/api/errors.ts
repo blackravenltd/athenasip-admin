@@ -37,7 +37,7 @@ export class ApiError extends Error {
 
   /** The node is rate limiting. Never a sign-out: the session is fine, it is asking too often. */
   get isRateLimited(): boolean {
-    return this.status === 429;
+    return this.status === 429 || this.code === 'rate_limited';
   }
 }
 
@@ -61,6 +61,7 @@ export type ApiErrorCode =
   | 'conflict'
   | 'datastore_error'
   | 'unavailable'
+  | 'rate_limited'
   | 'would_lock_out'
   | 'unknown_role'
   | 'wrong_password';

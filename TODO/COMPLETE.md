@@ -3,7 +3,7 @@
 The record of what exists and works in the tree. Move items from `ACTIVE.md` as they land,
 with a one-line note on what shipped.
 
-## Subscribers route, realm delete and rate limits (2026-10-03, uncommitted at the time of writing)
+## Subscribers route, realm delete and rate limits (2026-10-03)
 
 - [x] **`/realms/{realm}/subscribers`.** Renamed from `/accounts` in `HttpAdminApi`, with no
       alias, following the server's document; the contract test checks it there.

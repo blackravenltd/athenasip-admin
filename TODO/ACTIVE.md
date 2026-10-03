@@ -24,10 +24,6 @@ from `5df4ffd`, and the server session has been told.
 **Waiting on Tom:** sign in on corvus-fi-1 and click through every screen as users with
 different roles.
 
-**Waiting on the server:** the exact rate limits. It promised at least 120 requests a minute
-per session on authenticated routes, so the 2-second Calls poll stays; public routes, login
-above all, will be much tighter.
-
 **After a deploy:** check `curl -s http://10.35.1.20:8080/ | grep -o 'assets/index-[^"]*'`
 matches `build/assets/index-*.js`, tell the server session, and ask Tom to sign in and click
 through every screen as users with different roles. The account `athenaphone` on realm
@@ -84,8 +80,13 @@ point it there.
   demotes or deletes themselves: 409 `would_lock_out`. 400 `unknown_role`.
 - **Failures.** 401 for bad credentials and a disabled user alike; 403 for a real credential
   without the role; 503 `unavailable` when the datastore cannot be asked, never a sign-out;
-  429 with Retry-After on every route (public ones tighter), never a sign-out. The console
-  says how long to wait, and the Calls poll holds for that long.
+  429 `rate_limited` with Retry-After (whole seconds, never 0) on every route, never a
+  sign-out. The console says how long to wait, and the Calls poll holds for that long.
+- **Rate limits** (live 2026-10-03, per node, token buckets; burst then refill): open routes,
+  unknown endpoints and unresolvable tokens 30 then 30/min per source address; login also 10
+  then 5/min per address and 5 then 1/min per username, counting successes too; a signed-in
+  session 60 then 300/min on any route, 403s included, never charged to its address. The
+  source address is the TCP peer. The Calls screen's 2-second poll is about 90/min.
 - **Realms.** Reading admits `manage-realms` or `manage-realm-subscribers`; writing needs
   `manage-realms`. Each realm carries `behaviour` (its own settings, null to inherit),
   `behaviour_effective` (what they come to) and `behaviour_default` (the server's own):
