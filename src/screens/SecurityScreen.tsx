@@ -1,22 +1,21 @@
 import type { AdminApi } from '../api/AdminApi';
+import { isEncrypted } from '../api/types';
 import { useRefreshableAsync } from '../hooks/useRefreshableAsync';
 import { ErrorMessage, Loading } from '../components/Status';
-import { transportState } from './OverviewScreen';
+import { selfNode } from './OverviewScreen';
 
 /**
  * Whether this node is actually as secure as it is meant to be.
  *
- * AthenaSIP's first stated principle is TLS-only SIP with SRTP and DTLS-SRTP
- * enforced, and plaintext explicitly opted into. So the useful question this
- * screen answers is not "is TLS configured" but "is anything unencrypted
- * currently listening" — which is a thing the transport list already knows and
- * nothing else in the interface points out.
+ * AthenaSIP is TLS-first and plaintext has to be opted into. So the useful
+ * question here is not "is TLS configured" but "is anything unencrypted
+ * listening", which the node list already answers and nothing else in the
+ * console points out.
  */
 export function SecurityScreen({ api }: { api: AdminApi }) {
-  const result = useRefreshableAsync((signal) => api.status(signal), [api]);
-  const plaintext = (result.value?.transports ?? []).filter(
-    (transport) => transport.enabled && (transport.transport === 'udp' || transport.transport === 'tcp' || transport.transport === 'ws'),
-  );
+  const result = useRefreshableAsync((signal) => api.nodes(signal), [api]);
+  const self = result.value && selfNode(result.value);
+  const plaintext = (self?.transports ?? []).filter((transport) => !isEncrypted(transport.transport));
 
   return (
     <>
@@ -27,8 +26,9 @@ export function SecurityScreen({ api }: { api: AdminApi }) {
           <div>
             <h2>Transport encryption</h2>
             <p>
-              AthenaSIP is TLS-first: unencrypted SIP has to be turned on deliberately.
-              Anything listed here is carrying signalling in the clear.
+              AthenaSIP is TLS-first: unencrypted SIP has to be turned on deliberately, with{' '}
+              <code>allow_unencrypted</code>. Anything listed here is carrying signalling in the
+              clear.
             </p>
           </div>
           <button className="secondary-button" type="button" onClick={result.refresh} disabled={result.refreshing}>
@@ -37,7 +37,7 @@ export function SecurityScreen({ api }: { api: AdminApi }) {
         </div>
 
         {result.error && <ErrorMessage error={result.error} />}
-        {result.loading ? <Loading /> : result.value && (
+        {result.loading ? <Loading /> : self && (
           plaintext.length === 0 ? (
             <p className="field-hint" role="status">
               <span className="state-dot state-ok" aria-hidden="true" /> No unencrypted transport is enabled.
@@ -65,8 +65,9 @@ export function SecurityScreen({ api }: { api: AdminApi }) {
 }
 
 export function TlsScreen({ api }: { api: AdminApi }) {
-  const result = useRefreshableAsync((signal) => api.status(signal), [api]);
-  const tls = (result.value?.transports ?? []).find((transport) => transport.transport === 'tls');
+  const result = useRefreshableAsync((signal) => api.nodes(signal), [api]);
+  const self = result.value && selfNode(result.value);
+  const secure = (self?.transports ?? []).filter((transport) => isEncrypted(transport.transport));
 
   return (
     <>
@@ -75,27 +76,29 @@ export function TlsScreen({ api }: { api: AdminApi }) {
       <section className="panel">
         <div className="panel-heading">
           <div>
-            <h2>TLS listener</h2>
+            <h2>Encrypted listeners</h2>
             <p>
-              The certificate and cipher policy are read from the server's configuration.
-              Editing them from here needs the settings endpoints, which the server does not
-              expose yet.
+              The TLS and secure WebSocket listeners this node advertises. The certificate and
+              cipher policy are read from the node's configuration; the API does not expose them
+              yet, so they cannot be shown or changed from here.
             </p>
           </div>
         </div>
 
         {result.error && <ErrorMessage error={result.error} />}
-        {result.loading ? <Loading /> : !tls ? (
-          <p className="field-hint">This node does not report a TLS transport.</p>
-        ) : (
-          <dl className="readout">
-            <dt>State</dt>
-            <dd>
-              <span className={`state-dot state-${transportState(tls).tone}`} aria-hidden="true" />{' '}
-              {transportState(tls).label}
-            </dd>
-            <dt>Address</dt><dd>{tls.address}:{tls.port}</dd>
-          </dl>
+        {result.loading ? <Loading /> : self && (
+          secure.length === 0 ? (
+            <p className="field-hint">This node advertises no TLS or WSS listener.</p>
+          ) : (
+            <dl className="readout">
+              {secure.map((transport) => (
+                <div key={transport.transport} style={{ display: 'contents' }}>
+                  <dt>{transport.transport.toUpperCase()}</dt>
+                  <dd><code>{transport.uri}</code></dd>
+                </div>
+              ))}
+            </dl>
+          )
         )}
       </section>
     </>
