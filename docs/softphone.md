@@ -139,7 +139,7 @@ passes its environment through and sets nothing new.
 | `ATHENA_INTEROP_WS_PORT` | `8088` | The socket is `ws://127.0.0.1:<port>`. |
 | `ATHENA_INTEROP_PUBLIC_ADDRESS` | `127.0.0.1` | The address the node advertises, and rtpengine unless told otherwise. The realm defaults to it. |
 | `ATHENA_INTEROP_REALM` | the public address | The realm the subscribers live in. |
-| `ATHENA_INTEROP_ACCOUNTS` | `1001,1002` | The two subscribers the run registers. |
+| `ATHENA_INTEROP_SUBSCRIBERS` | `1001,1002` | The two subscribers the run registers. |
 | `ATHENA_INTEROP_PASSWORD` | `athenaphone` | Their password. |
 | `ATHENA_INTEROP_RESULTS` | `e2e/results` | Where the records are written. |
 | `ATHENA_INTEROP_PAGE_URL` | `http://127.0.0.1:<api port>` | Override where the page is served from, for running it against `vite preview` while the fixture does not mount the build. |

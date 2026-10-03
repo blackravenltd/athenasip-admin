@@ -8,8 +8,8 @@ with a one-line note on what shipped.
 - [x] **One vocabulary.** Per Tom and the server's `docs/glossary.md`: the type, the
       `AdminApi` methods, the fake and every screen say subscriber; the signed-in user's own
       page is `MeScreen` at `/me`, headed "You". The fake's messages read as the node's do
-      ("no such subscriber"). `ATHENA_INTEROP_ACCOUNTS` keeps its name: it is shared with
-      the server's `browser.sh`, and renaming it is a change to both repositories.
+      ("no such subscriber"). `ATHENA_INTEROP_ACCOUNTS` became `ATHENA_INTEROP_SUBSCRIBERS`
+      on both sides, the server's first.
 
 ## Subscribers route, realm delete and rate limits (2026-10-03)
 
