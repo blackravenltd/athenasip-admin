@@ -153,16 +153,16 @@ export class HttpAdminApi implements AdminApi {
   }
 
   listAccounts(realm: string, signal?: AbortSignal) {
-    return this.request<Account[]>('GET', `/realms/${segment(realm)}/accounts`, { signal });
+    return this.request<Account[]>('GET', `/realms/${segment(realm)}/subscribers`, { signal });
   }
   createAccount(realm: string, account: CreateAccount, signal?: AbortSignal) {
-    return this.request<Account>('POST', `/realms/${segment(realm)}/accounts`, { body: account, signal });
+    return this.request<Account>('POST', `/realms/${segment(realm)}/subscribers`, { body: account, signal });
   }
   updateAccount(realm: string, user: string, changes: UpdateAccount, signal?: AbortSignal) {
-    return this.request<Account>('PUT', `/realms/${segment(realm)}/accounts/${segment(user)}`, { body: changes, signal });
+    return this.request<Account>('PUT', `/realms/${segment(realm)}/subscribers/${segment(user)}`, { body: changes, signal });
   }
   deleteAccount(realm: string, user: string, signal?: AbortSignal) {
-    return this.request<void>('DELETE', `/realms/${segment(realm)}/accounts/${segment(user)}`, { signal });
+    return this.request<void>('DELETE', `/realms/${segment(realm)}/subscribers/${segment(user)}`, { signal });
   }
 
   listRegistrations(realm?: string, signal?: AbortSignal) {

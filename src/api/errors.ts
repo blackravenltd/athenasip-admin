@@ -34,6 +34,20 @@ export class ApiError extends Error {
   get isForbidden(): boolean {
     return this.status === 403;
   }
+
+  /** The node is rate limiting. Never a sign-out: the session is fine, it is asking too often. */
+  get isRateLimited(): boolean {
+    return this.status === 429;
+  }
+}
+
+/** How long to hold off after a 429 that named no Retry-After. */
+export const DEFAULT_RETRY_AFTER_S = 10;
+
+/** Seconds to wait before asking again, when a failure is the node rate limiting; undefined otherwise. */
+export function retryAfter(cause: unknown): number | undefined {
+  if (!(cause instanceof ApiError) || !cause.isRateLimited) return undefined;
+  return cause.retryAfter ?? DEFAULT_RETRY_AFTER_S;
 }
 
 /** The codes the server's OpenAPI document lists. */
@@ -61,6 +75,12 @@ export type ApiErrorCode =
  * server is unreachable.
  */
 export function errorMessage(cause: unknown): string {
+  if (cause instanceof ApiError && cause.isRateLimited) {
+    // Every route is rate limited, and the node's own wording would not say how long.
+    return cause.retryAfter
+      ? `The node is limiting requests. Try again in ${cause.retryAfter} second${cause.retryAfter === 1 ? '' : 's'}.`
+      : 'The node is limiting requests. Wait a little and try again.';
+  }
   if (cause instanceof Error) return cause.message;
   if (typeof cause === 'string') return cause;
   if (cause && typeof cause === 'object') {

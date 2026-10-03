@@ -116,9 +116,8 @@ function DeleteRealm({ api, realm, onClose, onDeleted }: {
       </p>
       {count > 0 && (
         <p className="field-problem">
-          It still has {count} subscriber{count === 1 ? '' : 's'}. The node does not yet delete a
-          realm's subscribers with it: they stay in the datastore, out of sight, and belong to the
-          realm again if one of the same name is created. Delete them first to be rid of them.
+          Its {count === 1 ? 'subscriber goes' : `${count} subscribers go`} with it, and every
+          registration they hold ends.
         </p>
       )}
       {error && <p className="error-message" role="alert">{error}</p>}

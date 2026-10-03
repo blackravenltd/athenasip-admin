@@ -54,7 +54,7 @@ describe('HttpAdminApi', () => {
     // realm with a slash must not reach another route.
     const fetch = respond(null, { status: 204 });
     await new HttpAdminApi({ fetch }).deleteAccount('a/../b', 'x@y');
-    expect(fetch).toHaveBeenCalledWith('/api/v1/realms/a%2F..%2Fb/accounts/x%40y', expect.objectContaining({ method: 'DELETE' }));
+    expect(fetch).toHaveBeenCalledWith('/api/v1/realms/a%2F..%2Fb/subscribers/x%40y', expect.objectContaining({ method: 'DELETE' }));
   });
 
   it('addresses a call by its Call-ID as one segment, even with a slash in it', async () => {
@@ -139,6 +139,13 @@ describe('HttpAdminApi', () => {
       const onUnauthorized = vi.fn();
       const fetch = route({ '/api/v1/auth/login': [401, { error: { code: 'unauthorized', message: 'no' } }] });
       await expect(new HttpAdminApi({ fetch, onUnauthorized }).login('ops', 'x')).rejects.toMatchObject({ status: 401 });
+      expect(onUnauthorized).not.toHaveBeenCalled();
+    });
+
+    it('never signs out on a 429', async () => {
+      const onUnauthorized = vi.fn();
+      const fetch = vi.fn(async () => new Response('{}', { status: 429, headers: { 'Retry-After': '5' } })) as unknown as typeof globalThis.fetch;
+      await expect(new HttpAdminApi({ fetch, token: () => 't', onUnauthorized }).listRealms()).rejects.toMatchObject({ status: 429, retryAfter: 5 });
       expect(onUnauthorized).not.toHaveBeenCalled();
     });
 

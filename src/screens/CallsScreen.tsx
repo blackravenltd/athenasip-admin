@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { AdminApi } from '../api/AdminApi';
+import { retryAfter } from '../api/errors';
 import type { Call, CallLeg, CallState } from '../api/types';
 import { useRefreshableAsync } from '../hooks/useRefreshableAsync';
 import { Empty, ErrorMessage, Loading } from '../components/Status';
@@ -144,10 +145,16 @@ export function CallsScreen({ api }: { api: AdminApi }) {
   const [samples, setSamples] = useState<{ current?: Call[]; previous?: Call[] }>({});
   if (result.value !== samples.current) setSamples({ current: result.value, previous: samples.current });
 
+  // A 429 holds the poll for as long as the node asked, then reads once and resumes.
+  const holdFor = retryAfter(result.error);
   useEffect(() => {
+    if (holdFor !== undefined) {
+      const timer = window.setTimeout(refresh, holdFor * 1000);
+      return () => window.clearTimeout(timer);
+    }
     const timer = window.setInterval(refresh, POLL_MS);
     return () => window.clearInterval(timer);
-  }, [refresh]);
+  }, [refresh, holdFor]);
 
   const now = Date.now();
   const previous = new Map((samples.previous ?? []).map((call) => [call.id, call]));

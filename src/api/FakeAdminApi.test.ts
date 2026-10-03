@@ -48,12 +48,13 @@ describe('FakeAdminApi', () => {
     expect((await api.listRealms()).find((realm) => realm.name === 'sip.athenasip.org')).toEqual(before);
   });
 
-  it('deletes a realm without its accounts, because the server does', async () => {
+  it('deletes a realm with its accounts and their registrations, as the server does', async () => {
     const api = new FakeAdminApi();
     await api.deleteRealm('blackraven.co.nz');
     await expect(api.listAccounts('blackraven.co.nz')).rejects.toMatchObject({ status: 404 });
     await api.createRealm({ name: 'blackraven.co.nz' });
-    await expect(api.listAccounts('blackraven.co.nz')).resolves.toHaveLength(1);
+    await expect(api.listAccounts('blackraven.co.nz')).resolves.toHaveLength(0);
+    await expect(api.listRegistrations('blackraven.co.nz')).resolves.toHaveLength(0);
   });
 
   it('changes an account’s media profile without a password, and refuses a realm-only setting, changing nothing', async () => {

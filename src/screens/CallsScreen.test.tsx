@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { act, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ApiError } from '../api/errors';
 import { FakeAdminApi } from '../api/FakeAdminApi';
 import type { Call } from '../api/types';
 import { CallsScreen, POLL_MS, callDuration, callParties, flow, oneWay } from './CallsScreen';
@@ -101,5 +102,18 @@ describe('CallsScreen', () => {
     api.endCallElsewhere('3848276298220188511@203.0.113.40');
     await act(async () => { await vi.advanceTimersByTimeAsync(POLL_MS); });
     expect(screen.queryByText('Not relayed')).toBeNull();
+  });
+
+  it('stops polling for as long as a 429 asks, then reads again', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const api = new FakeAdminApi();
+    const listCalls = vi.spyOn(api, 'listCalls').mockRejectedValueOnce(new ApiError('too many requests', 429, undefined, 10));
+    render(<CallsScreen api={api} />);
+    expect(await screen.findByText('The node is limiting requests. Try again in 10 seconds.')).toBeTruthy();
+    await act(async () => { await vi.advanceTimersByTimeAsync(POLL_MS * 4); });
+    expect(listCalls).toHaveBeenCalledTimes(1);
+    await act(async () => { await vi.advanceTimersByTimeAsync(10_000 - POLL_MS * 4); });
+    expect(listCalls).toHaveBeenCalledTimes(2);
+    expect(await screen.findByText('Not relayed')).toBeTruthy();
   });
 });

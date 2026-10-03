@@ -194,9 +194,8 @@ function SubscriberRow({ api, account, realmProfile, onChanged }: {
  * The subscribers of one realm.
  *
  * A subscriber is something registered on a realm to make and receive calls.
- * The API calls the resource an account (`/realms/{realm}/accounts`), because
- * "subscriber" collides with SUBSCRIBE once presence arrives; this screen
- * uses the word a person reads.
+ * The route is `/realms/{realm}/subscribers`; its records are still typed
+ * `Account` in the server's document and in `AdminApi`.
  *
  * The realm is a query parameter rather than a path segment because this
  * screen is reached two ways, from a realm's row and from the section bar with

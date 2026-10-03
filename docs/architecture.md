@@ -31,7 +31,7 @@ accounts, registrations, live calls and the media engine under `/api/v1`. There 
 - `FakeAdminApi` holds the same records in memory and enforces the same rules, read from the
   server's handlers: a duplicate is a `conflict`, an unknown realm `not_found`, a missing
   field `invalid_request`, a user without the route's role `forbidden`, and deleting a
-  realm leaves its accounts behind because the server's does. It is what development runs
+  realm deletes its subscribers and their registrations because the server's does. It is what development runs
   against without a node, and what every screen test runs against.
 
 A realm is addressed by its name and an account by its user, never by id: the server's ids

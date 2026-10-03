@@ -3,6 +3,17 @@
 The record of what exists and works in the tree. Move items from `ACTIVE.md` as they land,
 with a one-line note on what shipped.
 
+## Subscribers route, realm delete and rate limits (2026-10-03, uncommitted at the time of writing)
+
+- [x] **`/realms/{realm}/subscribers`.** Renamed from `/accounts` in `HttpAdminApi`, with no
+      alias, following the server's document; the contract test checks it there.
+- [x] **Deleting a realm deletes its subscribers.** The fake removes them and their
+      registrations, and the delete dialogue says they go with it instead of warning that
+      they stay behind.
+- [x] **429 everywhere.** Any rate-limited request reads "The node is limiting requests. Try
+      again in N seconds."; it never signs out, and the Calls poll holds for Retry-After (10
+      seconds when the node names none) before reading again.
+
 ## Realm and account behaviour (2026-10-02, uncommitted at the time of writing)
 
 - [x] **Media settings inherit.** The realm's `media_anchor` and `media_profiles` became

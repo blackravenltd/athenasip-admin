@@ -23,8 +23,13 @@ attribution (the user's global rule).
 **Waiting on Tom:**
 
 1. Sign in on corvus-fi-1 and click through every screen as users with different roles.
-2. Still open from before: whether `/realms/{realm}/accounts` becomes `/subscribers` (build
-   against `/accounts`), and whether deleting a realm deletes its subscribers (build as if not).
+2. Approve deploying the console again, in step with the server's next node deploy. Tom
+   settled three API questions on 2026-10-03 (relayed by the server session): `/accounts` is
+   renamed `/subscribers` with no alias, deleting a realm deletes its subscribers and their
+   registrations, and every route is rate limited (429 with Retry-After). The tree follows
+   all three, uncommitted. The console on corvus-fi-1 still calls `/accounts`, so the node
+   and the console must go out together: the server waits for word that the console is
+   ready, then deploys, then this session deploys straight after.
 
 **After a deploy:** check `curl -s http://10.35.1.20:8080/ | grep -o 'assets/index-[^"]*'`
 matches `build/assets/index-*.js`, tell the server session, and ask Tom to sign in and click
@@ -82,7 +87,8 @@ point it there.
   demotes or deletes themselves: 409 `would_lock_out`. 400 `unknown_role`.
 - **Failures.** 401 for bad credentials and a disabled user alike; 403 for a real credential
   without the role; 503 `unavailable` when the datastore cannot be asked, never a sign-out;
-  429 with Retry-After.
+  429 with Retry-After on every route (public ones tighter), never a sign-out. The console
+  says how long to wait, and the Calls poll holds for that long.
 - **Realms.** Reading admits `manage-realms` or `manage-realm-subscribers`; writing needs
   `manage-realms`. Each realm carries `behaviour` (its own settings, null to inherit),
   `behaviour_effective` (what they come to) and `behaviour_default` (the server's own):
@@ -90,7 +96,8 @@ point it there.
   0 or 5 to 86400 seconds, `rewrite_contact` bool. Server defaults: true, mirror, 0, false.
   A setting left out of an update is left alone, null resets it, and anything unknown or out
   of range is a 400 that changes nothing. Top-level `media_anchor`/`media_profiles` are refused.
-- **Accounts** (subscribers). `behaviour: {media_profile}` only, null for the realm's; a PUT
+  Deleting a realm deletes its subscribers and their registrations.
+- **Subscribers**, `/realms/{realm}/subscribers` (type `Account`). `behaviour: {media_profile}` only, null for the realm's; a PUT
   takes a password, the behaviour, or both.
 - **Status reads** (`view-cluster-status`): `/nodes` (status, version, `stale`, `at`),
   `/registrations`, `/client/config` (`websocket_uri`, `websocket_uris`, `nodes`,
@@ -180,7 +187,8 @@ Dated, and not reopened without asking.
   permissions. A change is a change to both repositories.
 - (2026-09-25) A user is somebody or some system that uses the API. A subscriber is something
   registered on a realm to make and receive calls. The console says "subscriber" for what the
-  API calls an account (`/realms/{realm}/accounts`, type `Account`), and never mixes the two.
+  API types as an account (`/realms/{realm}/subscribers`, type `Account`), and never mixes the
+  two.
 - (2026-09-30) A test asserts facts about our configuration, never the browser's labels. The
   relay phase knows a relayed pair by its local port being inside coturn's range, because
   Chrome reports the relayed candidate as `prflx`. Agreed with the server, and written into its
@@ -211,10 +219,6 @@ Dated, and not reopened without asking.
 - [ ] Sign in on corvus-fi-1 and click through every screen with users of different roles, once
       the current build is deployed. Nothing authenticated has been run against a live node
       from here; the screens added since 2026-10-01 have only met the fake.
-- [ ] Remove the realm-delete warning in `DeleteRealm` (`src/screens/RealmsScreen.tsx`) and the
-      matching behaviour in the fake, if the server decides to cascade the delete. Undecided.
-- [ ] Rename `/realms/{realm}/accounts` to `/subscribers` here and in the fake, if the server
-      decides to. Undecided.
 - [ ] Keep a half-filled dialogue across a session's end. The top bar counts down the last five
       minutes, but at the instant the console still replaces the screen with the sign-in form.
       Signing in again over the screen, as the same user, would keep it; a different user must

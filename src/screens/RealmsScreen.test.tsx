@@ -91,10 +91,10 @@ describe('RealmsScreen', () => {
     expect((await api.listRealms()).find((realm) => realm.name === 'blackraven.co.nz')?.behaviour.media_anchor).toBe(false);
   });
 
-  it('warns that a realm’s subscribers outlive it before deleting it', async () => {
+  it('warns that a realm’s subscribers go with it before deleting it', async () => {
     show();
     fireEvent.click(await screen.findByRole('button', { name: 'Delete sip.athenasip.org' }));
-    expect(await within(dialogue()).findByText(/It still has 2 subscribers/)).toBeTruthy();
+    expect(await within(dialogue()).findByText(/Its 2 subscribers go with it/)).toBeTruthy();
     fireEvent.click(within(dialogue()).getByRole('button', { name: 'Delete realm' }));
     await waitFor(() => expect(screen.queryByRole('group', { name: 'sip.athenasip.org' })).toBeNull());
   });

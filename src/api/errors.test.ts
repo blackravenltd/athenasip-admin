@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ApiError, errorMessage, isAbort, isConflict } from './errors';
+import { ApiError, DEFAULT_RETRY_AFTER_S, errorMessage, isAbort, isConflict, retryAfter } from './errors';
 
 describe('errorMessage', () => {
   it('uses the server message when there is one', () => {
@@ -9,6 +9,11 @@ describe('errorMessage', () => {
 
   it('reads an ordinary Error, which is what an unreachable server produces', () => {
     expect(errorMessage(new TypeError('Failed to fetch'))).toBe('Failed to fetch');
+  });
+
+  it('says how long to wait when the node is rate limiting', () => {
+    expect(errorMessage(new ApiError('too many requests', 429, undefined, 30))).toBe('The node is limiting requests. Try again in 30 seconds.');
+    expect(errorMessage(new ApiError('too many requests', 429))).toBe('The node is limiting requests. Wait a little and try again.');
   });
 
   it('never renders [object Object] at somebody trying to fix a server', () => {
@@ -23,6 +28,15 @@ describe('ApiError', () => {
     expect(new ApiError('no', 401, 'unauthorized').isUnauthorized).toBe(true);
     expect(new ApiError('no', 403, 'forbidden').isUnauthorized).toBe(false);
     expect(new ApiError('no', 403, 'forbidden').isForbidden).toBe(true);
+  });
+});
+
+describe('retryAfter', () => {
+  it('holds off for what the node asked, or a default, and only on a 429', () => {
+    expect(retryAfter(new ApiError('slow', 429, undefined, 5))).toBe(5);
+    expect(retryAfter(new ApiError('slow', 429))).toBe(DEFAULT_RETRY_AFTER_S);
+    expect(retryAfter(new ApiError('down', 503, 'unavailable'))).toBeUndefined();
+    expect(retryAfter(new TypeError('Failed to fetch'))).toBeUndefined();
   });
 });
 

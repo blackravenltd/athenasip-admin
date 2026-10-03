@@ -96,8 +96,8 @@ const PACKET_BYTES = 172;
  * rules the real node enforces, read from its handlers rather than guessed:
  * a duplicate realm or account is a `conflict`, an unknown one `not_found`, a
  * missing field `invalid_request`, a caller without the route's role
- * `forbidden`, and deleting a realm does not delete its accounts, because the
- * server's does not either. Its users, sessions and roles are the server's
+ * `forbidden`, and deleting a realm deletes its accounts and their
+ * registrations, as the server's does. Its users, sessions and roles are the server's
  * `docs/authentication.md`, which the node does not enforce until it is built. Mocks that answer yes to everything are how a form
  * ships with no error path at all.
  */
@@ -436,9 +436,11 @@ export class FakeAdminApi implements AdminApi {
   deleteRealm(name: string, signal?: AbortSignal): Promise<void> {
     return this.settle(REALMS, () => {
       this.find(name);
-      // Only the realm. The server's datastores leave its accounts where they
-      // are, and so does this.
+      // Its accounts go with it, and their registrations with them.
+      const gone = new Set(this.accounts.filter((account) => account.realm === name).map((account) => account.uri));
       this.realms = this.realms.filter((candidate) => candidate.name !== name);
+      this.accounts = this.accounts.filter((account) => account.realm !== name);
+      this.registrations = this.registrations.filter((binding) => !gone.has(binding.account));
       return undefined;
     }, signal);
   }
