@@ -40,7 +40,7 @@ export function useSoftphone(stack: SipStack, options: PageOptions): SoftphoneHa
       setState(next);
       setRemoteStream(phone.remoteStream);
     });
-    const unexpose = typeof window === 'undefined' ? () => {} : expose(window, phone);
+    const unexpose = typeof window === 'undefined' ? () => {} : expose(window, phone, { video: options.video ?? false });
     return () => {
       unsubscribe();
       unexpose();
@@ -58,8 +58,8 @@ export function useSoftphone(stack: SipStack, options: PageOptions): SoftphoneHa
   }, [phone]);
 
   useEffect(() => {
-    if (options.answer && state.call === 'incoming') phone.answer();
-  }, [options.answer, phone, state.call]);
+    if (options.answer && state.call === 'incoming') phone.answer(undefined, { video: options.video ?? false });
+  }, [options.answer, options.video, phone, state.call]);
 
   useEffect(() => {
     if (state.call !== 'connected') {

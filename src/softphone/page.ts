@@ -11,7 +11,7 @@
  * `docs/softphone.md`. Nothing here is loaded by the provisioning screens.
  */
 import type { IceServer } from '../api/types';
-import type { MediaStats, Softphone, SoftphoneState, Transition } from './Softphone';
+import { videoLine, type CallMedia, type MediaStats, type Softphone, type SoftphoneState, type Transition, type VideoLine } from './Softphone';
 
 export interface PageOptions {
   socket?: string;
@@ -29,6 +29,8 @@ export interface PageOptions {
   ice?: IceServer[];
   /** Media only through the TURN server, `iceTransportPolicy: "relay"`. */
   relay?: boolean;
+  /** Send the camera on calls placed and answered, as the console's Video box does. */
+  video?: boolean;
 }
 
 /**
@@ -36,7 +38,8 @@ export interface PageOptions {
  *
  * `ws`, `uri`, `password` and `target` prefill the fields; `register=1`
  * presses Register, and `answer=1` presses Answer when a call arrives. `ice`
- * is a JSON array of ICE servers and `relay=1` forces media through TURN. A
+ * is a JSON array of ICE servers and `relay=1` forces media through TURN.
+ * `video=1` sends the camera on every call placed or answered. A
  * password or a TURN credential in a URL is a harness convenience and nothing
  * else; the page removes both from the address bar as soon as it has read them.
  */
@@ -59,6 +62,7 @@ export function pageOptions(search: string): PageOptions {
     answer: flag('answer'),
     ice: iceServers(text('ice')),
     relay: flag('relay'),
+    video: flag('video'),
   };
 }
 
@@ -84,13 +88,37 @@ export function withoutSecrets(url: string): string | undefined {
   return parsed.toString();
 }
 
+/**
+ * What became of the video line, read from the far end's description:
+ * `absent` when there is none, `declined` at port 0, `bundled` when it shares
+ * the bundle's transport (port 9, a placeholder), `accepted` otherwise.
+ * Bundled is a way of being accepted, named apart because its port says nothing.
+ */
+export type VideoOutcome = 'absent' | 'declined' | 'bundled' | 'accepted';
+
+export interface VideoNegotiation {
+  local?: VideoLine;
+  remote?: VideoLine;
+  outcome: VideoOutcome;
+}
+
+export function videoNegotiation(state: SoftphoneState): VideoNegotiation {
+  const local = videoLine(state.localSdp);
+  const remote = videoLine(state.remoteSdp);
+  const outcome: VideoOutcome = !remote ? 'absent' : remote.port === 0 ? 'declined' : remote.bundled && remote.port === 9 ? 'bundled' : 'accepted';
+  return { local, remote, outcome };
+}
+
 /** What a harness can read from `window.__athenaSoftphone`. */
 export interface SoftphoneReadout {
   /** The contract's version, bumped when a field changes meaning. */
   readonly version: 1;
   state(): SoftphoneState;
   history(): readonly Transition[];
+  /** Audio counters at the top level; `video` carries the video's own, when the call has any. */
   stats(): Promise<MediaStats | undefined>;
+  /** Each end's video line and what the far end did with it. */
+  video(): VideoNegotiation;
   call(target: string): void;
   answer(): void;
   hangUp(): void;
@@ -104,15 +132,19 @@ declare global {
   }
 }
 
-/** Hangs the readout on the window, and returns the function that takes it down. */
-export function expose(target: Window, phone: Softphone): () => void {
+/**
+ * Hangs the readout on the window, and returns the function that takes it down.
+ * `media` is what the page's calls send: video when it was opened with `video=1`.
+ */
+export function expose(target: Window, phone: Softphone, media: CallMedia = {}): () => void {
   const readout: SoftphoneReadout = {
     version: 1,
     state: () => phone.state,
     history: () => phone.history,
     stats: () => phone.stats(),
-    call: (destination) => phone.call(destination),
-    answer: () => phone.answer(),
+    video: () => videoNegotiation(phone.state),
+    call: (destination) => phone.call(destination, undefined, media),
+    answer: () => phone.answer(undefined, media),
     hangUp: () => phone.hangUp(),
   };
   target[READOUT_KEY] = readout;

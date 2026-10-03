@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { expose, pageOptions, READOUT_KEY, withoutSecrets } from './page';
+import { expose, pageOptions, READOUT_KEY, videoNegotiation, withoutSecrets } from './page';
 import type { Softphone } from './Softphone';
 
 describe('pageOptions', () => {
@@ -14,7 +14,9 @@ describe('pageOptions', () => {
         answer: true,
         ice: undefined,
         relay: false,
+        video: false,
       });
+    expect(pageOptions('?video=1').video).toBe(true);
   });
 
   it('reads the ICE servers as JSON and the relay flag, keeping only entries with a urls', () => {
@@ -29,7 +31,7 @@ describe('pageOptions', () => {
 
   it('treats an absent or empty value as not given, and anything but 1 or true as off', () => {
     expect(pageOptions('?uri=&register=0&answer=yes')).toEqual({
-      socket: undefined, uri: undefined, password: undefined, target: undefined, register: false, answer: false, ice: undefined, relay: false,
+      socket: undefined, uri: undefined, password: undefined, target: undefined, register: false, answer: false, ice: undefined, relay: false, video: false,
     });
     expect(pageOptions('')).toMatchObject({ register: false, answer: false });
   });
@@ -46,6 +48,19 @@ describe('withoutSecrets', () => {
   });
 });
 
+describe('videoNegotiation', () => {
+  const sdp = (video: string) => ['v=0', 'a=group:BUNDLE 0 1', 'm=audio 9 UDP/TLS/RTP/SAVPF 111', 'a=mid:0', video].join('\r\n');
+  const state = (remoteSdp?: string) => ({ registration: 'registered', call: 'connected', localSdp: sdp('m=video 9 UDP/TLS/RTP/SAVPF 96\r\na=mid:1'), remoteSdp }) as const;
+
+  it('says what the far end did with the video line', () => {
+    expect(videoNegotiation(state(sdp('m=video 9 UDP/TLS/RTP/SAVPF 96\r\na=mid:1'))).outcome).toBe('bundled');
+    expect(videoNegotiation(state(sdp('m=video 30000 UDP/TLS/RTP/SAVPF 96\r\na=mid:2'))).outcome).toBe('accepted');
+    expect(videoNegotiation(state(sdp('m=video 0 UDP/TLS/RTP/SAVPF 96\r\na=mid:1'))).outcome).toBe('declined');
+    expect(videoNegotiation(state(sdp(''))).outcome).toBe('absent');
+    expect(videoNegotiation(state(undefined))).toMatchObject({ outcome: 'absent', local: { port: 9, bundled: true } });
+  });
+});
+
 describe('expose', () => {
   it('hangs a readout on the window that reads through to the phone, and takes it down again', async () => {
     const calls: string[] = [];
@@ -53,8 +68,8 @@ describe('expose', () => {
       state: { registration: 'registered', call: 'idle' },
       history: [{ at: 1, registration: 'registered', call: 'idle' }],
       stats: () => Promise.resolve({ packetsSent: 3 }),
-      call: (target: string) => { calls.push(target); },
-      answer: () => { calls.push('answer'); },
+      call: (target: string, _ice: unknown, media: { video?: boolean }) => { calls.push(`${target}${media.video ? ' with video' : ''}`); },
+      answer: (_ice: unknown, media: { video?: boolean }) => { calls.push(`answer${media.video ? ' with video' : ''}`); },
       hangUp: () => { calls.push('hangUp'); },
     } as unknown as Softphone;
     const target = {} as Window;
@@ -70,7 +85,14 @@ describe('expose', () => {
     readout.hangUp();
     expect(calls).toEqual(['sip:1002@x', 'answer', 'hangUp']);
 
+    expect(readout.video().outcome).toBe('absent');
+
     remove();
     expect(target[READOUT_KEY]).toBeUndefined();
+
+    expose(target, phone, { video: true });
+    target[READOUT_KEY]!.call('sip:1003@x');
+    target[READOUT_KEY]!.answer();
+    expect(calls.slice(-2)).toEqual(['sip:1003@x with video', 'answer with video']);
   });
 });

@@ -29,9 +29,31 @@ export interface Fixture {
    */
   apiUser?: { username: string; password: string };
   realm: string;
-  subscribers: [string, string];
+  /** Two for a browser calling a browser; the first alone when a browser calls a phone. */
+  subscribers: string[];
   password: string;
   resultsDir: string;
+  /**
+   * A phone to call, not another page: `ATHENA_INTEROP_TARGET`, a SIP URI. Set,
+   * it selects the phone run (`phone-call.spec.ts`) and the browser-to-browser
+   * run stands aside.
+   */
+  target?: string;
+  /** Accept the node's certificate unverified, for a snakeoil CA: `ATHENA_INTEROP_IGNORE_TLS=1`. */
+  ignoreTls: boolean;
+  /** How long the phone has to answer, `ATHENA_INTEROP_ANSWER_SECONDS`, 45 by default. */
+  answerSeconds: number;
+  /** How long media runs before its counters are read, `ATHENA_INTEROP_MEDIA_SECONDS`, 5 by default. */
+  mediaSeconds: number;
+  /** Video frames the browser must have decoded from the phone by then, `ATHENA_INTEROP_MIN_FRAMES`, 30 by default. */
+  minFrames: number;
+}
+
+function seconds(value: string | undefined, fallback: number, name: string): number {
+  if (value === undefined || value === '') return fallback;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) throw new Error(`${name} is ${value}, which is not a number of seconds`);
+  return parsed;
 }
 
 export function fixtureFromEnvironment(env: NodeJS.ProcessEnv = process.env): Fixture {
@@ -39,9 +61,7 @@ export function fixtureFromEnvironment(env: NodeJS.ProcessEnv = process.env): Fi
   const wsPort = env.ATHENA_INTEROP_WS_PORT ?? '8088';
   const publicAddress = env.ATHENA_INTEROP_PUBLIC_ADDRESS ?? '127.0.0.1';
   const subscribers = (env.ATHENA_INTEROP_SUBSCRIBERS ?? '1001,1002').split(',').map((subscriber) => subscriber.trim()).filter(Boolean);
-  if (subscribers.length !== 2) {
-    throw new Error(`ATHENA_INTEROP_SUBSCRIBERS names ${subscribers.length} subscriber(s); a call needs exactly two`);
-  }
+  if (subscribers.length === 0) throw new Error('ATHENA_INTEROP_SUBSCRIBERS names nobody to register as');
   const advertise = env.ATHENA_INTEROP_RTPENGINE_ADVERTISE || publicAddress;
   let relay: Fixture['relay'];
   if (advertise !== publicAddress) {
@@ -63,9 +83,14 @@ export function fixtureFromEnvironment(env: NodeJS.ProcessEnv = process.env): Fi
       ? { username: env.ATHENA_INTEROP_API_USER, password: env.ATHENA_INTEROP_API_PASSWORD }
       : undefined,
     realm: env.ATHENA_INTEROP_REALM ?? publicAddress,
-    subscribers: [subscribers[0], subscribers[1]],
+    subscribers,
     password: env.ATHENA_INTEROP_PASSWORD ?? 'athenaphone',
     resultsDir: env.ATHENA_INTEROP_RESULTS ?? 'e2e/results',
+    target: env.ATHENA_INTEROP_TARGET || undefined,
+    ignoreTls: env.ATHENA_INTEROP_IGNORE_TLS === '1' || env.ATHENA_INTEROP_IGNORE_TLS === 'true',
+    answerSeconds: seconds(env.ATHENA_INTEROP_ANSWER_SECONDS, 45, 'ATHENA_INTEROP_ANSWER_SECONDS'),
+    mediaSeconds: seconds(env.ATHENA_INTEROP_MEDIA_SECONDS, 5, 'ATHENA_INTEROP_MEDIA_SECONDS'),
+    minFrames: seconds(env.ATHENA_INTEROP_MIN_FRAMES, 30, 'ATHENA_INTEROP_MIN_FRAMES'),
   };
 }
 
@@ -74,7 +99,7 @@ export function sipUri(fixture: Fixture, user: string): string {
 }
 
 /** The softphone page, opened already knowing what to do. */
-export function softphoneUrl(fixture: Fixture, user: string, options: { target?: string; answer?: boolean; ice?: unknown[] }): string {
+export function softphoneUrl(fixture: Fixture, user: string, options: { target?: string; answer?: boolean; ice?: unknown[]; video?: boolean }): string {
   const url = new URL('/softphone.html', `${fixture.pageUrl}/`);
   url.searchParams.set('ws', fixture.socket);
   url.searchParams.set('uri', sipUri(fixture, user));
@@ -84,5 +109,6 @@ export function softphoneUrl(fixture: Fixture, user: string, options: { target?:
   if (options.answer) url.searchParams.set('answer', '1');
   if (options.ice) url.searchParams.set('ice', JSON.stringify(options.ice));
   if (fixture.relay) url.searchParams.set('relay', '1');
+  if (options.video) url.searchParams.set('video', '1');
   return url.toString();
 }

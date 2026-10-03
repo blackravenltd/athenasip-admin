@@ -77,7 +77,8 @@ export function SoftphoneScreen({ options = NO_OPTIONS, stack = jssipStack, api 
   const [configNotice, setConfigNotice] = useState<string>();
   const [iceServers, setIceServers] = useState<RTCIceServer[]>();
   const [relayOnly, setRelayOnly] = useState(false);
-  const [video, setVideo] = useState(false);
+  // The harness page's `video=1`; the console's own box starts unticked.
+  const [video, setVideo] = useState(options.video ?? false);
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const { phone, state, remoteStream, stats } = useSoftphone(stack, options);

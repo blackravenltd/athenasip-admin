@@ -40,10 +40,16 @@ interface EndRecord {
 
 const fixture = fixtureFromEnvironment();
 
+// A phone target selects the phone run instead (`phone-call.spec.ts`).
+test.skip(!!fixture.target, 'ATHENA_INTEROP_TARGET is set, so this is the phone run');
+
 /** In the relay phase, what `/client/config` says, fetched here so the page never holds a session. */
 let iceServers: unknown[] | undefined;
 
 test.beforeAll(async () => {
+  if (fixture.subscribers.length !== 2) {
+    throw new Error(`ATHENA_INTEROP_SUBSCRIBERS names ${fixture.subscribers.length} subscriber(s); a browser calling a browser needs exactly two`);
+  }
   let health: Response | undefined;
   try {
     health = await fetch(`${fixture.apiUrl}/health`);

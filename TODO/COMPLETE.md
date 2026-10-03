@@ -38,6 +38,11 @@ with a one-line note on what shipped.
       needs, and with only `view-cluster-status` the directory lists who is registered now.
 - [x] **The Phone without View cluster status.** It asks `/client/config` for nothing, so no
       403s: the WebSocket is a guess, calls have no ICE servers, and the page says both.
+- [x] **The phone run.** `e2e/phone-call.spec.ts`: one page calls a phone (`ATHENA_INTEROP_TARGET`)
+      with Chromium's fake camera, and asserts ICE, DTLS, audio both ways, the video line
+      accepted or bundled, and frames decoded from the phone. The harness page takes
+      `video=1`, and the readout gains `video()` and the video counters in `stats()`. For the
+      server's run against macnessa and the A85; not yet run.
 ## The softphone's meters and secure context (2026-10-03)
 
 - [x] **Video, when asked.** A "Video" box beside Call on the console's softphone (not the

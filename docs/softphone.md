@@ -48,6 +48,7 @@ Either page can be opened already knowing what to do. All values are URL-encoded
 | `answer=1` | Answer an incoming call as soon as it arrives. |
 | `ice` | A JSON array of ICE servers, as `GET /api/v1/client/config` gives `ice_servers`. A `turn:` entry without a credential, or with an expired one, is dropped. Removed from the address bar as soon as it has been read, since it carries a TURN credential. |
 | `relay=1` | Media only through the TURN server (`iceTransportPolicy: "relay"`). |
+| `video=1` | Send the camera on every call placed or answered, as the console's Video box does. |
 
 A password or a TURN credential in a URL is a harness convenience and nothing else. Nothing
 is stored: both live in the page, and are gone on reload. The harness fetches `ice` itself,
@@ -64,7 +65,8 @@ test reads state rather than scraping it off the screen.
 | `version` | `1`. Bumped when a field changes meaning. |
 | `state()` | `registration`, `call`, `direction`, `remoteIdentity`, `cause`, `localSdp`, `remoteSdp`, `signalingState`, `iceGatheringState`, `iceConnectionState`, `connectionState`, `notice`. |
 | `history()` | Every state change since load, oldest first, each with a timestamp. |
-| `stats()` | A promise of the browser's own counters: packets and bytes each way, packets lost, the far end's audio level and its accumulated audio energy, the codec, the DTLS state, and the selected candidate pair with each end's address, port and type. |
+| `stats()` | A promise of the browser's own counters: packets and bytes each way, packets lost, the far end's audio level and its accumulated audio energy, the codec, the DTLS state, and the selected candidate pair with each end's address, port and type. These are audio's. When the call carries video, `video` holds its own: `packetsSent`, `packetsReceived`, `framesDecoded`, `codec`. |
+| `video()` | Each end's video m-line (`port`, `direction`, `bundled`) and `outcome`, what the far end did with it: `accepted`, `bundled` (accepted, sharing the bundle's transport, so its port 9 is a placeholder), `declined` (port 0) or `absent`. |
 | `call(target)`, `answer()`, `hangUp()` | The buttons, callable. |
 
 `registration` is `unregistered`, `connecting`, `registered` or `failed`. `call` is `idle`,
@@ -160,4 +162,46 @@ ATHENA_INTEROP_SIP_PORT=15060 ATHENA_INTEROP_TLS_PORT=15061 \
 ATHENA_INTEROP_WS_PORT=18088  ATHENA_INTEROP_API_PORT=18080 \
 ATHENA_INTEROP_RTP_MIN=23000  ATHENA_INTEROP_RTP_MAX=23020 \
 ATHENA_INTEROP_NAME=athenasip-interop-alt test/interop/browser.sh
+```
+
+## The phone run
+
+`e2e/phone-call.spec.ts` registers one page and calls a phone, not another page: the
+AthenaPhone A85 first, through a real node. It sends Chromium's fake camera and microphone
+(`video=1`), waits for the phone to answer by itself, and asserts ICE and DTLS connected,
+audio packets both ways, the video line accepted or bundled, video sent, and at least
+`ATHENA_INTEROP_MIN_FRAMES` frames decoded from the phone after `ATHENA_INTEROP_MEDIA_SECONDS`.
+The phone's audio is not required to carry sound, since a phone on a desk may be sending
+silence. It writes its record before asserting, so a failed call leaves its descriptions and
+counters behind, then hangs up.
+
+It runs only when `ATHENA_INTEROP_TARGET` is set, and the browser-to-browser spec stands aside
+when it is, so one environment selects one run. The node, its engine and the phone are the
+server's; the spec only opens the page, which a static server of `build/` provides over
+loopback, a secure context.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `ATHENA_INTEROP_TARGET` | none | The SIP URI to call. Selects this run. |
+| `ATHENA_INTEROP_PAGE_URL` | `http://127.0.0.1:<api port>` | Where `softphone.html` is served. |
+| `ATHENA_INTEROP_WS_URL` | | The node's socket, `wss://` for a node on the internet. |
+| `ATHENA_INTEROP_IGNORE_TLS` | off | `1` accepts the node's certificate unverified, for the snakeoil CA. Nothing in this run then proves the certificate. |
+| `ATHENA_INTEROP_REALM` | | The realm the page registers in. |
+| `ATHENA_INTEROP_SUBSCRIBERS` | | The first is the page's subscriber; any others are ignored. |
+| `ATHENA_INTEROP_PASSWORD` | `athenaphone` | Its password. |
+| `ATHENA_INTEROP_ANSWER_SECONDS` | `45` | How long the phone has to answer. |
+| `ATHENA_INTEROP_MEDIA_SECONDS` | `5` | How long media runs before the counters are read. |
+| `ATHENA_INTEROP_MIN_FRAMES` | `30` | Frames the page must have decoded from the phone by then. |
+| `ATHENA_INTEROP_RTPENGINE_ADVERTISE` | none | When set, the page must be sending to this address: the engine anchored the call. |
+
+The run against macnessa, from this checkout:
+
+```
+npm run build
+npx vite preview --port 4173 --strictPort &
+ATHENA_INTEROP_PAGE_URL=http://127.0.0.1:4173 \
+ATHENA_INTEROP_WS_URL=wss://macnessa.athenasip.org:8089 ATHENA_INTEROP_IGNORE_TLS=1 \
+ATHENA_INTEROP_REALM=macnessa.athenasip.org ATHENA_INTEROP_SUBSCRIBERS=1002 \
+ATHENA_INTEROP_TARGET=sip:1003@macnessa.athenasip.org \
+npx playwright test e2e/phone-call.spec.ts
 ```
