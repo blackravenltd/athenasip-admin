@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 
 interface ModalProps {
   open: boolean;
@@ -16,6 +17,11 @@ interface ModalProps {
  * behind it. None of that is optional for a console somebody drives from the
  * keyboard, and all of it is the kind of thing each screen gets slightly wrong
  * if each screen writes it.
+ *
+ * It renders into `document.body` rather than where it is declared. The main
+ * panel is a stacking context of its own, so a dialogue inside it could never
+ * rise above the sticky navigation, which covered the top of any dialogue
+ * taller than the space below it.
  */
 export function Modal({ open, title, children, actions, onClose }: ModalProps) {
   const titleId = useId();
@@ -58,7 +64,7 @@ export function Modal({ open, title, children, actions, onClose }: ModalProps) {
   }, [open]);
 
   if (!open) return null;
-  return (
+  return createPortal(
     <div
       className="modal-backdrop"
       role="presentation"
@@ -69,7 +75,8 @@ export function Modal({ open, title, children, actions, onClose }: ModalProps) {
         <div className="modal-content">{children}</div>
         <div className="modal-actions">{actions}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
