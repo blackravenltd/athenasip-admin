@@ -4,7 +4,7 @@ This is the React administration frontend for [AthenaSIP](../athenasip), the SIP
 the sibling checkout. The server is the source of truth: this repository renders and edits
 what the server's admin API exposes, and ships as a static bundle the server serves itself.
 
-Work happens on `develop`; `main` carries the last release, and `0.2.0` is the current one.
+Work happens on `develop`; `main` carries the last release, and `0.3.0` is the current one.
 Move items to `COMPLETE.md` as they land, with a one-line note on what shipped. Line numbers
 refer to the current tree; update them as files move.
 
@@ -27,6 +27,10 @@ different roles.
 matches `build/assets/index-*.js`, tell the server session, and ask Tom to sign in and click
 through every screen as users with different roles. The subscriber `athenaphone` on realm
 `10.35.1.20` has `media_profile: webrtc` and should show a WebRTC tag on Subscribers.
+
+**The node is at 0.8.0** (2026-10-03): `/realms/{realm}/subscribers`, rate limits, HTTPS on
+8443 and wss on 8089 at corvus-fi-1, all of which the console uses; and two it does not read
+yet, call records at `GET /api/v1/call-records` and a cluster entry in `GET /api/v1/nodes`.
 
 **The server's session.** "AthenaSIP Server" (find it with ListAgents, message with
 SendMessage). It owns `../athenasip`, the node and every fixture; nothing here edits them,
@@ -269,6 +273,8 @@ Refresh button. See `COMPLETE.md` for what shipped.
       WebSocket on the HTTP listener. MQTT over WebSocket straight to the browser is the
       alternative and a much larger security surface. The server has not built either.
 - [ ] Push calls, registrations and counts rather than polling them, once there is a stream.
+- [ ] Show finished calls from `GET /api/v1/call-records` (node 0.8.0), beside the live ones.
+- [ ] Show the cluster entry `GET /api/v1/nodes` now carries (node 0.8.0) on Overview.
 - [ ] Hang up a call from the Calls screen. Needs the node to send BYEs itself, its M6.
 - [ ] Match legs to participants on the Calls screen once the node fills `participant`.
       Nothing is planned on the server for it.

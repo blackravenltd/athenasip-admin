@@ -2,7 +2,7 @@
 
 # AthenaSIP Admin
 
-*v0.2.0*
+*v0.3.0*
 
 **Project Status: ALPHA - DO NOT USE**
 
