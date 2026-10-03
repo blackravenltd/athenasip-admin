@@ -17,9 +17,8 @@ over `8a09898`; the first six were split by file, so only `9d971ce` onwards type
 layer changed under every screen at once). Not pushed. Commit only when asked, never with Claude
 attribution (the user's global rule).
 
-**Deployed** (Tom approved in this session, 2026-10-03, after the server's node deploy that
-renamed `/accounts` to `/subscribers`): corvus-fi-1 serves `assets/index-CJwlzpai.js`, built
-from `5df4ffd`, and the server session has been told.
+**Deployed** (Tom approved in this session, 2026-10-03 evening): corvus-fi-1 serves
+`assets/index-BCjSgyU1.js`, built from `a48d645`, and the server session has been told.
 
 **Waiting on Tom:** sign in on corvus-fi-1 and click through every screen as users with
 different roles.
