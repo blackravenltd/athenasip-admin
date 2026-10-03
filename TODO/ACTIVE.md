@@ -12,24 +12,21 @@ refer to the current tree; update them as files move.
 
 Everything needed to pick this up after a clear, in the order it matters.
 
-**The tree.** On `develop`, clean: six commits from `a4649f9` (sign-in) to
-the docs commit, over `8a09898`, split by file, so only `9d971ce` onwards typechecks (the API layer
-changed under every screen at once). Not pushed. Commit only when asked, never with Claude
+**The tree.** On `develop`, clean. Today's commits run from `a4649f9` (sign-in) to `5df4ffd`,
+over `8a09898`; the first six were split by file, so only `9d971ce` onwards typechecks (the API
+layer changed under every screen at once). Not pushed. Commit only when asked, never with Claude
 attribution (the user's global rule).
 
-**Deployed** (Tom approved in this session, 2026-10-03): corvus-fi-1 serves
-`assets/index-CzSube6u.js`, and the server session has been told.
+**Deployed** (Tom approved in this session, 2026-10-03, after the server's node deploy that
+renamed `/accounts` to `/subscribers`): corvus-fi-1 serves `assets/index-CJwlzpai.js`, built
+from `5df4ffd`, and the server session has been told.
 
-**Waiting on Tom:**
+**Waiting on Tom:** sign in on corvus-fi-1 and click through every screen as users with
+different roles.
 
-1. Sign in on corvus-fi-1 and click through every screen as users with different roles.
-2. Approve deploying the console again, in step with the server's next node deploy. Tom
-   settled three API questions on 2026-10-03 (relayed by the server session): `/accounts` is
-   renamed `/subscribers` with no alias, deleting a realm deletes its subscribers and their
-   registrations, and every route is rate limited (429 with Retry-After). The tree follows
-   all three, uncommitted. The console on corvus-fi-1 still calls `/accounts`, so the node
-   and the console must go out together: the server waits for word that the console is
-   ready, then deploys, then this session deploys straight after.
+**Waiting on the server:** the exact rate limits. It promised at least 120 requests a minute
+per session on authenticated routes, so the 2-second Calls poll stays; public routes, login
+above all, will be much tighter.
 
 **After a deploy:** check `curl -s http://10.35.1.20:8080/ | grep -o 'assets/index-[^"]*'`
 matches `build/assets/index-*.js`, tell the server session, and ask Tom to sign in and click
