@@ -104,14 +104,10 @@ export function SoftphoneScreen({ options = NO_OPTIONS, stack = jssipStack, api 
   const [iceServers, setIceServers] = useState<RTCIceServer[]>();
   const [relayOnly, setRelayOnly] = useState(false);
   const { phone, state, remoteStream, stats } = useSoftphone(stack, options);
-  const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const [playbackNotice, setPlaybackNotice] = useState<string>();
-
-  // The meter needs the element itself, and a ref does not re-render when it
-  // is attached. This is the one place that matters, so it is a state copy
-  // rather than a callback ref threaded through everything.
-  useEffect(() => setAudioElement(audioRef.current), []);
+  // Undefined where the browser does not say, as in a test; only a plain no stops the phone.
+  const insecure = window.isSecureContext === false;
 
   // Where to signal, from the node, unless the query string or the environment said.
   // Only replaces the guessed default, never something already typed.
@@ -233,7 +229,7 @@ export function SoftphoneScreen({ options = NO_OPTIONS, stack = jssipStack, api 
               type="button"
               data-testid="softphone-register"
               onClick={() => phone.register({ socket: connection.socket, uri: connection.uri, password: connection.password })}
-              disabled={busy || !connection.socket || !connection.uri}
+              disabled={insecure || busy || !connection.socket || !connection.uri}
             >
               {busy ? 'Registering...' : 'Register'}
             </button>
@@ -281,10 +277,16 @@ export function SoftphoneScreen({ options = NO_OPTIONS, stack = jssipStack, api 
             </span>
           )}
         </p>
+        {insecure && (
+          <p className="error-message" role="alert" data-testid="softphone-insecure">
+            This page is not a secure context, so the browser will not give it a microphone and no
+            call can start. Open the console over https, or through localhost.
+          </p>
+        )}
         {notice && <p className="error-message" role="alert">{notice}</p>}
 
         <audio ref={audioRef} autoPlay hidden playsInline />
-        <VolumeMeter label="Far end" source={{ kind: 'element', element: audioElement }} active={state.call === 'connected'} />
+        <VolumeMeter label="Far end" source={{ kind: 'stream', stream: remoteStream }} active={state.call === 'connected'} />
         <VolumeMeter label="Microphone" source={{ kind: 'microphone' }} active={registered} />
       </section>
 

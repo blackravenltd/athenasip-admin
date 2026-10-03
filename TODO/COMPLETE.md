@@ -3,6 +3,15 @@
 The record of what exists and works in the tree. Move items from `ACTIVE.md` as they land,
 with a one-line note on what shipped.
 
+## The softphone's meters and secure context (2026-10-03)
+
+- [x] **The Far end meter reads the remote stream.** It used `createMediaElementSource` on the
+      `<audio>` element, which works once per element, and restarted on every render (once a
+      second, as the stats arrive), so it went dead within a second of a call connecting. It
+      now reads the stream with `createMediaStreamSource` and restarts only for a new stream.
+- [x] **No secure context, said plainly.** Over plain http to a non-local address the browser
+      gives no microphone; the softphone says so and disables Register.
+
 ## "Account" names nothing (2026-10-03)
 
 - [x] **One vocabulary.** Per Tom and the server's `docs/glossary.md`: the type, the

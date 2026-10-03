@@ -149,6 +149,17 @@ describe('SoftphoneScreen', () => {
     expect(screen.getByTestId('softphone-registration').getAttribute('data-state')).toBe('failed');
   });
 
+  it('says plainly that no call can start on a page that is not a secure context', () => {
+    Object.defineProperty(window, 'isSecureContext', { value: false, configurable: true });
+    try {
+      render(<SoftphoneScreen options={{ socket: 'ws://node:8088', uri: 'sip:1001@example.com', password: 'p', register: false, answer: false }} stack={stack()} />);
+      expect(screen.getByTestId('softphone-insecure').textContent).toContain('not a secure context');
+      expect(screen.getByTestId('softphone-register')).toHaveProperty('disabled', true);
+    } finally {
+      delete (window as { isSecureContext?: boolean }).isSecureContext;
+    }
+  });
+
   it('registers on load when the page asks for it, prefilled from the query string', () => {
     const sip = stack();
     render(<SoftphoneScreen options={{ socket: 'ws://node:8088', uri: 'sip:1001@example.com', password: 'pw', target: 'sip:1002@example.com', register: true, answer: false }} stack={sip} />);

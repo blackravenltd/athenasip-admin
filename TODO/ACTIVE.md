@@ -235,6 +235,29 @@ Dated, and not reopened without asking.
       which is how it missed the server's DTLS-role bug (fixed there in `ec43d9c`). Agreed
       with the server session; the knob is ours.
 
+## The softphone, from the first live call (2026-10-03)
+
+The server session called AthenaPhone from the console's softphone on corvus-fi-1, audio both
+ways, through an SSH tunnel to localhost. What made it hard:
+
+- [ ] A microphone picker, listing `enumerateDevices()` inputs and passing the choice to the
+      call's `getUserMedia`. The Mac's default input was a virtual loopback (BlackHole), and
+      the first call sent encoded silence for 45 seconds.
+- [ ] A visible warning when the outbound level stays at zero for a few seconds of a
+      connected call, read from the call's own sender (its `audioLevel` or energy in
+      `getStats`), not from the meter's separate `getUserMedia`.
+- [ ] Meter the microphone from the track the call sends, not a second capture of the default
+      device, so the meter and the call can never disagree about which input is live.
+- [ ] HTTPS on the node's admin listener is the server's; until then the softphone works only
+      over localhost. The page now says so instead of offering a Register that leads nowhere.
+- [ ] The guessed WebSocket URL (page host, port 8088) is wrong through a port forward. The
+      console asks `/client/config` first, which names the node's own address; only the
+      fallback guesses. Worth saying in the field's hint when the guess is in use.
+- [ ] A reload loses the session and the subscriber password, by design (principle 5).
+      Changing Chrome's microphone permission reloads the page. Asking for the microphone
+      before signing in to the softphone, so the permission is settled first, would spare
+      the repeat.
+
 ## Milestone 2 - Live view
 
 Calls, the media engine, re-offers, probed clients and the cluster are read by polling or a
