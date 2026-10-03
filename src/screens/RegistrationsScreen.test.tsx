@@ -2,27 +2,53 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { FakeAdminApi } from '../api/FakeAdminApi';
-import { RegistrationsScreen, describeExpiry } from './RegistrationsScreen';
+import { RegistrationsScreen, contactTransport, describeExpiry, describeProbe } from './RegistrationsScreen';
 
 describe('describeExpiry', () => {
   const now = 1_000_000;
 
-  it('treats a nearly-expired binding as ordinary, not as a failure', () => {
-    // Phones refresh at half the interval, so a short remainder is normal.
-    // Drawing it red would make a healthy server look broken all day.
-    expect(describeExpiry(now + 30_000, now)).toEqual({ label: '30s left', tone: 'warn' });
-    expect(describeExpiry(now + 240_000, now)).toEqual({ label: '4m left', tone: 'ok' });
+  it('reads the server’s Unix seconds, and treats a nearly-expired binding as ordinary', () => {
+    expect(describeExpiry(now + 30, now)).toEqual({ label: '30s left', tone: 'warn' });
+    expect(describeExpiry(now + 240, now)).toEqual({ label: '4m left', tone: 'ok' });
   });
 
   it('calls an elapsed binding expired rather than reporting negative time', () => {
-    expect(describeExpiry(now - 5_000, now)).toEqual({ label: 'Expired', tone: 'down' });
+    expect(describeExpiry(now - 5, now)).toEqual({ label: 'Expired', tone: 'down' });
+  });
+});
+
+describe('contactTransport', () => {
+  it('reads the transport out of the contact, which is the only place the API says it', () => {
+    expect(contactTransport('sip:tom@192.168.1.24:5061;transport=tls')).toBe('TLS');
+    expect(contactTransport('sip:tom@192.168.1.24:5060')).toBeUndefined();
+  });
+});
+
+describe('describeProbe', () => {
+  const client = { account: 'sip:a@b', contact: 'sip:a@c', interval: 60, said_media_profile: null };
+  const now = Date.parse('2026-10-02T10:00:00Z');
+
+  it('treats one missed probe as a lost packet and several as a client gone', () => {
+    expect(describeProbe({ ...client, answered_at: '2026-10-02T09:59:48Z', unanswered: 0 }, now)).toEqual({ label: 'Answered 12s ago', tone: 'ok' });
+    expect(describeProbe({ ...client, answered_at: null, unanswered: 1 }, now).tone).toBe('warn');
+    expect(describeProbe({ ...client, answered_at: null, unanswered: 3 }, now).tone).toBe('down');
   });
 });
 
 describe('RegistrationsScreen', () => {
-  it('lists the live bindings with their transport', async () => {
+  it('lists the probed clients, with what each said it takes', async () => {
+    render(<RegistrationsScreen api={new FakeAdminApi()} />);
+    const tom = await screen.findByRole('group', { name: 'Probe of sip:tom@sip.athenasip.org' });
+    expect(tom.parentElement!.textContent).toContain('Says Plain RTP');
+    const tomweb = screen.getByRole('group', { name: 'Probe of sip:tomweb@sip.athenasip.org' });
+    expect(tomweb.parentElement!.textContent).toContain('3 unanswered');
+  });
+
+
+  it('lists the live bindings with their transport and NAT state', async () => {
     render(<RegistrationsScreen api={new FakeAdminApi()} />);
     expect(await screen.findByRole('group', { name: 'sip:tom@sip.athenasip.org' })).toBeTruthy();
     expect(await screen.findByText('WS')).toBeTruthy();
+    expect(await screen.findByText('NAT')).toBeTruthy();
   });
 });
