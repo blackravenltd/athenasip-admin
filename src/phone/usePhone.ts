@@ -26,9 +26,11 @@ export interface PhoneHandle {
  * Unlike the harness page's hook it puts nothing on `window` and reads no
  * query string. TURN credentials are minted per request and expire, so the
  * ICE servers are asked for as each call is placed or answered; without the
- * node's answer the call goes ahead with none.
+ * node's answer the call goes ahead with none. `readsConfig` is whether the
+ * console user may ask (`/client/config` needs View cluster status): without
+ * it nothing is asked, rather than collecting a 403 on every call.
  */
-export function usePhone(stack: SipStack, api: AdminApi): PhoneHandle {
+export function usePhone(stack: SipStack, api: AdminApi, readsConfig = true): PhoneHandle {
   const phone = useMemo(() => new Softphone(stack), [stack]);
   const [state, setState] = useState<SoftphoneState>(phone.state);
   const [streams, setStreams] = useState<{ remote?: MediaStream; local?: MediaStream }>({});
@@ -72,6 +74,10 @@ export function usePhone(stack: SipStack, api: AdminApi): PhoneHandle {
 
   const withIce = useCallback((place: (servers: RTCIceServer[]) => void) => {
     setIceNotice(undefined);
+    if (!readsConfig) {
+      place([]);
+      return;
+    }
     api.clientConfig().then(
       (config) => usableIceServers(config.ice_servers),
       (cause: unknown) => {
@@ -79,7 +85,7 @@ export function usePhone(stack: SipStack, api: AdminApi): PhoneHandle {
         return [];
       },
     ).then(place);
-  }, [api]);
+  }, [api, readsConfig]);
 
   const call = useCallback((target: string, media: CallMedia = {}) => {
     withIce((servers) => phone.call(target, { servers }, media));

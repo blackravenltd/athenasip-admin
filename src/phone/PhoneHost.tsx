@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import type { AdminApi } from '../api/AdminApi';
 import type { Role } from '../api/types';
+import { can } from '../auth/roles';
 import { routes } from '../app/routes';
 import { jssipStack } from '../softphone/jssip';
 import type { SipStack } from '../softphone/Softphone';
@@ -32,7 +33,8 @@ export default function PhoneHost({ api, roles, visible, indicator, stack = jssi
   indicator: HTMLElement | null;
   stack?: SipStack;
 }) {
-  const handle = usePhone(stack, api);
+  const readsConfig = can(roles, 'view-cluster-status');
+  const handle = usePhone(stack, api, readsConfig);
   const [settings, setSettings] = useRememberedSettings();
   const audio = useRef<HTMLAudioElement>(null);
   const { state, remoteStream } = handle;
@@ -62,6 +64,7 @@ export default function PhoneHost({ api, roles, visible, indicator, stack = jssi
         <PhoneScreen
           api={api}
           handle={handle}
+          readsConfig={readsConfig}
           settings={settings}
           onSettings={setSettings}
           aside={(

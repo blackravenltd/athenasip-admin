@@ -55,18 +55,27 @@ const CONFIG: ClientConfig = {
   ice_servers: [{ urls: 'stun:10.35.1.20:3478' }],
 };
 
-function node(): AdminApi {
-  return { clientConfig: async () => CONFIG } as unknown as AdminApi;
+/** A node that answers what View cluster status may ask, with an empty history and nobody registered. */
+function node(): AdminApi & { asked: string[] } {
+  const asked: string[] = [];
+  return {
+    asked,
+    clientConfig: async () => { asked.push('clientConfig'); return CONFIG; },
+    listCallRecords: async () => [],
+    listRegistrations: async () => [],
+  } as unknown as AdminApi & { asked: string[] };
 }
 
-function show(sip = stack(), visible = true, api: AdminApi = node(), roles: readonly Role[] = []) {
+const STATUS: readonly Role[] = ['view-cluster-status'];
+
+function show(sip = stack(), visible = true, api: AdminApi = node(), roles: readonly Role[] = STATUS) {
   const slot = document.createElement('div');
   document.body.appendChild(slot);
   const view = render(<MemoryRouter><PhoneHost api={api} roles={roles} visible={visible} indicator={slot} stack={sip} /></MemoryRouter>);
   return { sip, slot, view };
 }
 
-async function registered(sip = stack(), api: AdminApi = node(), roles: readonly Role[] = []) {
+async function registered(sip = stack(), api: AdminApi = node(), roles: readonly Role[] = STATUS) {
   saveSettings({ uri: 'sip:1001@10.35.1.20', socket: 'ws://10.35.1.20:8088' });
   const shown = show(sip, true, api, roles);
   fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'pw' } });
@@ -214,9 +223,22 @@ describe('PhoneHost', () => {
   });
 
   it('says why there is no history or directory when the console user has no role for them', async () => {
-    await registered();
+    await registered(stack(), node(), []);
     expect(screen.getByText(/call records, which need the View cluster status role/)).toBeTruthy();
     expect(screen.getByText(/needs the Manage subscribers or View cluster status role/)).toBeTruthy();
+  });
+
+  it('without View cluster status, asks the node nothing, calls with no relay, and says so', async () => {
+    const api = node();
+    const sip = stack();
+    await registered(sip, api, []);
+    expect(screen.getByTestId('phone-no-config').textContent).toContain('calls get no relay');
+    fireEvent.change(screen.getByLabelText('Number or address'), { target: { value: '1002' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Call' }));
+    await vi.waitFor(() => expect(sip.agents[0].calls).toHaveLength(1));
+    expect(sip.agents[0].calls[0].options.pcConfig).toEqual({ iceServers: [] });
+    expect(api.asked).toEqual([]);
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('keeps the call, and its indicator, while another screen is shown', async () => {
@@ -227,7 +249,7 @@ describe('PhoneHost', () => {
     await vi.waitFor(() => expect(sip.agents[0].sessions).toHaveLength(1));
     act(() => { sip.agents[0].sessions[0].emit('accepted', {}); });
 
-    view.rerender(<MemoryRouter><PhoneHost api={node()} roles={[]} visible={false} indicator={slot} stack={sip} /></MemoryRouter>);
+    view.rerender(<MemoryRouter><PhoneHost api={node()} roles={STATUS} visible={false} indicator={slot} stack={sip} /></MemoryRouter>);
     expect(screen.queryByRole('heading', { name: 'Phone' })).toBeNull();
     expect(slot.textContent).toMatch(/^Connected athenaphone 0:0\d$/);
     expect(sip.agents[0].sessions[0].log).toEqual([]);

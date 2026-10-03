@@ -26,9 +26,11 @@ function guessedSocket(): string {
  *
  * `aside` is where history and the directory go, beside the dialler.
  */
-export function PhoneScreen({ api, handle, settings, onSettings, aside }: {
+export function PhoneScreen({ api, handle, readsConfig = true, settings, onSettings, aside }: {
   api: AdminApi;
   handle: PhoneHandle;
+  /** Whether the console user may read `/client/config`, which needs View cluster status. */
+  readsConfig?: boolean;
   settings: PhoneSettings;
   onSettings: (settings: PhoneSettings) => void;
   aside?: ReactNode;
@@ -57,6 +59,10 @@ export function PhoneScreen({ api, handle, settings, onSettings, aside }: {
   // Where to signal, from the node, unless this browser remembers somewhere.
   useEffect(() => {
     if (socket) return;
+    if (!readsConfig) {
+      setSocket(guessedSocket());
+      return;
+    }
     const controller = new AbortController();
     const https = window.location.protocol === 'https:';
     api.clientConfig(controller.signal).then((config) => {
@@ -132,6 +138,14 @@ export function PhoneScreen({ api, handle, settings, onSettings, aside }: {
           )}
         </div>
 
+        {!readsConfig && (
+          <p className="field-hint" data-testid="phone-no-config">
+            Without the View cluster status role this console cannot ask the node for its WebSocket or
+            its TURN server, so the connection below is a guess and calls get no relay: they work where
+            the two ends can reach each other directly.
+          </p>
+        )}
+
         {insecure && (
           <p className="error-message" role="alert">
             This page is not a secure context, so the browser will not give it a microphone and no
@@ -159,6 +173,12 @@ export function PhoneScreen({ api, handle, settings, onSettings, aside }: {
                 <input value={socket} onChange={(event) => setSocket(event.target.value)} />
               </label>
               {socketNotice && <p className="field-hint">{socketNotice}</p>}
+              {!readsConfig && (
+                <p className="field-hint">
+                  This is a guess: where the node listens comes from its client configuration, which
+                  needs the View cluster status role.
+                </p>
+              )}
             </details>
             <div className="dialog-actions">
               <button className="primary-button" type="submit" disabled={insecure || registering || !socket || !uri}>

@@ -36,6 +36,8 @@ with a one-line note on what shipped.
       ends, and the realm's subscribers with whether each is registered; each with a Call
       button. Read with the console user's roles: without them the panel says which role it
       needs, and with only `view-cluster-status` the directory lists who is registered now.
+- [x] **The Phone without View cluster status.** It asks `/client/config` for nothing, so no
+      403s: the WebSocket is a guess, calls have no ICE servers, and the page says both.
 ## The softphone's meters and secure context (2026-10-03)
 
 - [x] **Video, when asked.** A "Video" box beside Call on the console's softphone (not the
