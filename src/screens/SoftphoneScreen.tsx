@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { AdminApi } from '../api/AdminApi';
 import { errorMessage, isAbort } from '../api/errors';
+import type { ClientConfig } from '../api/types';
 import { VolumeMeter } from '../components/VolumeMeter';
 import { usableIceServers } from '../softphone/iceServers';
 import type { CallState, IceOptions, RegistrationState, SipStack } from '../softphone/Softphone';
@@ -74,6 +75,22 @@ export function defaultConnection(options: PageOptions): Connection {
   };
 }
 
+/**
+ * Where to signal, from what the node advertises, for a page served over
+ * https or not.
+ *
+ * An https page must use the secure WebSocket: a browser blocks `ws://` from
+ * it as mixed content. A plain http page uses the plain one, because the
+ * secure one works only once the browser trusts the node's certificate, and
+ * a page reached over http is usually one that has not been asked to. Nothing
+ * when the node offers nothing fit, so the caller keeps its guess.
+ */
+export function signallingUri(config: ClientConfig, https: boolean): string | undefined {
+  if (https) return config.websocket_uri;
+  const plain = config.transports.find((entry) => entry.transport === 'ws');
+  return plain ? `ws://${plain.address}:${plain.port}` : undefined;
+}
+
 const NO_OPTIONS: PageOptions = { register: false, answer: false };
 
 /**
@@ -115,11 +132,12 @@ export function SoftphoneScreen({ options = NO_OPTIONS, stack = jssipStack, api 
     if (!api || options.socket || import.meta.env.VITE_SIP_WS_URL) return;
     const guessed = defaultConnection(options).socket;
     const controller = new AbortController();
+    const https = window.location.protocol === 'https:';
     api.clientConfig(controller.signal).then((config) => {
-      if (config.websocket_uri) {
-        const uri = config.websocket_uri;
+      const uri = signallingUri(config, https);
+      if (uri) {
         setConnection((current) => (current.socket === guessed ? { ...current, socket: uri } : current));
-      } else if (window.location.protocol === 'https:') {
+      } else if (https) {
         setConfigNotice('This node has no secure WebSocket listener, so a page served over https cannot reach it.');
       }
     }).catch((cause: unknown) => {

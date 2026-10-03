@@ -15,8 +15,10 @@ AthenaSIP's end-to-end run, on a page of its own.
   what the end-to-end run opens.
 
 They differ in one thing. The console's page asks the node's `GET /api/v1/client/config`
-where to signal and what to use for ICE: `websocket_uri`, when the node has a `wss` listener,
-replaces the guessed default socket, and the ICE servers are fetched again as each call is
+where to signal and what to use for ICE. On a page served over https, `websocket_uri` (the
+node's `wss` listener) replaces the guessed default socket, since the browser blocks `ws://`
+there; on a plain http page the `ws` entry in `transports` does, since `wss` works only once
+the browser trusts the node's certificate. The ICE servers are fetched again as each call is
 placed or answered, because a TURN credential is minted per request and expires. A `turn:`
 entry that arrives without a credential is dropped rather than handed to the browser half
 built (`src/softphone/iceServers.ts`). The harness page takes no API and changes nothing:

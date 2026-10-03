@@ -11,7 +11,7 @@ Vite environment variables, read at build time and compiled in. All optional.
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `VITE_ATHENASIP_LIVE` | unset | `true` talks to a real node. Anything else uses the in-memory fake, which is wrong for a deployment. |
-| `VITE_SIP_WS_URL` | port 8088 on this page's host | The softphone's WebSocket URL. |
+| `VITE_SIP_WS_URL` | what `/client/config` names, else port 8088 on this page's host | The softphone's WebSocket URL. |
 | `VITE_SIP_URI` | empty | A SIP URI to prefill on the softphone. |
 | `VITE_SIP_TARGET` | empty | A call target to prefill on the softphone. |
 

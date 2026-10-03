@@ -236,6 +236,11 @@ Dated, and not reopened without asking.
 
 ## The softphone, from the first live call (2026-10-03)
 
+corvus-fi-1 serves the console over https at `https://10.35.1.20:8443` and `wss` on 8089 since
+21:45 that evening, with the node's certificate from the server's snakeoil CA
+(`tls/ca/snakeca.crt` there). A browser must trust that CA, or accept the certificate on both
+ports, before the softphone works from the node's real address.
+
 The server session called AthenaPhone from the console's softphone on corvus-fi-1, audio both
 ways, through an SSH tunnel to localhost. What made it hard:
 
@@ -247,8 +252,6 @@ ways, through an SSH tunnel to localhost. What made it hard:
       `getStats`), not from the meter's separate `getUserMedia`.
 - [ ] Meter the microphone from the track the call sends, not a second capture of the default
       device, so the meter and the call can never disagree about which input is live.
-- [ ] HTTPS on the node's admin listener is the server's; until then the softphone works only
-      over localhost. The page now says so instead of offering a Register that leads nowhere.
 - [ ] The guessed WebSocket URL (page host, port 8088) is wrong through a port forward. The
       console asks `/client/config` first, which names the node's own address; only the
       fallback guesses. Worth saying in the field's hint when the guess is in use.

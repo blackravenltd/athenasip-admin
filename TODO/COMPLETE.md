@@ -9,6 +9,9 @@ with a one-line note on what shipped.
       `<audio>` element, which works once per element, and restarted on every render (once a
       second, as the stats arrive), so it went dead within a second of a call connecting. It
       now reads the stream with `createMediaStreamSource` and restarts only for a new stream.
+- [x] **wss on https, ws on http.** The console's softphone takes `websocket_uri` on an
+      https page and the `ws` transport on an http one (`signallingUri`), so a page over http
+      does not depend on the browser trusting the node's certificate.
 - [x] **No secure context, said plainly.** Over plain http to a non-local address the browser
       gives no microphone; the softphone says so and disables Register.
 

@@ -7,7 +7,7 @@ import { READOUT_KEY } from '../softphone/page';
 import type { SipStack } from '../softphone/Softphone';
 import type { AdminApi } from '../api/AdminApi';
 import type { ClientConfig } from '../api/types';
-import { SoftphoneScreen, callInProgress, defaultConnection, describeCallState } from './SoftphoneScreen';
+import { SoftphoneScreen, callInProgress, defaultConnection, describeCallState, signallingUri } from './SoftphoneScreen';
 
 class FakeAgent extends EventEmitter {
   sessions: FakeSession[] = [];
@@ -61,12 +61,36 @@ function node(config: ClientConfig): AdminApi & { asked: number } {
   return api as unknown as AdminApi & { asked: number };
 }
 
+describe('signallingUri', () => {
+  const config: ClientConfig = {
+    websocket_uri: 'wss://203.0.113.5:8089',
+    transports: [
+      { transport: 'udp', address: '203.0.113.5', port: 5060, uri: 'sip:203.0.113.5:5060;transport=udp' },
+      { transport: 'ws', address: '203.0.113.5', port: 8088, uri: 'sip:203.0.113.5:8088;transport=ws' },
+    ],
+    ice_servers: [],
+  };
+
+  it('takes the secure WebSocket for an https page, which may not open ws://', () => {
+    expect(signallingUri(config, true)).toBe('wss://203.0.113.5:8089');
+    expect(signallingUri({ ...config, websocket_uri: undefined }, true)).toBeUndefined();
+  });
+
+  it('takes the plain WebSocket for an http page, which need not trust the node certificate', () => {
+    expect(signallingUri(config, false)).toBe('ws://203.0.113.5:8088');
+    expect(signallingUri({ ...config, transports: [] }, false)).toBeUndefined();
+  });
+});
+
 describe('SoftphoneScreen', () => {
   it("signals where the node says, and calls with the node's ICE servers fetched at the moment of calling", async () => {
     const sip = stack();
     const api = node({
       websocket_uri: 'wss://node:9443',
-      transports: [],
+      transports: [
+        { transport: 'ws', address: 'node', port: 8088, uri: 'sip:node:8088;transport=ws' },
+        { transport: 'wss', address: 'node', port: 9443, uri: 'sips:node:9443;transport=wss' },
+      ],
       ice_servers: [
         { urls: 'stun:node:3478' },
         { urls: 'turn:node:3478' },
@@ -75,7 +99,8 @@ describe('SoftphoneScreen', () => {
     });
     render(<SoftphoneScreen api={api} stack={sip} options={{ uri: 'sip:1001@example.com', target: 'sip:1002@example.com', register: false, answer: false }} />);
     const socket = screen.getByTestId('softphone-socket') as HTMLInputElement;
-    await vi.waitFor(() => expect(socket.value).toBe('wss://node:9443'));
+    // jsdom serves the page over http, so the plain WebSocket.
+    await vi.waitFor(() => expect(socket.value).toBe('ws://node:8088'));
 
     fireEvent.click(screen.getByRole('button', { name: 'Register' }));
     const [agent] = sip.agents;
