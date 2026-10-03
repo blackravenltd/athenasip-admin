@@ -16,7 +16,7 @@ import { OverviewScreen } from './screens/OverviewScreen';
 import { RealmsScreen } from './screens/RealmsScreen';
 import { SubscribersScreen } from './screens/SubscribersScreen';
 import { UsersScreen } from './screens/UsersScreen';
-import { AccountScreen } from './screens/AccountScreen';
+import { MeScreen } from './screens/MeScreen';
 import { RegistrationsScreen } from './screens/RegistrationsScreen';
 import { MediaScreen } from './screens/MediaScreen';
 import { CallsScreen } from './screens/CallsScreen';
@@ -93,7 +93,7 @@ export default function App({ api, session, loginHint }: { api: AdminApi; sessio
           {signedIn && info && (
             <>
               <SessionExpiry expiresAt={expiresAt} />
-              <Link className="session-who" to={routes.account}>{describeWho(info)}</Link>
+              <Link className="session-who" to={routes.me}>{describeWho(info)}</Link>
               <button className="secondary-button" type="button" onClick={logOut}>Log out</button>
             </>
           )}
@@ -112,7 +112,7 @@ export default function App({ api, session, loginHint }: { api: AdminApi; sessio
             // In place of the screen that was asked for, so signing in lands
             // there and the address bar never changes.
             <LoginScreen api={api} session={session} ended={ended} hint={loginHint} />
-          ) : roles.length === 0 && location.pathname !== routes.account ? (
+          ) : roles.length === 0 && location.pathname !== routes.me ? (
             <NoPermissionsScreen info={info} />
           ) : (
             <Routes>
@@ -131,7 +131,7 @@ export default function App({ api, session, loginHint }: { api: AdminApi; sessio
               <Route path={routes.securityTls} element={guard(['view-cluster-status'], <TlsScreen api={api} />)} />
 
               <Route path={routes.users} element={guard(['manage-admin-users'], <UsersScreen api={api} username={info.username} />)} />
-              <Route path={routes.account} element={<AccountScreen api={api} info={info} expiresAt={expiresAt} onPasswordChanged={() => session.signOut('Your password was changed. Sign in with the new one.')} />} />
+              <Route path={routes.me} element={<MeScreen api={api} info={info} expiresAt={expiresAt} onPasswordChanged={() => session.signOut('Your password was changed. Sign in with the new one.')} />} />
 
               <Route path={routes.settings} element={<SettingsScreen />} />
 

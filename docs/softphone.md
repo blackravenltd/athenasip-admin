@@ -1,6 +1,6 @@
 # AthenaSIP Admin - The softphone, and the end-to-end run
 
-The softphone is a WebRTC endpoint over SIP: it registers one account against one node over
+The softphone is a WebRTC endpoint over SIP: it registers one subscriber against one node over
 the WebSocket transport, places or answers one call, and says exactly what happened while
 doing it. It is a diagnostic in the console, under Diagnostics, and it is the browser end of
 AthenaSIP's end-to-end run, on a page of its own.
@@ -89,14 +89,14 @@ The fixture is the server's, brought up by its own script and never by this one:
 (cd ../athenasip && test/interop/up.sh --rtpengine)
 ```
 
-It provisions accounts `1001`, `1002` and `1003` with the password `athenaphone` in a realm
+It provisions subscribers `1001`, `1002` and `1003` with the password `athenaphone` in a realm
 named for the address it advertises, and serves this client's `build/` from the same listener
 as the API. The spec fails with a clear message when nothing is serving at the API port.
 
 Two tests, each with two ends registered in separate browser contexts:
 
-1. The first account calls the second, which answers on arrival, and the caller hangs up.
-2. The second account calls the first, which is answered by clicking, and the callee hangs
+1. The first subscriber calls the second, which answers on arrival, and the caller hangs up.
+2. The second subscriber calls the first, which is answered by clicking, and the callee hangs
    up.
 
 Each asserts that both ends reach `connected`, that ICE reaches `connected` or `completed`
@@ -138,8 +138,8 @@ passes its environment through and sets nothing new.
 | `ATHENA_INTEROP_API_PORT` | `8080` | The page is opened at `http://127.0.0.1:<port>/softphone.html`. |
 | `ATHENA_INTEROP_WS_PORT` | `8088` | The socket is `ws://127.0.0.1:<port>`. |
 | `ATHENA_INTEROP_PUBLIC_ADDRESS` | `127.0.0.1` | The address the node advertises, and rtpengine unless told otherwise. The realm defaults to it. |
-| `ATHENA_INTEROP_REALM` | the public address | The realm the accounts live in. |
-| `ATHENA_INTEROP_ACCOUNTS` | `1001,1002` | The two users the run registers. |
+| `ATHENA_INTEROP_REALM` | the public address | The realm the subscribers live in. |
+| `ATHENA_INTEROP_ACCOUNTS` | `1001,1002` | The two subscribers the run registers. |
 | `ATHENA_INTEROP_PASSWORD` | `athenaphone` | Their password. |
 | `ATHENA_INTEROP_RESULTS` | `e2e/results` | Where the records are written. |
 | `ATHENA_INTEROP_PAGE_URL` | `http://127.0.0.1:<api port>` | Override where the page is served from, for running it against `vite preview` while the fixture does not mount the build. |

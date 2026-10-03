@@ -72,7 +72,7 @@ function RealmDialogue({ api, realm, defaults, onClose, onSaved }: {
       {!realm && (
         <p className="field-hint">
           The domain phones put after the @ in their address. A realm cannot be renamed, because
-          every account in it is named by it.
+          every subscriber in it is named by it.
         </p>
       )}
       <RegistrationFields form={form} defaults={defaults} busy={busy} onChange={setForm} />
@@ -88,9 +88,9 @@ function DeleteRealm({ api, realm, onClose, onDeleted }: {
   onClose: () => void;
   onDeleted: () => void;
 }) {
-  const accounts = useRefreshableAsync((signal) => api.listAccounts(realm.name, signal), [api, realm.name]);
+  const subscribers = useRefreshableAsync((signal) => api.listSubscribers(realm.name, signal), [api, realm.name]);
   const { busy, error, clearError, run } = useSubmit();
-  const count = accounts.value?.length ?? 0;
+  const count = subscribers.value?.length ?? 0;
 
   const remove = () => {
     void run(() => api.deleteRealm(realm.name)).then((removed) => {

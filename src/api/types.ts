@@ -9,7 +9,7 @@
  *
  * Ids are 64-bit on the server and a JavaScript number holds 53 bits, so an
  * id arrives rounded. Nothing in this client keys on one: a realm is keyed by
- * its name and an account by its user, which is how the API addresses them.
+ * its name and a subscriber by its user, which is how the API addresses them.
  */
 
 export type SipTransport = 'udp' | 'tcp' | 'tls' | 'ws' | 'wss';
@@ -57,7 +57,7 @@ export interface LoginResult {
   roles: Role[];
 }
 
-/** A person or system that administers the node. Not a realm account, and never made from one. */
+/** A person or system that administers the node. Not a realm subscriber, and never made from one. */
 export interface AdminUser {
   username: string;
   display_name: string;
@@ -217,43 +217,43 @@ export interface CreateRealm extends RealmSettings {
 /** Only the fields given are changed. A realm cannot be renamed. */
 export type UpdateRealm = RealmSettings;
 
-/** One account in one realm. Addressed by `user` within its realm. */
-export interface Account {
+/** One subscriber in one realm. Addressed by `user` within its realm. */
+export interface Subscriber {
   /** Derived from the URI, so every node agrees on it. Rounded; see the top of this file. */
   id: number;
   uri: string;
   user: string;
   realm: string;
-  /** As the account set it: null where it takes its realm's. */
-  behaviour: Required<AccountBehaviour>;
+  /** As the subscriber set it: null where it takes its realm's. */
+  behaviour: Required<SubscriberBehaviour>;
 }
 
 /**
  * The one behaviour setting that is about an endpoint rather than a realm,
  * as Asterisk's `webrtc=yes` is: what the first description towards this
- * account's endpoint is. Above the realm's, below what the endpoint has itself
+ * subscriber's endpoint is. Above the realm's, below what the endpoint has itself
  * said. Null takes the realm's, and null in an update goes back to it.
  */
-export interface AccountBehaviour {
+export interface SubscriberBehaviour {
   media_profile?: MediaProfile | null;
 }
 
 /** The server computes HA1 from the password and keeps only that. */
-export interface CreateAccount {
+export interface CreateSubscriber {
   user: string;
   password: string;
-  behaviour?: AccountBehaviour;
+  behaviour?: SubscriberBehaviour;
 }
 
 /** Either or both. A password left out is left alone. */
-export interface UpdateAccount {
+export interface UpdateSubscriber {
   password?: string;
-  behaviour?: AccountBehaviour;
+  behaviour?: SubscriberBehaviour;
 }
 
 /** A live binding. Read only: a binding is written by a REGISTER and by nothing else. */
 export interface Registration {
-  /** The account's URI. */
+  /** The subscriber's URI. */
   subscriber: string;
   subscriber_id: number;
   contact: string;
@@ -338,12 +338,12 @@ export interface MediaEngine {
 }
 
 /**
- * `GET /media/reoffers`: an account whose endpoint answered an offer with 488,
+ * `GET /media/reoffers`: a subscriber whose endpoint answered an offer with 488,
  * and was offered the other profile once. The node suggests and the operator
- * decides; nothing sets the account's profile.
+ * decides; nothing sets the subscriber's profile.
  */
 export interface MediaReoffer {
-  /** The account's address of record, as the call's Request-URI named it. */
+  /** The subscriber's address of record, as the call's Request-URI named it. */
   subscriber: string;
   rejected: 'rtp' | 'webrtc';
   /** Null when the other profile was refused as well. */
@@ -351,7 +351,7 @@ export interface MediaReoffer {
   count: number;
   /** ISO 8601. */
   last_at: string;
-  /** What the account's `behaviour.media_profile` would be set to. */
+  /** What the subscriber's `behaviour.media_profile` would be set to. */
   suggested_media_profile: 'rtp' | 'webrtc' | null;
 }
 

@@ -22,7 +22,7 @@ src/
 
 `src/api/AdminApi.ts` is an interface describing everything this client can ask a node to do.
 Its contract is the server's `docs/api/openapi.yaml`, version 1: health, the node list, realms,
-accounts, registrations, live calls and the media engine under `/api/v1`. There are two implementations:
+subscribers, registrations, live calls and the media engine under `/api/v1`. There are two implementations:
 
 - `HttpAdminApi` speaks to a real node. It is the only file in the repository that knows a
   URL, a verb or a status code exists. `src/api/contract.test.ts` checks every request it
@@ -34,7 +34,7 @@ accounts, registrations, live calls and the media engine under `/api/v1`. There 
   realm deletes its subscribers and their registrations because the server's does. It is what development runs
   against without a node, and what every screen test runs against.
 
-A realm is addressed by its name and an account by its user, never by id: the server's ids
+A realm is addressed by its name and a subscriber by its user, never by id: the server's ids
 are 64-bit and arrive in JavaScript rounded.
 
 ## Authentication and roles

@@ -23,7 +23,7 @@ export const routes = {
   securityTls: '/security/tls',
 
   users: '/users',
-  account: '/account',
+  me: '/me',
 
   settings: '/settings',
 

@@ -29,7 +29,7 @@ export interface Fixture {
    */
   apiUser?: { username: string; password: string };
   realm: string;
-  accounts: [string, string];
+  subscribers: [string, string];
   password: string;
   resultsDir: string;
 }
@@ -38,9 +38,9 @@ export function fixtureFromEnvironment(env: NodeJS.ProcessEnv = process.env): Fi
   const apiPort = env.ATHENA_INTEROP_API_PORT ?? '8080';
   const wsPort = env.ATHENA_INTEROP_WS_PORT ?? '8088';
   const publicAddress = env.ATHENA_INTEROP_PUBLIC_ADDRESS ?? '127.0.0.1';
-  const accounts = (env.ATHENA_INTEROP_ACCOUNTS ?? '1001,1002').split(',').map((account) => account.trim()).filter(Boolean);
-  if (accounts.length !== 2) {
-    throw new Error(`ATHENA_INTEROP_ACCOUNTS names ${accounts.length} account(s); a call needs exactly two`);
+  const subscribers = (env.ATHENA_INTEROP_ACCOUNTS ?? '1001,1002').split(',').map((subscriber) => subscriber.trim()).filter(Boolean);
+  if (subscribers.length !== 2) {
+    throw new Error(`ATHENA_INTEROP_ACCOUNTS names ${subscribers.length} subscriber(s); a call needs exactly two`);
   }
   const advertise = env.ATHENA_INTEROP_RTPENGINE_ADVERTISE || publicAddress;
   let relay: Fixture['relay'];
@@ -63,7 +63,7 @@ export function fixtureFromEnvironment(env: NodeJS.ProcessEnv = process.env): Fi
       ? { username: env.ATHENA_INTEROP_API_USER, password: env.ATHENA_INTEROP_API_PASSWORD }
       : undefined,
     realm: env.ATHENA_INTEROP_REALM ?? publicAddress,
-    accounts: [accounts[0], accounts[1]],
+    subscribers: [subscribers[0], subscribers[1]],
     password: env.ATHENA_INTEROP_PASSWORD ?? 'athenaphone',
     resultsDir: env.ATHENA_INTEROP_RESULTS ?? 'e2e/results',
   };

@@ -48,24 +48,24 @@ describe('FakeAdminApi', () => {
     expect((await api.listRealms()).find((realm) => realm.name === 'sip.athenasip.org')).toEqual(before);
   });
 
-  it('deletes a realm with its accounts and their registrations, as the server does', async () => {
+  it('deletes a realm with its subscribers and their registrations, as the server does', async () => {
     const api = new FakeAdminApi();
     await api.deleteRealm('blackraven.co.nz');
-    await expect(api.listAccounts('blackraven.co.nz')).rejects.toMatchObject({ status: 404 });
+    await expect(api.listSubscribers('blackraven.co.nz')).rejects.toMatchObject({ status: 404 });
     await api.createRealm({ name: 'blackraven.co.nz' });
-    await expect(api.listAccounts('blackraven.co.nz')).resolves.toHaveLength(0);
+    await expect(api.listSubscribers('blackraven.co.nz')).resolves.toHaveLength(0);
     await expect(api.listRegistrations('blackraven.co.nz')).resolves.toHaveLength(0);
   });
 
-  it('changes an account’s media profile without a password, and refuses a realm-only setting, changing nothing', async () => {
+  it('changes a subscriber’s media profile without a password, and refuses a realm-only setting, changing nothing', async () => {
     const api = new FakeAdminApi();
-    await expect(api.updateAccount('sip.athenasip.org', 'tom', { behaviour: { media_profile: 'srtp' } }))
+    await expect(api.updateSubscriber('sip.athenasip.org', 'tom', { behaviour: { media_profile: 'srtp' } }))
       .resolves.toMatchObject({ behaviour: { media_profile: 'srtp' } });
-    await expect(api.updateAccount('sip.athenasip.org', 'tom', { password: 'p', behaviour: { media_anchor: false } as never }))
+    await expect(api.updateSubscriber('sip.athenasip.org', 'tom', { password: 'p', behaviour: { media_anchor: false } as never }))
       .rejects.toMatchObject({ status: 400 });
-    await expect(api.updateAccount('sip.athenasip.org', 'tom', { behaviour: { media_profile: 'nonsense' as never } }))
+    await expect(api.updateSubscriber('sip.athenasip.org', 'tom', { behaviour: { media_profile: 'nonsense' as never } }))
       .rejects.toMatchObject({ status: 400 });
-    expect((await api.listAccounts('sip.athenasip.org')).find((account) => account.user === 'tom')?.behaviour.media_profile).toBe('srtp');
+    expect((await api.listSubscribers('sip.athenasip.org')).find((subscriber) => subscriber.user === 'tom')?.behaviour.media_profile).toBe('srtp');
   });
 
   it('takes rewrite_contact as true, false or null, and refuses anything else', async () => {
@@ -90,11 +90,11 @@ describe('FakeAdminApi', () => {
     await expect(api.listQualifiedClients()).resolves.toEqual([]);
   });
 
-  it('takes an account’s registrations with it', async () => {
+  it('takes a subscriber’s registrations with it', async () => {
     const api = new FakeAdminApi();
-    await api.deleteAccount('sip.athenasip.org', 'tom');
-    const accounts = (await api.listRegistrations()).map((binding) => binding.subscriber);
-    expect(accounts).not.toContain('sip:tom@sip.athenasip.org');
+    await api.deleteSubscriber('sip.athenasip.org', 'tom');
+    const subscribers = (await api.listRegistrations()).map((binding) => binding.subscriber);
+    expect(subscribers).not.toContain('sip:tom@sip.athenasip.org');
   });
 
   it('reports registration times in Unix seconds', async () => {

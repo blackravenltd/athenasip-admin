@@ -54,7 +54,7 @@ export function RegistrationsScreen({ api }: { api: AdminApi }) {
           <div>
             <h2>Live contact bindings</h2>
             <p>
-              Where this node currently believes each account can be reached. Bindings are made
+              Where this node currently believes each subscriber can be reached. Bindings are made
               by phones registering, so there is nothing to edit here. A binding marked NAT is
               on a private address, so the node answers it down the connection it arrived on.
             </p>

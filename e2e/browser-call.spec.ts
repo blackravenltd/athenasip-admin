@@ -78,8 +78,8 @@ test.beforeAll(async () => {
   }
 });
 
-test('the first account calls the second, and the caller hangs up', async ({ browser }, info) => {
-  const [callerUser, calleeUser] = fixture.accounts;
+test('the first subscriber calls the second, and the caller hangs up', async ({ browser }, info) => {
+  const [callerUser, calleeUser] = fixture.subscribers;
   const callee = await open(browser, calleeUser, { answer: true });
   const caller = await open(browser, callerUser, { target: sipUri(fixture, calleeUser) });
 
@@ -95,8 +95,8 @@ test('the first account calls the second, and the caller hangs up', async ({ bro
   await ended(callee.page);
 });
 
-test('the second account calls the first, and the callee hangs up', async ({ browser }, info) => {
-  const [calleeUser, callerUser] = fixture.accounts;
+test('the second subscriber calls the first, and the callee hangs up', async ({ browser }, info) => {
+  const [calleeUser, callerUser] = fixture.subscribers;
   const callee = await open(browser, calleeUser, {});
   const caller = await open(browser, callerUser, { target: sipUri(fixture, calleeUser) });
 

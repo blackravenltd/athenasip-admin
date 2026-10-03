@@ -3,6 +3,14 @@
 The record of what exists and works in the tree. Move items from `ACTIVE.md` as they land,
 with a one-line note on what shipped.
 
+## "Account" names nothing (2026-10-03)
+
+- [x] **One vocabulary.** Per Tom and the server's `docs/glossary.md`: the type, the
+      `AdminApi` methods, the fake and every screen say subscriber; the signed-in user's own
+      page is `MeScreen` at `/me`, headed "You". The fake's messages read as the node's do
+      ("no such subscriber"). `ATHENA_INTEROP_ACCOUNTS` keeps its name: it is shared with
+      the server's `browser.sh`, and renaming it is a change to both repositories.
+
 ## Subscribers route, realm delete and rate limits (2026-10-03)
 
 - [x] **`/realms/{realm}/subscribers`.** Renamed from `/accounts` in `HttpAdminApi`, with no

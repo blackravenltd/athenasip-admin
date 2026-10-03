@@ -21,7 +21,7 @@ describe('SubscribersScreen', () => {
     expect(await screen.findByText('Choose a realm to see its subscribers.')).toBeTruthy();
   });
 
-  it('lists a realm’s accounts by user, with the address each one registers as', async () => {
+  it('lists a realm’s subscribers by user, with the address each one registers as', async () => {
     show(realmSubscribers('sip.athenasip.org'));
     const row = await screen.findByRole('group', { name: 'tomweb' });
     expect(row.textContent).toContain('sip:tomweb@sip.athenasip.org');
@@ -74,14 +74,14 @@ describe('SubscribersScreen', () => {
     fireEvent.change(select, { target: { value: 'webrtc' } });
     fireEvent.click(within(dialogue()).getByRole('button', { name: 'Save media profile' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-    expect((await api.listAccounts('blackraven.co.nz'))[0].behaviour.media_profile).toBe('webrtc');
+    expect((await api.listSubscribers('blackraven.co.nz'))[0].behaviour.media_profile).toBe('webrtc');
 
     fireEvent.click(await screen.findByRole('button', { name: 'Media for reception' }));
     expect(within(dialogue()).getByLabelText('Media profile')).toHaveProperty('value', 'webrtc');
     fireEvent.change(within(dialogue()).getByLabelText('Media profile'), { target: { value: '' } });
     fireEvent.click(within(dialogue()).getByRole('button', { name: 'Save media profile' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-    expect((await api.listAccounts('blackraven.co.nz'))[0].behaviour.media_profile).toBeNull();
+    expect((await api.listSubscribers('blackraven.co.nz'))[0].behaviour.media_profile).toBeNull();
   });
 
   it('says a realm that does not exist does not exist', async () => {

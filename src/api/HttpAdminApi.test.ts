@@ -49,11 +49,11 @@ describe('HttpAdminApi', () => {
     expect(headerOf(1)).toBe('Bearer second');
   });
 
-  it('addresses an account by realm and user, each one path segment', async () => {
+  it('addresses a subscriber by realm and user, each one path segment', async () => {
     // The document says a user with an @ or a / in it is one segment, and a
     // realm with a slash must not reach another route.
     const fetch = respond(null, { status: 204 });
-    await new HttpAdminApi({ fetch }).deleteAccount('a/../b', 'x@y');
+    await new HttpAdminApi({ fetch }).deleteSubscriber('a/../b', 'x@y');
     expect(fetch).toHaveBeenCalledWith('/api/v1/realms/a%2F..%2Fb/subscribers/x%40y', expect.objectContaining({ method: 'DELETE' }));
   });
 

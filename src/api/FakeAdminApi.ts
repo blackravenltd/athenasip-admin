@@ -1,7 +1,7 @@
 import type { AdminApi } from './AdminApi';
 import { ApiError } from './errors';
 import type {
-  Account,
+  Subscriber,
   Call,
   AdminUser,
   ChangePassword,
@@ -9,10 +9,10 @@ import type {
   ClusterNode,
   NodeTransport,
   CreateAdminUser,
-  CreateAccount,
+  CreateSubscriber,
   CreateRealm,
   Health,
-  AccountBehaviour,
+  SubscriberBehaviour,
   Behaviour,
   BehaviourEffective,
   Realm,
@@ -24,7 +24,7 @@ import type {
   Registration,
   Role,
   SessionInfo,
-  UpdateAccount,
+  UpdateSubscriber,
   UpdateAdminUser,
   UpdateRealm,
 } from './types';
@@ -62,7 +62,7 @@ const STATUS: readonly Role[] = ['view-cluster-status'];
 const REALMS: readonly Role[] = ['manage-realms'];
 /** Listing and reading a realm: whoever places a subscriber has to find the realm first. */
 const REALMS_READ: readonly Role[] = ['manage-realms', 'manage-realm-subscribers'];
-const ACCOUNTS: readonly Role[] = ['manage-realm-subscribers'];
+const SUBSCRIBERS: readonly Role[] = ['manage-realm-subscribers'];
 const USERS: readonly Role[] = ['manage-admin-users'];
 /** Any authenticated caller. */
 const ANYONE: readonly Role[] = [];
@@ -94,16 +94,16 @@ const PACKET_BYTES = 172;
  *
  * It is not a mock. It holds the records, applies the writes and enforces the
  * rules the real node enforces, read from its handlers rather than guessed:
- * a duplicate realm or account is a `conflict`, an unknown one `not_found`, a
+ * a duplicate realm or subscriber is a `conflict`, an unknown one `not_found`, a
  * missing field `invalid_request`, a caller without the route's role
- * `forbidden`, and deleting a realm deletes its accounts and their
+ * `forbidden`, and deleting a realm deletes its subscribers and their
  * registrations, as the server's does. Its users, sessions and roles are the server's
  * `docs/authentication.md`, which the node does not enforce until it is built. Mocks that answer yes to everything are how a form
  * ships with no error path at all.
  */
 export class FakeAdminApi implements AdminApi {
   private realms: StoredRealm[];
-  private accounts: Account[];
+  private subscribers: Subscriber[];
   private registrations: Stored[];
   private calls: StoredCall[];
   private reoffers: Array<Omit<MediaReoffer, 'last_at'> & { age_s: number }> = [{
@@ -148,18 +148,18 @@ export class FakeAdminApi implements AdminApi {
       // Relaying set on the realm itself, the profile inherited.
       { ...this.realm('blackraven.co.nz', { media_anchor: true, media_profile: null, qualify_interval: null, rewrite_contact: true }), registration_minimum: 60 },
     ];
-    this.accounts = [
-      this.account('sip.athenasip.org', 'tom'),
+    this.subscribers = [
+      this.subscriber('sip.athenasip.org', 'tom'),
       // AthenaPhone, whose media is WebRTC whatever transport it registers over.
-      this.account('sip.athenasip.org', 'tomweb', 'webrtc'),
-      this.account('blackraven.co.nz', 'reception'),
+      this.subscriber('sip.athenasip.org', 'tomweb', 'webrtc'),
+      this.subscriber('blackraven.co.nz', 'reception'),
     ];
     // Held as offsets from now and turned into instants at read time, or every
     // binding would have expired a few minutes into a development session.
     this.registrations = [
       {
         subscriber: 'sip:tom@sip.athenasip.org',
-        subscriber_id: this.accounts[0].id,
+        subscriber_id: this.subscribers[0].id,
         contact: 'sip:tom@192.168.1.24:5061;transport=tls',
         age_s: 60,
         expires_in_s: 240,
@@ -170,7 +170,7 @@ export class FakeAdminApi implements AdminApi {
       },
       {
         subscriber: 'sip:tomweb@sip.athenasip.org',
-        subscriber_id: this.accounts[1].id,
+        subscriber_id: this.subscribers[1].id,
         contact: 'sip:tomweb@df7jal23ls0d.invalid;transport=ws',
         age_s: 255,
         expires_in_s: 45,
@@ -233,15 +233,15 @@ export class FakeAdminApi implements AdminApi {
     };
   }
 
-  private account(realm: string, user: string, media_profile: MediaProfile | null = null): Account {
+  private subscriber(realm: string, user: string, media_profile: MediaProfile | null = null): Subscriber {
     return { id: this.nextId++, uri: `sip:${user}@${realm}`, user, realm, behaviour: { media_profile } };
   }
 
-  /** An account's behaviour, checked whole before any of it is kept, because the node's 400 changes nothing. */
-  private accountBehaviour(behaviour: AccountBehaviour | undefined): AccountBehaviour {
+  /** A subscriber's behaviour, checked whole before any of it is kept, because the node's 400 changes nothing. */
+  private subscriberBehaviour(behaviour: SubscriberBehaviour | undefined): SubscriberBehaviour {
     if (behaviour === undefined) return {};
     for (const key of Object.keys(behaviour)) {
-      if (key !== 'media_profile') throw new ApiError(`${key} is not an account behaviour setting`, 400, 'invalid_request');
+      if (key !== 'media_profile') throw new ApiError(`a subscriber's behaviour has no setting called ${key}`, 400, 'invalid_request');
     }
     const profile = behaviour.media_profile;
     if (profile !== undefined && profile !== null && !MEDIA_PROFILES.includes(profile)) {
@@ -436,62 +436,62 @@ export class FakeAdminApi implements AdminApi {
   deleteRealm(name: string, signal?: AbortSignal): Promise<void> {
     return this.settle(REALMS, () => {
       this.find(name);
-      // Its accounts go with it, and their registrations with them.
-      const gone = new Set(this.accounts.filter((account) => account.realm === name).map((account) => account.uri));
+      // Its subscribers go with it, and their registrations with them.
+      const gone = new Set(this.subscribers.filter((subscriber) => subscriber.realm === name).map((subscriber) => subscriber.uri));
       this.realms = this.realms.filter((candidate) => candidate.name !== name);
-      this.accounts = this.accounts.filter((account) => account.realm !== name);
+      this.subscribers = this.subscribers.filter((subscriber) => subscriber.realm !== name);
       this.registrations = this.registrations.filter((binding) => !gone.has(binding.subscriber));
       return undefined;
     }, signal);
   }
 
-  listAccounts(realm: string, signal?: AbortSignal): Promise<Account[]> {
-    return this.settle(ACCOUNTS, () => {
+  listSubscribers(realm: string, signal?: AbortSignal): Promise<Subscriber[]> {
+    return this.settle(SUBSCRIBERS, () => {
       this.find(realm);
-      return this.accounts.filter((account) => account.realm === realm);
+      return this.subscribers.filter((subscriber) => subscriber.realm === realm);
     }, signal);
   }
 
-  createAccount(realm: string, account: CreateAccount, signal?: AbortSignal): Promise<Account> {
-    return this.settle(ACCOUNTS, () => {
+  createSubscriber(realm: string, subscriber: CreateSubscriber, signal?: AbortSignal): Promise<Subscriber> {
+    return this.settle(SUBSCRIBERS, () => {
       this.find(realm);
-      const user = account.user?.trim();
+      const user = subscriber.user?.trim();
       if (!user) throw new ApiError('user is required', 400, 'invalid_request');
-      if (!account.password) throw new ApiError('password or ha1 is required', 400, 'invalid_request');
-      const behaviour = this.accountBehaviour(account.behaviour);
-      if (this.accounts.some((candidate) => candidate.realm === realm && candidate.user === user)) {
-        throw new ApiError('that account already exists', 409, 'conflict');
+      if (!subscriber.password) throw new ApiError('password or ha1 is required', 400, 'invalid_request');
+      const behaviour = this.subscriberBehaviour(subscriber.behaviour);
+      if (this.subscribers.some((candidate) => candidate.realm === realm && candidate.user === user)) {
+        throw new ApiError('that subscriber already exists', 409, 'conflict');
       }
-      const created = this.account(realm, user, behaviour.media_profile ?? null);
-      this.accounts.push(created);
+      const created = this.subscriber(realm, user, behaviour.media_profile ?? null);
+      this.subscribers.push(created);
       return created;
     }, signal);
   }
 
-  updateAccount(realm: string, user: string, changes: UpdateAccount, signal?: AbortSignal): Promise<Account> {
-    return this.settle(ACCOUNTS, () => {
+  updateSubscriber(realm: string, user: string, changes: UpdateSubscriber, signal?: AbortSignal): Promise<Subscriber> {
+    return this.settle(SUBSCRIBERS, () => {
       this.find(realm);
-      const account = this.accounts.find((candidate) => candidate.realm === realm && candidate.user === user);
-      if (!account) throw new ApiError('no such account', 404, 'not_found');
+      const subscriber = this.subscribers.find((candidate) => candidate.realm === realm && candidate.user === user);
+      if (!subscriber) throw new ApiError('no such subscriber', 404, 'not_found');
       if (changes.password === undefined && changes.behaviour === undefined) {
         throw new ApiError('password, ha1 or behaviour is required', 400, 'invalid_request');
       }
       if (changes.password !== undefined && !changes.password) throw new ApiError('password must not be empty', 400, 'invalid_request');
-      const behaviour = this.accountBehaviour(changes.behaviour);
+      const behaviour = this.subscriberBehaviour(changes.behaviour);
       // The password is not kept here any more than it is on the server.
-      if (behaviour.media_profile !== undefined) account.behaviour.media_profile = behaviour.media_profile;
-      return account;
+      if (behaviour.media_profile !== undefined) subscriber.behaviour.media_profile = behaviour.media_profile;
+      return subscriber;
     }, signal);
   }
 
-  deleteAccount(realm: string, user: string, signal?: AbortSignal): Promise<void> {
-    return this.settle(ACCOUNTS, () => {
+  deleteSubscriber(realm: string, user: string, signal?: AbortSignal): Promise<void> {
+    return this.settle(SUBSCRIBERS, () => {
       this.find(realm);
-      const account = this.accounts.find((candidate) => candidate.realm === realm && candidate.user === user);
-      if (!account) throw new ApiError('no such account', 404, 'not_found');
-      this.accounts = this.accounts.filter((candidate) => candidate !== account);
+      const subscriber = this.subscribers.find((candidate) => candidate.realm === realm && candidate.user === user);
+      if (!subscriber) throw new ApiError('no such subscriber', 404, 'not_found');
+      this.subscribers = this.subscribers.filter((candidate) => candidate !== subscriber);
       // Its registrations go with it.
-      this.registrations = this.registrations.filter((binding) => binding.subscriber !== account.uri);
+      this.registrations = this.registrations.filter((binding) => binding.subscriber !== subscriber.uri);
       return undefined;
     }, signal);
   }

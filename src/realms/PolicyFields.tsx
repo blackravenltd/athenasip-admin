@@ -143,7 +143,7 @@ export function MediaFields({ form, defaults, busy, onChange }: {
  * profile gets wrong, as Asterisk's `webrtc=yes` is. "Realm default" sends
  * null, which goes back to the realm's.
  */
-export function AccountMediaField({ value, realmProfile, busy, onChange }: {
+export function SubscriberMediaField({ value, realmProfile, busy, onChange }: {
   value: MediaProfile | null;
   /** What the realm's setting comes to, when the realm is known. */
   realmProfile?: MediaProfile;

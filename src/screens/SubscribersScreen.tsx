@@ -2,9 +2,9 @@ import { useCallback, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import type { AdminApi } from '../api/AdminApi';
 import { isConflict } from '../api/errors';
-import type { Account, MediaProfile } from '../api/types';
+import type { Subscriber, MediaProfile } from '../api/types';
 import { MEDIA_PROFILE_TEXT } from '../realms/policy';
-import { AccountMediaField } from '../realms/PolicyFields';
+import { SubscriberMediaField } from '../realms/PolicyFields';
 import { useRefreshableAsync } from '../hooks/useRefreshableAsync';
 import { useSubmit } from '../hooks/useSubmit';
 import { ConfirmModal, FormModal } from '../components/Modal';
@@ -24,7 +24,7 @@ function NewSubscriberDialogue({ api, realm, realmProfile, onClose, onSaved }: {
   const taken = isConflict(failure);
 
   const submit = () => {
-    void run(() => api.createAccount(realm, { user: user.trim(), password, behaviour: { media_profile: profile } })).then((saved) => {
+    void run(() => api.createSubscriber(realm, { user: user.trim(), password, behaviour: { media_profile: profile } })).then((saved) => {
       if (!saved) return;
       onSaved();
       onClose();
@@ -75,20 +75,20 @@ function NewSubscriberDialogue({ api, realm, realmProfile, onClose, onSaved }: {
         The node derives the digest (HA1) from it and keeps only that. The password itself is not
         stored and cannot be shown again.
       </p>
-      <AccountMediaField value={profile} realmProfile={realmProfile} busy={busy} onChange={setProfile} />
+      <SubscriberMediaField value={profile} realmProfile={realmProfile} busy={busy} onChange={setProfile} />
     </FormModal>
   );
 }
 
-function SubscriberRow({ api, account, realmProfile, onChanged }: {
+function SubscriberRow({ api, subscriber, realmProfile, onChanged }: {
   api: AdminApi;
-  account: Account;
+  subscriber: Subscriber;
   realmProfile?: MediaProfile;
   onChanged: () => void;
 }) {
   const [dialogue, setDialogue] = useState<'password' | 'media' | 'delete'>();
   const [password, setPassword] = useState('');
-  const [profile, setProfile] = useState(account.behaviour.media_profile);
+  const [profile, setProfile] = useState(subscriber.behaviour.media_profile);
   const { busy, error, clearError, run } = useSubmit();
   const close = () => { setPassword(''); clearError(); setDialogue(undefined); };
 
@@ -102,17 +102,17 @@ function SubscriberRow({ api, account, realmProfile, onChanged }: {
 
   return (
     <li className="record-row">
-      <div className="record-main" role="group" aria-label={account.user}>
-        <span className="record-name">{account.user}</span>
-        <span className="record-detail"><code>{account.uri}</code></span>
+      <div className="record-main" role="group" aria-label={subscriber.user}>
+        <span className="record-name">{subscriber.user}</span>
+        <span className="record-detail"><code>{subscriber.uri}</code></span>
       </div>
-      {/* Only the account's own setting: the realm's is on the realm. */}
-      {account.behaviour.media_profile && <span className="record-tag">{MEDIA_PROFILE_TEXT[account.behaviour.media_profile].label}</span>}
+      {/* Only the subscriber's own setting: the realm's is on the realm. */}
+      {subscriber.behaviour.media_profile && <span className="record-tag">{MEDIA_PROFILE_TEXT[subscriber.behaviour.media_profile].label}</span>}
       <div className="record-actions">
         <button
           className="secondary-button"
           type="button"
-          aria-label={`Set password for ${account.user}`}
+          aria-label={`Set password for ${subscriber.user}`}
           onClick={() => setDialogue('password')}
         >
           Set password
@@ -120,16 +120,16 @@ function SubscriberRow({ api, account, realmProfile, onChanged }: {
         <button
           className="secondary-button"
           type="button"
-          aria-label={`Media for ${account.user}`}
-          // From the account as it is now, which a refresh may have changed since the last opening.
-          onClick={() => { setProfile(account.behaviour.media_profile); setDialogue('media'); }}
+          aria-label={`Media for ${subscriber.user}`}
+          // From the subscriber as it is now, which a refresh may have changed since the last opening.
+          onClick={() => { setProfile(subscriber.behaviour.media_profile); setDialogue('media'); }}
         >
           Media
         </button>
         <button
           className="secondary-button danger-button"
           type="button"
-          aria-label={`Delete ${account.user}`}
+          aria-label={`Delete ${subscriber.user}`}
           onClick={() => setDialogue('delete')}
         >
           Delete
@@ -138,12 +138,12 @@ function SubscriberRow({ api, account, realmProfile, onChanged }: {
 
       <FormModal
         open={dialogue === 'password'}
-        title={`Set a password for ${account.user}`}
+        title={`Set a password for ${subscriber.user}`}
         submitLabel="Change password"
         busy={busy}
         submitDisabled={!password}
         error={error}
-        onSubmit={() => act(() => api.updateAccount(account.realm, account.user, { password }))}
+        onSubmit={() => act(() => api.updateSubscriber(subscriber.realm, subscriber.user, { password }))}
         onCancel={close}
       >
         <label className="field">
@@ -156,32 +156,32 @@ function SubscriberRow({ api, account, realmProfile, onChanged }: {
             onChange={(event) => setPassword(event.target.value)}
           />
         </label>
-        <p className="field-hint">A phone registered as {account.user} will be challenged with it at its next registration.</p>
+        <p className="field-hint">A phone registered as {subscriber.user} will be challenged with it at its next registration.</p>
       </FormModal>
 
       <FormModal
         open={dialogue === 'media'}
-        title={`Media for ${account.user}`}
+        title={`Media for ${subscriber.user}`}
         submitLabel="Save media profile"
         busy={busy}
         error={error}
-        onSubmit={() => act(() => api.updateAccount(account.realm, account.user, { behaviour: { media_profile: profile } }))}
+        onSubmit={() => act(() => api.updateSubscriber(subscriber.realm, subscriber.user, { behaviour: { media_profile: profile } }))}
         onCancel={close}
       >
-        <AccountMediaField value={profile} realmProfile={realmProfile} busy={busy} onChange={setProfile} />
+        <SubscriberMediaField value={profile} realmProfile={realmProfile} busy={busy} onChange={setProfile} />
       </FormModal>
 
       <ConfirmModal
         open={dialogue === 'delete'}
-        title={`Delete ${account.user}?`}
+        title={`Delete ${subscriber.user}?`}
         confirmLabel="Delete subscriber"
         destructive
         busy={busy}
         onCancel={close}
-        onConfirm={() => act(() => api.deleteAccount(account.realm, account.user))}
+        onConfirm={() => act(() => api.deleteSubscriber(subscriber.realm, subscriber.user))}
       >
         <p>
-          <strong>{account.uri}</strong> will be removed, and its registrations go with it. This
+          <strong>{subscriber.uri}</strong> will be removed, and its registrations go with it. This
           cannot be undone.
         </p>
         {error && <p className="error-message" role="alert">{error}</p>}
@@ -194,8 +194,7 @@ function SubscriberRow({ api, account, realmProfile, onChanged }: {
  * The subscribers of one realm.
  *
  * A subscriber is something registered on a realm to make and receive calls.
- * The route is `/realms/{realm}/subscribers`; its records are still typed
- * `Account` in the server's document and in `AdminApi`.
+ * The route is `/realms/{realm}/subscribers`.
  *
  * The realm is a query parameter rather than a path segment because this
  * screen is reached two ways, from a realm's row and from the section bar with
@@ -208,7 +207,7 @@ export function SubscribersScreen({ api }: { api: AdminApi }) {
 
   const realms = useRefreshableAsync((signal) => api.listRealms(signal), [api]);
   const result = useRefreshableAsync(
-    (signal) => (realm ? api.listAccounts(realm, signal) : Promise.resolve([])),
+    (signal) => (realm ? api.listSubscribers(realm, signal) : Promise.resolve([])),
     [api, realm],
   );
   const refresh = result.refresh;
@@ -264,8 +263,8 @@ export function SubscribersScreen({ api }: { api: AdminApi }) {
               <Empty>{realm} has no subscribers yet.</Empty>
             ) : (
               <ul className="record-list">
-                {(result.value ?? []).map((account) => (
-                  <SubscriberRow key={account.user} api={api} account={account} realmProfile={realmProfile} onChanged={onChanged} />
+                {(result.value ?? []).map((subscriber) => (
+                  <SubscriberRow key={subscriber.user} api={api} subscriber={subscriber} realmProfile={realmProfile} onChanged={onChanged} />
                 ))}
               </ul>
             )}

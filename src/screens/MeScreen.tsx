@@ -11,7 +11,7 @@ export function describeSessionEnd(expiresAt: number | undefined): string {
 }
 
 /** Who you are signed in as, what you may do, when the session ends, and your own password. */
-export function AccountScreen({ api, info, expiresAt, onPasswordChanged }: {
+export function MeScreen({ api, info, expiresAt, onPasswordChanged }: {
   api: AdminApi;
   info: SessionInfo;
   expiresAt?: number;
@@ -33,7 +33,7 @@ export function AccountScreen({ api, info, expiresAt, onPasswordChanged }: {
 
   return (
     <>
-      <h1>Your account</h1>
+      <h1>You</h1>
 
       <section className="panel">
         <div className="panel-heading">

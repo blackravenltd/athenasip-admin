@@ -2,7 +2,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { FakeAdminApi } from '../api/FakeAdminApi';
-import { MediaScreen, accountOf, describeReoffer, engineState } from './MediaScreen';
+import { MediaScreen, subscriberOf, describeReoffer, engineState } from './MediaScreen';
 
 describe('engineState', () => {
   it('calls no engine a choice and a lost engine a fault', () => {
@@ -12,10 +12,10 @@ describe('engineState', () => {
   });
 });
 
-describe('accountOf', () => {
+describe('subscriberOf', () => {
   it('reads the realm and user out of an address of record', () => {
-    expect(accountOf('sip:reception@blackraven.co.nz')).toEqual({ user: 'reception', realm: 'blackraven.co.nz' });
-    expect(accountOf('sip:blackraven.co.nz')).toBeUndefined();
+    expect(subscriberOf('sip:reception@blackraven.co.nz')).toEqual({ user: 'reception', realm: 'blackraven.co.nz' });
+    expect(subscriberOf('sip:blackraven.co.nz')).toBeUndefined();
   });
 });
 
@@ -28,12 +28,12 @@ describe('describeReoffer', () => {
 });
 
 describe('MediaScreen', () => {
-  it('sets a re-offered account’s profile to what its phone took, when asked', async () => {
+  it('sets a re-offered subscriber’s profile to what its phone took, when asked', async () => {
     const api = new FakeAdminApi();
     render(<MediaScreen api={api} />);
     fireEvent.click(await screen.findByRole('button', { name: 'Set sip:reception@blackraven.co.nz to Plain RTP' }));
     expect(await screen.findByText('Set to Plain RTP')).toBeTruthy();
-    expect((await api.listAccounts('blackraven.co.nz'))[0].behaviour.media_profile).toBe('rtp');
+    expect((await api.listSubscribers('blackraven.co.nz'))[0].behaviour.media_profile).toBe('rtp');
   });
 
 

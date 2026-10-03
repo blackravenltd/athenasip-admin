@@ -46,13 +46,13 @@ function MediaDialogue({ api, realm, onClose, onSaved }: {
   );
 }
 
-/** An account's address of record as the realm and user the API addresses it by, or nothing for one it cannot. */
-export function accountOf(uri: string): { realm: string; user: string } | undefined {
+/** A subscriber's address of record as the realm and user the API addresses it by, or nothing for one it cannot. */
+export function subscriberOf(uri: string): { realm: string; user: string } | undefined {
   const match = /^sips?:([^@;]+)@([^;:>]+)/.exec(uri);
   return match ? { user: decodeURIComponent(match[1]), realm: match[2] } : undefined;
 }
 
-/** What the node did for one account, in words. */
+/** What the node did for one subscriber, in words. */
 export function describeReoffer(reoffer: MediaReoffer): string {
   const word = (profile: 'rtp' | 'webrtc') => MEDIA_PROFILE_TEXT[profile].label;
   const times = reoffer.count === 1 ? 'once' : `${reoffer.count} times`;
@@ -62,19 +62,19 @@ export function describeReoffer(reoffer: MediaReoffer): string {
 }
 
 /**
- * One account that needed the other profile. The node only suggests; setting
- * the account's own profile makes the first offer right, and saves its phone
+ * One subscriber that needed the other profile. The node only suggests; setting
+ * the subscriber's own profile makes the first offer right, and saves its phone
  * a 488 and a second offer on every call.
  */
 function ReofferRow({ api, reoffer }: { api: AdminApi; reoffer: MediaReoffer }) {
   const { busy, error, run } = useSubmit();
   const [done, setDone] = useState(false);
-  const account = accountOf(reoffer.subscriber);
+  const subscriber = subscriberOf(reoffer.subscriber);
   const suggested = reoffer.suggested_media_profile;
 
   const apply = () => {
-    if (!account || !suggested) return;
-    void run(() => api.updateAccount(account.realm, account.user, { behaviour: { media_profile: suggested } })).then((saved) => {
+    if (!subscriber || !suggested) return;
+    void run(() => api.updateSubscriber(subscriber.realm, subscriber.user, { behaviour: { media_profile: suggested } })).then((saved) => {
       if (saved) setDone(true);
     });
   };
@@ -86,7 +86,7 @@ function ReofferRow({ api, reoffer }: { api: AdminApi; reoffer: MediaReoffer }) 
         <span className="record-detail">{describeReoffer(reoffer)} Last {new Date(reoffer.last_at).toLocaleString()}.</span>
         {error && <span className="field-error" role="alert">{error}</span>}
       </div>
-      {account && suggested && (
+      {subscriber && suggested && (
         <div className="record-actions">
           {done ? (
             <span className="record-tag state-tag-ok">Set to {MEDIA_PROFILE_TEXT[suggested].label}</span>
@@ -226,9 +226,9 @@ export function MediaScreen({ api }: { api: AdminApi }) {
           <div>
             <h2>Re-offered media</h2>
             <p>
-              Accounts whose phone refused the media it was offered with 488, since this node
+              Subscribers whose phone refused the media it was offered with 488, since this node
               started. The node then offers the other kind once, WebRTC for plain RTP or back. Each
-              time costs the caller a moment&apos;s delay; setting the account&apos;s own profile to
+              time costs the caller a moment&apos;s delay; setting the subscriber&apos;s own profile to
               what its phone took makes the first offer right.
             </p>
           </div>

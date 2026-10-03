@@ -67,10 +67,10 @@ describe.skipIf(!present)('HttpAdminApi against the server OpenAPI document', ()
     await api.createRealm({ name: 'r' });
     await api.updateRealm('r', { behaviour: { media_anchor: false } });
     await api.deleteRealm('r');
-    await api.listAccounts('r');
-    await api.createAccount('r', { user: 'u', password: 'p' });
-    await api.updateAccount('r', 'u', { password: 'p', behaviour: { media_profile: null } });
-    await api.deleteAccount('r', 'u');
+    await api.listSubscribers('r');
+    await api.createSubscriber('r', { user: 'u', password: 'p' });
+    await api.updateSubscriber('r', 'u', { password: 'p', behaviour: { media_profile: null } });
+    await api.deleteSubscriber('r', 'u');
     await api.listRegistrations('r');
     await api.listCalls();
     await api.getCall('a84b4c76e66710@pc33.atlanta.com');

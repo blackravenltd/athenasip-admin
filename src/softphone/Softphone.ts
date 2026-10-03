@@ -1,7 +1,7 @@
 /**
  * A WebRTC endpoint over SIP, with nothing of React in it.
  *
- * This is the whole of what the softphone does: register one account against
+ * This is the whole of what the softphone does: register one subscriber against
  * one node over a WebSocket, place or answer one call, and say exactly what
  * happened while doing it. It owns the JsSIP user agent and session, and it
  * publishes an immutable snapshot of its state after every change, so that a
@@ -228,7 +228,7 @@ export class Softphone {
     this.session?.terminate();
   }
 
-  /** The browser's own account of the media, or nothing when there is no connection to ask. */
+  /** The browser's own report of the media, or nothing when there is no connection to ask. */
   async stats(): Promise<MediaStats | undefined> {
     if (!this.peer) return undefined;
     return summarise(await this.peer.getStats());
@@ -355,7 +355,7 @@ export class Softphone {
   }
 }
 
-/** A one-line account of a state, for an error message. */
+/** A one-line description of a state, for an error message. */
 export function describe(state: SoftphoneState): string {
   const parts = [`registration ${state.registration}`, `call ${state.call}`];
   if (state.iceConnectionState) parts.push(`ice ${state.iceConnectionState}`);

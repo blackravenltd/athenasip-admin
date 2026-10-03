@@ -37,14 +37,14 @@ describe('App', () => {
     expect(screen.getByText(/Session ends in/).textContent).toMatch(/^Session ends in [12]:\d\d$/);
   });
 
-  it('says on the account screen when the session ends', async () => {
-    show(routes.account, await signedInAs('ops'));
+  it('says on the user’s own screen when the session ends', async () => {
+    show(routes.me, await signedInAs('ops'));
     expect(screen.queryByText(/Session ends in/)).toBeNull();
     expect(screen.getByText('Session ends').nextElementSibling!.textContent).not.toMatch(/log out/);
   });
 
   it('signs you out after changing your own password, and says so', async () => {
-    show(routes.account, await signedInAs('ops'));
+    show(routes.me, await signedInAs('ops'));
     fireEvent.change(screen.getByLabelText('Current password'), { target: { value: 'wrong' } });
     fireEvent.change(screen.getByLabelText('New password'), { target: { value: 'fresh' } });
     fireEvent.change(screen.getByLabelText('New password again'), { target: { value: 'fresh' } });
@@ -55,7 +55,7 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Change password' }));
     expect(await screen.findByText('Your password was changed. Sign in with the new one.')).toBeTruthy();
     signIn('ops', 'fresh');
-    expect(await screen.findByRole('heading', { name: 'Your account', level: 1 })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'You', level: 1 })).toBeTruthy();
   });
 
   it('has no section bar on the overview', async () => {

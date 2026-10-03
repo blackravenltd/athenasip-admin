@@ -1,12 +1,12 @@
 import type {
-  Account,
+  Subscriber,
   Call,
   AdminUser,
   ChangePassword,
   ClientConfig,
   ClusterNode,
   CreateAdminUser,
-  CreateAccount,
+  CreateSubscriber,
   CreateRealm,
   Health,
   Realm,
@@ -16,7 +16,7 @@ import type {
   QualifiedClient,
   Registration,
   SessionInfo,
-  UpdateAccount,
+  UpdateSubscriber,
   UpdateAdminUser,
   UpdateRealm,
 } from './types';
@@ -25,7 +25,7 @@ import type {
  * Everything this client can ask an AthenaSIP node to do.
  *
  * The contract is the server's `docs/api/openapi.yaml`, version 1: health,
- * the node list, realms, accounts, registrations, live calls and the media
+ * the node list, realms, subscribers, registrations, live calls and the media
  * engine under `/api/v1`, with a session token from a user's login as the
  * bearer on everything but health and the login itself. Users and roles are
  * the server's `docs/authentication.md`.
@@ -64,10 +64,10 @@ export interface AdminApi {
   updateRealm(name: string, changes: UpdateRealm, signal?: AbortSignal): Promise<Realm>;
   deleteRealm(name: string, signal?: AbortSignal): Promise<void>;
 
-  listAccounts(realm: string, signal?: AbortSignal): Promise<Account[]>;
-  createAccount(realm: string, account: CreateAccount, signal?: AbortSignal): Promise<Account>;
-  updateAccount(realm: string, user: string, changes: UpdateAccount, signal?: AbortSignal): Promise<Account>;
-  deleteAccount(realm: string, user: string, signal?: AbortSignal): Promise<void>;
+  listSubscribers(realm: string, signal?: AbortSignal): Promise<Subscriber[]>;
+  createSubscriber(realm: string, subscriber: CreateSubscriber, signal?: AbortSignal): Promise<Subscriber>;
+  updateSubscriber(realm: string, user: string, changes: UpdateSubscriber, signal?: AbortSignal): Promise<Subscriber>;
+  deleteSubscriber(realm: string, user: string, signal?: AbortSignal): Promise<void>;
 
   /** Read only. Every realm's when `realm` is left out. */
   listRegistrations(realm?: string, signal?: AbortSignal): Promise<Registration[]>;
@@ -78,7 +78,7 @@ export interface AdminApi {
   getCall(id: string, signal?: AbortSignal): Promise<Call>;
   /** The media engine and what it can do. */
   mediaEngine(signal?: AbortSignal): Promise<MediaEngine>;
-  /** Accounts whose endpoint refused the media profile it was offered, most recent first. */
+  /** Subscribers whose endpoint refused the media profile it was offered, most recent first. */
   listMediaReoffers(signal?: AbortSignal): Promise<MediaReoffer[]>;
   /** The registered clients this node is probing with OPTIONS. */
   listQualifiedClients(signal?: AbortSignal): Promise<QualifiedClient[]>;

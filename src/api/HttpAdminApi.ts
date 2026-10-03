@@ -1,14 +1,14 @@
 import type { AdminApi } from './AdminApi';
 import { ApiError } from './errors';
 import type {
-  Account,
+  Subscriber,
   Call,
   AdminUser,
   ChangePassword,
   ClientConfig,
   ClusterNode,
   CreateAdminUser,
-  CreateAccount,
+  CreateSubscriber,
   CreateRealm,
   Health,
   Realm,
@@ -18,7 +18,7 @@ import type {
   QualifiedClient,
   Registration,
   SessionInfo,
-  UpdateAccount,
+  UpdateSubscriber,
   UpdateAdminUser,
   UpdateRealm,
 } from './types';
@@ -152,16 +152,16 @@ export class HttpAdminApi implements AdminApi {
     return this.request<void>('DELETE', `/realms/${segment(name)}`, { signal });
   }
 
-  listAccounts(realm: string, signal?: AbortSignal) {
-    return this.request<Account[]>('GET', `/realms/${segment(realm)}/subscribers`, { signal });
+  listSubscribers(realm: string, signal?: AbortSignal) {
+    return this.request<Subscriber[]>('GET', `/realms/${segment(realm)}/subscribers`, { signal });
   }
-  createAccount(realm: string, account: CreateAccount, signal?: AbortSignal) {
-    return this.request<Account>('POST', `/realms/${segment(realm)}/subscribers`, { body: account, signal });
+  createSubscriber(realm: string, subscriber: CreateSubscriber, signal?: AbortSignal) {
+    return this.request<Subscriber>('POST', `/realms/${segment(realm)}/subscribers`, { body: subscriber, signal });
   }
-  updateAccount(realm: string, user: string, changes: UpdateAccount, signal?: AbortSignal) {
-    return this.request<Account>('PUT', `/realms/${segment(realm)}/subscribers/${segment(user)}`, { body: changes, signal });
+  updateSubscriber(realm: string, user: string, changes: UpdateSubscriber, signal?: AbortSignal) {
+    return this.request<Subscriber>('PUT', `/realms/${segment(realm)}/subscribers/${segment(user)}`, { body: changes, signal });
   }
-  deleteAccount(realm: string, user: string, signal?: AbortSignal) {
+  deleteSubscriber(realm: string, user: string, signal?: AbortSignal) {
     return this.request<void>('DELETE', `/realms/${segment(realm)}/subscribers/${segment(user)}`, { signal });
   }
 

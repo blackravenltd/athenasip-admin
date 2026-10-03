@@ -26,7 +26,7 @@ different roles.
 
 **After a deploy:** check `curl -s http://10.35.1.20:8080/ | grep -o 'assets/index-[^"]*'`
 matches `build/assets/index-*.js`, tell the server session, and ask Tom to sign in and click
-through every screen as users with different roles. The account `athenaphone` on realm
+through every screen as users with different roles. The subscriber `athenaphone` on realm
 `10.35.1.20` has `media_profile: webrtc` and should show a WebRTC tag on Subscribers.
 
 **The server's session.** "AthenaSIP Server" (find it with ListAgents, message with
@@ -95,14 +95,14 @@ point it there.
   A setting left out of an update is left alone, null resets it, and anything unknown or out
   of range is a 400 that changes nothing. Top-level `media_anchor`/`media_profiles` are refused.
   Deleting a realm deletes its subscribers and their registrations.
-- **Subscribers**, `/realms/{realm}/subscribers` (type `Account`). `behaviour: {media_profile}` only, null for the realm's; a PUT
+- **Subscribers**, `/realms/{realm}/subscribers` (type `Subscriber`). `behaviour: {media_profile}` only, null for the realm's; a PUT
   takes a password, the behaviour, or both.
 - **Status reads** (`view-cluster-status`): `/nodes` (status, version, `stale`, `at`),
   `/registrations`, `/client/config` (`websocket_uri`, `websocket_uris`, `nodes`,
   `transports`, `ice_servers` minted per request), `/calls` and `/calls/{call}` (Call-ID
   percent-encoded, `%2F` one segment; per-leg cumulative counters, a direction the engine does
   not count absent rather than 0, `participant` always null), `/media` (engine, connected,
-  capabilities, never its URL), `/media/reoffers` (accounts that answered 488, with a
+  capabilities, never its URL), `/media/reoffers` (subscribers that answered 488, with a
   suggested profile nothing applies), `/qualify` (probed clients). `/metrics` is Prometheus
   text for a monitoring system; the console does not read it.
 - The API is RESTful and usable without the console. Nothing is added for the UI's sake.
@@ -183,10 +183,9 @@ Dated, and not reopened without asking.
   contract above. The console shows what the roles permit and hides the rest; the node's 403
   is the rule. A user with no roles can sign in and is told plainly that they have no
   permissions. A change is a change to both repositories.
-- (2026-09-25) A user is somebody or some system that uses the API. A subscriber is something
-  registered on a realm to make and receive calls. The console says "subscriber" for what the
-  API types as an account (`/realms/{realm}/subscribers`, type `Account`), and never mixes the
-  two.
+- (2026-09-25, settled by Tom 2026-10-03) A user is somebody or some system that signs in and
+  manages the cluster. A subscriber belongs to a realm and registers and calls. "Account" names
+  nothing, in the screens or the code; the server's `docs/glossary.md` is the reference.
 - (2026-09-30) A test asserts facts about our configuration, never the browser's labels. The
   relay phase knows a relayed pair by its local port being inside coturn's range, because
   Chrome reports the relayed candidate as `prflx`. Agreed with the server, and written into its
