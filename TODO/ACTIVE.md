@@ -247,8 +247,6 @@ Dated, and not reopened without asking.
 One controller (`Softphone`), two faces: the harness page, unchanged, and a Phone section the
 app shell owns so a call outlives a screen change. First round, in order:
 
-- [ ] Ringing: a tone made in Web Audio (no asset), and a browser notification for an
-      incoming call when the tab is hidden.
 - [ ] Device pickers for microphone, camera and speaker (`setSinkId`), and a warning when the
       call's own sent audio stays silent.
 - [ ] History from `GET /call-records` (`view-cluster-status`), filtered to this phone's

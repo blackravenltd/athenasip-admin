@@ -18,6 +18,10 @@ with a one-line note on what shipped.
       too), Call and Video call, Answer, Answer with video, Decline (603), Mute, Hold, the
       far end's hold, a call timer, video panes, and the readout as "Call details". The SIP
       address and WebSocket are remembered (`src/phone/settings.ts`), never the password.
+- [x] **Ringing.** A British double ring for an incoming call and a quieter ringback while
+      the far end rings, made with oscillators (`src/phone/ringing.ts`, no sound file). A
+      browser notification for a call arriving while the tab is hidden, once allowed from
+      the Phone screen; closed when the call stops ringing.
 ## The softphone's meters and secure context (2026-10-03)
 
 - [x] **Video, when asked.** A "Video" box beside Call on the console's softphone (not the

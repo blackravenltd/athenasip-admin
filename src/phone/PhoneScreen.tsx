@@ -5,6 +5,7 @@ import { CallReadout } from '../softphone/CallReadout';
 import { callInProgress, describeCallState, signallingUri } from '../softphone/words';
 import { DialPad } from './DialPad';
 import { callTimer, dialTarget, userOf } from './dial';
+import { notificationPermission } from './ringing';
 import { loadSettings, saveSettings, type PhoneSettings } from './settings';
 import type { PhoneHandle } from './usePhone';
 
@@ -37,6 +38,7 @@ export function PhoneScreen({ api, handle, settings, onSettings, aside }: {
   const [socketNotice, setSocketNotice] = useState<string>();
   const [target, setTarget] = useState('');
   const [tones, setTones] = useState('');
+  const [notifications, setNotifications] = useState(notificationPermission);
   const localVideo = useRef<HTMLVideoElement>(null);
   const remoteVideo = useRef<HTMLVideoElement>(null);
 
@@ -241,6 +243,22 @@ export function PhoneScreen({ api, handle, settings, onSettings, aside }: {
             )}
 
             {notice && state.registration === 'registered' && <p className="error-message" role="alert">{notice}</p>}
+
+            {notifications === 'default' && (
+              <p className="field-hint">
+                A call rings here while this tab is open.{' '}
+                <button
+                  className="link-button"
+                  type="button"
+                  onClick={() => { void Notification.requestPermission().then(setNotifications).catch(() => undefined); }}
+                >
+                  Notify me when this tab is hidden
+                </button>
+              </p>
+            )}
+            {notifications === 'denied' && (
+              <p className="field-hint">This browser blocks notifications from the console, so a call only rings while you can hear this tab.</p>
+            )}
           </section>
 
           {aside}

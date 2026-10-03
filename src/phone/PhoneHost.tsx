@@ -8,6 +8,7 @@ import type { SipStack } from '../softphone/Softphone';
 import { describeCallState } from '../softphone/words';
 import { callTimer, userOf } from './dial';
 import { PhoneScreen, useRememberedSettings } from './PhoneScreen';
+import { useIncomingNotification, useRinging } from './ringing';
 import { usePhone } from './usePhone';
 
 /**
@@ -31,6 +32,8 @@ export default function PhoneHost({ api, visible, indicator, stack = jssipStack 
   const [settings, setSettings] = useRememberedSettings();
   const audio = useRef<HTMLAudioElement>(null);
   const { state, remoteStream } = handle;
+  useRinging(state.call);
+  useIncomingNotification(state.call, userOf(state.remoteIdentity));
 
   useEffect(() => {
     const element = audio.current;
