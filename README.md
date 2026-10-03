@@ -38,9 +38,10 @@ npm run dev
 ```
 
 By default `npm run dev` runs against an in-memory fake of the admin API that enforces the
-same rules the server does. Point it at a real node with `VITE_ATHENASIP_LIVE=true npm run
-dev`; the dev server proxies `/api` to `http://127.0.0.1:8080`, overridable with
-`ATHENASIP_API`.
+same rules the server does; sign in as `admin` with the password `admin`. Point it at a real node with
+`VITE_ATHENASIP_LIVE=true npm run dev`; the dev server proxies `/api` to
+`http://127.0.0.1:8080`, overridable with `ATHENASIP_API`. A build to deploy needs
+`VITE_ATHENASIP_LIVE=true` as well.
 
 ```
 npm test          # Vitest

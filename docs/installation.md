@@ -8,10 +8,11 @@ Node 20 or newer.
 
 ```
 npm install
-npm run build
+VITE_ATHENASIP_LIVE=true npm run build
 ```
 
-`npm run build` typechecks both TypeScript projects and then produces a production bundle in
+Without `VITE_ATHENASIP_LIVE=true` the bundle talks to an in-memory fake rather than the node
+that serves it. `npm run build` typechecks both TypeScript projects and then produces a production bundle in
 `build/`. The bundle is served by AthenaSIP itself: copy `build/` to the path named by
 `http.files.path` in the server's `config.yaml`, and the server's static middleware serves it
 from the same listener that answers `/api/v1`.

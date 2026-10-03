@@ -3,6 +3,189 @@
 The record of what exists and works in the tree. Move items from `ACTIVE.md` as they land,
 with a one-line note on what shipped.
 
+## Realm and account behaviour (2026-10-02, uncommitted at the time of writing)
+
+- [x] **Media settings inherit.** The realm's `media_anchor` and `media_profiles` became
+      `behaviour: {media_anchor, media_profile}`, null for inheriting the server's `behaviour:`
+      section, with `behaviour_effective` beside it. Each setting is a select with "Server
+      default" first, which sends null, naming the server's value from `behaviour_default`
+      (server `89e97de`); a new realm inherits every setting and takes the defaults' names
+      from any listed realm. Rows mark an inherited setting "(server default)". The fake
+      validates as the node does: a 400 changes nothing, and the old top-level fields have
+      "moved into the behaviour section". `mirror` is described as offering the callee what
+      the caller offered.
+
+- [x] **A subscriber's media profile.** Accounts gained `behaviour: {media_profile}` (server
+      `fdac9a4`), null for the realm's. Adding a subscriber and the row's Media dialogue offer
+      it, with "Realm default (X)" first from the realm's `behaviour_effective`; a row shows a
+      tag only for the account's own setting. A password change sends no behaviour, and a
+      media change sends no password.
+
+- [x] **Probing, re-offers and the cluster** (server `798c50d`). A realm's `qualify_interval`
+      is a field on the realm form, empty for the server's, 0 for never, otherwise 5 to 86400;
+      a realm row says when it probes. The Registrations screen lists `GET /qualify`: each
+      probed client, whether it answers, and the media it said it takes. The Media screen lists
+      `GET /media/reoffers`, with a button that sets the account's profile to the suggestion
+      (needs Manage subscribers; nothing sets it automatically). The Overview lists every node
+      from `GET /nodes` with its status and version, a stale report shown as not trusted.
+
+- [x] **Contact rewriting** (server `de478c5`). A realm's `rewrite_contact` is a select on the
+      realm form, "Server default (off)" first, then On and Off, labelled as the server
+      suggested; a realm row says when it is on.
+
+## Live calls and the media engine (2026-10-01, uncommitted at the time of writing)
+
+- [x] **Calls screen.** `GET /calls` (server `02a3340`), read every two seconds: from, to,
+      state, duration, engine, and each leg's cumulative packets and bytes in both directions.
+      A direction the engine does not count says so rather than showing 0. One-way audio is
+      flagged when a direction stands still between readings while another in the call moves.
+      Needs `view-cluster-status`.
+- [x] **Media engine panel.** `GET /media` on the Media screen: the engine, whether it is
+      connected, and its capabilities. Media is now open to `view-cluster-status` as well as
+      `manage-realms`, and each panel says quietly when the login lacks its role.
+- [x] **Token sign-in removed** (Tom's decision, 2026-10-01). The node drops `http.api.tokens`
+      and has no setup token; the first user and recovery are `athenasip --add-user` on the host.
+      The sign-in page has only username and password, a 404 from the login says the node is too
+      old rather than offering a token, `SessionInfo` has no `kind` and always names a user, and
+      the client's role guessing for nodes without `/session` is gone, as are the fake's tokens.
+- [x] **The browser spec signs in.** With configured tokens gone (server `dd94d8c`), the relay
+      phase signs in as `ATHENA_INTEROP_API_USER` / `_PASSWORD`, which `up.sh` generates per
+      run, reads `/client/config` and signs out. The user is kept out of the results record.
+      The server session ran `browser.sh --relay` against it on 2026-10-01: both tests passed.
+- [x] **`getCall`** is in the client and the fake, with a Call-ID's `/` sent as `%2F`. No
+      screen uses it yet.
+
+## Aligned with the built server (2026-09-30, uncommitted at the time of writing)
+
+- [x] **The auth and users routes, as built.** 409 `would_lock_out` for disabling, demoting or
+      deleting yourself (a configuration token is nobody and exempt); 400 `unknown_role`; 403
+      `wrong_password`, which neither signs out nor re-reads roles; a password change ends every
+      session of that user, so the Account screen signs you out and says why; 503 `unavailable`
+      is never a sign-out, and the sign-in screen says a configuration token still works.
+- [x] **The contract test reads a complete document.** `PENDING` is empty against the server's
+      `03ebd0f`; every request the client makes is described.
+- [x] **Client provisioning.** `GET /client/config` (server `e5a752d`): the console's softphone
+      signals at `websocket_uri` and fetches ICE servers per call, dropping a TURN entry with no
+      credential or an expired one. The harness page is unchanged.
+- [x] **A relayed call, proven.** The console softphone's "Relay only" option sets
+      `iceTransportPolicy: "relay"`. Against the server's docker stack, with rtpengine on its
+      bridge address, two browsers carried audio both ways through coturn (about 400 packets
+      each way, 0 lost, `totalAudioEnergy` above 2), and the harness page with no ICE servers
+      failed there as expected. Chrome labels the relayed local candidate `prflx` with a
+      `relayProtocol` once checks run; the port is coturn's.
+- [x] **The relay in the automated browser layer.** Option B: coturn in the server's interop
+      fixture (`d015202`, `browser.sh` both phases at `8e55956`). The page takes `ice` and
+      `relay=1`; the spec runs relayed when the engine advertises its bridge address and
+      asserts each pair's local port inside coturn's range. First run: direct 2 passed, relayed
+      2 passed, both local candidates reported `prflx`, so the port was the only assertion
+      that would have held.
+
+## Users, roles and a login (2026-09-25, uncommitted at the time of writing)
+
+The server's admin authentication is specified in `../athenasip/docs/authentication.md`
+(committed there as `3900b1c`) and not yet built on the node. The console is built against it
+now, agreed point by point with the server's session, and falls back to the node as it is.
+
+- [x] **The model.** A user is somebody, or some system, that uses the API, of which the
+      console is one client. A subscriber is something registered on a realm to make and
+      receive calls; the API calls it an account. Neither is ever made from the other. Five
+      roles, and nothing implies anything else, including no superuser: `view-cluster-status`,
+      `manage-admin-users`, `manage-realms`, `manage-realm-subscribers`, `manage-cluster`. A
+      user can hold none, which is the default for a new one.
+- [x] **Signing in.** A username and password, `POST /auth/login` to a token and an expiry,
+      then `GET /session` for who it is. A configuration token from `http.api.tokens` is the
+      other way in, for the first user on a fresh node and for recovery, and is shown as one
+      rather than as a person. A node that answers the login with 404 predates user logins, and
+      the console moves to the token path and says why. One message for a wrong password and a
+      disabled user, as the node gives one answer for both. A 429 says how long to wait.
+- [x] **The session.** In memory only. Ends itself at the node's expiry, and on any 401 with
+      the reason shown on the sign-in screen. A 403 re-reads `GET /session`, so a role removed
+      mid-session takes its screens out of the navigation at once. Log out ends the session on
+      the node as well as in the page. In its last five minutes the top bar counts down, with a
+      live region that announces once rather than every second; the account screen says when
+      the session ends, or that a configuration token does not. `src/auth/SessionExpiry.tsx`.
+- [x] **Role-aware navigation.** What the roles permit is shown and the rest hidden; a screen
+      reached directly says which role it needs. A user with no roles sees a No permissions page
+      naming who they are signed in as and what to ask for, not an empty console. The SIP
+      section root lands on the first screen the roles allow.
+- [x] **Users screen** for `manage-admin-users`: list with roles, disabled state and last
+      sign-in; add with roles ticked explicitly, none by default; edit display name, roles and
+      disabled; set a password; sign a user out everywhere; delete. You cannot disable yourself,
+      remove your own `manage-admin-users` or delete yourself, which the node also refuses.
+- [x] **Your account** at `/account`: who you are, your roles, and changing your own password
+      with the old one.
+- [x] **Subscribers.** The realm accounts screen is called Subscribers, at `/sip/subscribers`,
+      and says a subscriber is not a user. The type and the API path stay `Account`.
+- [x] **Against today's node.** No `/auth/login` and no `/session`, so the token path runs: an
+      `admin` config token is treated as every role and a `client` token as reading status,
+      found by probing `/realms` and `/nodes`.
+- [x] `FakeAdminApi` enforces the specification: seeded users whose password is their username
+      (`admin` all roles, `ops` status, `helpdesk` subscribers, `newhire` none, `former`
+      disabled), sessions that re-read roles on every request, case-insensitive usernames,
+      configuration tokens, and the self-protection rules. Signing a user out everywhere is 204
+      with or without sessions and 404 for no such user, as agreed with the server.
+      `src/test/signedIn.ts` gives a test a signed-in node.
+- [x] Driven in headless Chromium: each seeded user lands where its roles say, the
+      configuration token signs in, the Users screen renders, and there are no page or console
+      errors.
+- [x] 149 tests. The contract test lists the auth and users routes as pending, and fails once
+      the OpenAPI document has them, so that it says to take them out.
+
+This replaced an earlier attempt the same day at roles as scopes (`admin`, `users`, `status`,
+`client`, with admin implying the rest). The server's user decided there is no admin scope and
+nothing implies anything, and the scope proposal was folded into the design above.
+
+## Against the server's API (2026-09-25, uncommitted at the time of writing)
+
+The client had been written against the plan for the server's admin API rather than the API it
+built. It now speaks `../athenasip/docs/api/openapi.yaml`, version 1, and every behaviour the
+document leaves open was read from the server's handlers rather than guessed.
+
+- [x] **The wire format.** The error envelope is `{"error": {"code", "message"}}` and is read as
+      such. Subscriber is Account, at `/realms/{realm}/accounts/{user}`. A realm carries its
+      registration and media policy, and is addressed by name. A registration is the server's
+      shape, with Unix-second times. There is no `/status` and no `/media/rtprelay`, so the
+      Overview is built from `/health` and `/nodes`, and the RTP Relay screen is gone.
+- [x] Realms and accounts are keyed by name and user, never by id. The server's ids are 64-bit
+      and a JavaScript number rounds them.
+- [x] `health()` answers a degraded node, which is a 503, with its body rather than as a
+      failure, because that is exactly what the Overview has to show.
+- [x] **Screens.** Realms add and edit the registration limits, the nonce lifetime and the
+      media policy, and refuse a shortest registration longer than the longest, which the
+      server would accept and every phone would then be refused by. A realm cannot be renamed.
+      Subscribers add, set a password and delete. Media edits each realm's media policy in
+      words. Security and TLS read the node list. Registrations show transport, NAT, node and
+      path. The Overview says quietly what a login cannot see rather than failing in red.
+- [x] **Field-level errors.** A `conflict` on a create is shown against the name field.
+- [x] Deleting a realm warns that its subscribers outlive it, because the node removes only the
+      realm today. Whether it should cascade is the server's user's decision.
+- [x] `src/api/contract.test.ts` checks every request `HttpAdminApi` makes against the OpenAPI
+      document in the sibling checkout, and skips without it.
+- [x] Dialogues render into the document body. The main panel is a stacking context of its own,
+      so a dialogue in it could never rise above the sticky navigation, which covered the title
+      of the realm dialogue. Found by driving every screen in headless Chromium.
+- [x] **Deployed to corvus-fi-1.** The node serves the console from
+      `/usr/local/share/athenasip/admin` in SPA mode; a new build is live as soon as rsync
+      finishes. Deployed once by the server's session and once from here, before the users and
+      roles work. The softphone defaults to WebSocket port 8088, which that node serves.
+
+## Audio, not only packets (2026-09-25, uncommitted at the time of writing)
+
+The last open item of the softphone's own milestone. The server's Milestone 3 has one item
+left, a browser to an AthenaPhone on a real device, which is manual and the server's to run.
+
+- [x] The readout's `stats()` carries the far end's accumulated `inbound-rtp.totalAudioEnergy`,
+      and the browser spec asserts it above zero at each end. An instantaneous `audioLevel`
+      could land in the gap between the fake device's beeps; an accumulator cannot. Run by the
+      server's `browser.sh` on alternate ports, both tests passing in 11.4 seconds.
+
+| Test | End | Sent | Received | Lost | Energy | Remote candidate |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1001 calls 1002, caller hangs up | 1001 | 105 | 105 | 0 | 0.412 | 10.35.1.132:23010 |
+| | 1002 | 111 | 109 | 0 | 0.549 | 10.35.1.132:23000 |
+| 1002 calls 1001, callee hangs up | 1002 | 117 | 117 | 0 | 0.469 | 10.35.1.132:23002 |
+| | 1001 | 123 | 120 | 0 | 0.571 | 10.35.1.132:23000 |
+
 ## The first browser-to-browser call (2026-09-23)
 
 Two Chromium browsers called each other through AthenaSIP and rtpengine, both directions,
