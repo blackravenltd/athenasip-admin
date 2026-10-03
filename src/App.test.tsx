@@ -31,6 +31,12 @@ describe('App', () => {
     expect(within(topbar).getByRole('link', { name: 'Overview' }).className).not.toContain('active');
   });
 
+  it('opens the phone for a user with no roles, since it signs in to a line of its own', async () => {
+    show(routes.phone, await signedInAs('newhire'));
+    expect(await screen.findByRole('heading', { name: 'Phone', level: 1 })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'No permissions' })).toBeNull();
+  });
+
   it('counts down in the top bar when the session is in its last minutes', async () => {
     show(routes.home, await signedInAs('ops', { sessionSeconds: 120 }));
     expect(screen.getByRole('status').textContent).toContain('Your session ends within five minutes');

@@ -58,8 +58,8 @@ describe('visible', () => {
     expect(sip(['view-cluster-status'])).toEqual(['Registrations']);
     expect(sip(['manage-realm-subscribers'])).toEqual(['Subscribers']);
     expect(sip(['manage-realms', 'manage-realm-subscribers', 'view-cluster-status'])).toEqual(['Realms', 'Subscribers', 'Registrations']);
-    expect(top(['manage-admin-users'])).toEqual(['Overview', 'Users', 'Diagnostics']);
-    expect(top(['view-cluster-status'])).toEqual(['Overview', 'SIP', 'Calls', 'Media', 'Security', 'Diagnostics']);
-    expect(top(['manage-realms'])).toEqual(['Overview', 'SIP', 'Media', 'Diagnostics']);
+    expect(top(['manage-admin-users'])).toEqual(['Overview', 'Phone', 'Users', 'Diagnostics']);
+    expect(top(['view-cluster-status'])).toEqual(['Overview', 'Phone', 'SIP', 'Calls', 'Media', 'Security', 'Diagnostics']);
+    expect(top(['manage-realms'])).toEqual(['Overview', 'Phone', 'SIP', 'Media', 'Diagnostics']);
   });
 });

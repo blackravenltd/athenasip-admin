@@ -247,9 +247,6 @@ Dated, and not reopened without asking.
 One controller (`Softphone`), two faces: the harness page, unchanged, and a Phone section the
 app shell owns so a call outlives a screen change. First round, in order:
 
-- [ ] The Phone section: route, navigation entry, a top-bar call indicator, the phone owned by
-      the shell; a dial pad, in-call controls, video panes, and the readout as "Call details".
-      Remembers its SIP URI, WebSocket and devices, never the password.
 - [ ] Ringing: a tone made in Web Audio (no asset), and a browser notification for an
       incoming call when the tab is hidden.
 - [ ] Device pickers for microphone, camera and speaker (`setSinkId`), and a warning when the

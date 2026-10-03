@@ -150,3 +150,23 @@
 .softphone-video video { width: 100%; border-radius: .5rem; background: #000; aspect-ratio: 4 / 3; object-fit: contain; }
 .softphone-video figcaption { margin-top: .3rem; color: var(--text-faint); font-size: .82rem; }
 @media (max-width: 800px) { .softphone-video { grid-template-columns: 1fr; } }
+.topbar-call-slot:empty { display: none; }
+.topbar-call { display: inline-flex; align-items: center; gap: .45rem; padding: .3rem .7rem; border-radius: 999px; border: 1px solid var(--border); color: var(--text); font-size: .8rem; text-decoration: none; white-space: nowrap; }
+.topbar-call-incoming { border-color: var(--warn); }
+.phone-line-form { display: grid; gap: .8rem; max-width: 32rem; }
+.phone-connection summary { cursor: pointer; color: var(--text-dim); font-size: .85rem; }
+.phone-connection .field { margin-top: .6rem; }
+.phone-layout { display: grid; grid-template-columns: minmax(18rem, 26rem) 1fr; gap: 1rem; align-items: start; }
+.phone-dialler { display: grid; gap: 1rem; }
+.phone-call { display: grid; gap: .2rem; }
+.phone-call-who { font-size: 1.4rem; font-weight: 600; }
+.phone-call-state { color: var(--text-dim); }
+.phone-call-uri { font-size: .75rem; color: var(--text-faint); overflow-wrap: anywhere; }
+.phone-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+.phone-tones { margin: 0; font-family: ui-monospace, monospace; letter-spacing: .15em; color: var(--text-dim); overflow-wrap: anywhere; }
+.dial-pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: .5rem; }
+.dial-key { display: grid; justify-items: center; gap: .1rem; padding: .6rem 0; border-radius: .6rem; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); cursor: pointer; font: inherit; }
+.dial-key:hover, .dial-key:focus-visible { background: var(--surface-3); }
+.dial-digit { font-size: 1.3rem; line-height: 1; }
+.dial-letters { font-size: .6rem; letter-spacing: .12em; color: var(--text-faint); min-height: .7rem; }
+@media (max-width: 800px) { .phone-layout { grid-template-columns: 1fr; } }

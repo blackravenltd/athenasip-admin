@@ -10,6 +10,14 @@ with a one-line note on what shipped.
       `heldByFarEnd`), `sendDtmf` as RFC 4733 telephone events in the media, and `CallMedia`
       for video and the microphone and camera by `deviceId`. `summarise` reads the sent
       microphone's accumulated energy from the `media-source` record, for a silence warning.
+- [x] **The Phone section.** `/phone`, in the top bar for any signed-in user (a user with no
+      roles too). `PhoneHost` is loaded on demand and held by the shell from first opening
+      until sign-out, so a call, its audio and a top-bar indicator outlive a change of screen.
+      Sign in to a line (SIP address, password, WebSocket from `/client/config`), a dial pad
+      that dials an extension in the line's own realm and sends tones on a call (keys typed
+      too), Call and Video call, Answer, Answer with video, Decline (603), Mute, Hold, the
+      far end's hold, a call timer, video panes, and the readout as "Call details". The SIP
+      address and WebSocket are remembered (`src/phone/settings.ts`), never the password.
 ## The softphone's meters and secure context (2026-10-03)
 
 - [x] **Video, when asked.** A "Video" box beside Call on the console's softphone (not the

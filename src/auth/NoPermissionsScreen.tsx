@@ -1,4 +1,6 @@
+import { Link } from 'react-router-dom';
 import type { SessionInfo } from '../api/types';
+import { routes } from '../app/routes';
 import { describeWho } from './roles';
 
 /**
@@ -22,6 +24,9 @@ export function NoPermissionsScreen({ info }: { info: SessionInfo }) {
           <p>
             Ask an administrator of this node, somebody with the Manage users role, to give you the
             roles you need.
+          </p>
+          <p>
+            The <Link to={routes.phone}>phone</Link> needs no role: it signs in to a SIP line of its own.
           </p>
         </div>
       </div>

@@ -14,6 +14,8 @@ export interface NavItem {
 /** The top-level sections, in the order they appear in the bar. */
 export const topNav: readonly NavItem[] = [
   { to: routes.home, label: 'Overview', end: true },
+  // Any signed-in user: the phone signs in to SIP as a subscriber, not with the console's roles.
+  { to: routes.phone, label: 'Phone', end: false },
   { to: routes.sip, label: 'SIP', end: false, requires: ['manage-realms', 'manage-realm-subscribers', 'view-cluster-status'] },
   { to: routes.calls, label: 'Calls', end: false, requires: ['view-cluster-status'] },
   { to: routes.media, label: 'Media', end: false, requires: ['manage-realms', 'view-cluster-status'] },

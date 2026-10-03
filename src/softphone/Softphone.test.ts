@@ -225,6 +225,18 @@ describe('Softphone', () => {
     expect(phone.state.heldByFarEnd).toBe(false);
   });
 
+  it('declines a ringing call with 603, and only a ringing one', () => {
+    const sip = stack();
+    const phone = new Softphone(sip);
+    phone.register(CONFIG);
+    const [agent] = sip.agents;
+    agent.emit('registered', {});
+    const session = new FakeSession();
+    agent.emit('newRTCSession', { originator: 'remote', session, request: {} });
+    phone.decline();
+    expect(session.terminated).toEqual([{ status_code: 603, reason_phrase: 'Decline' }]);
+  });
+
   it('refuses a second call with 486 rather than replacing the first', () => {
     const sip = stack();
     const phone = new Softphone(sip);

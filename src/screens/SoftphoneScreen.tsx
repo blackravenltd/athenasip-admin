@@ -1,43 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import type { AdminApi } from '../api/AdminApi';
 import { errorMessage, isAbort } from '../api/errors';
-import type { ClientConfig } from '../api/types';
 import { VolumeMeter } from '../components/VolumeMeter';
 import { usableIceServers } from '../softphone/iceServers';
-import { videoLine, type CallState, type IceOptions, type RegistrationState, type SipStack, type VideoLine } from '../softphone/Softphone';
+import { CallReadout } from '../softphone/CallReadout';
+import type { IceOptions, SipStack } from '../softphone/Softphone';
 import { jssipStack } from '../softphone/jssip';
 import type { PageOptions } from '../softphone/page';
 import { useSoftphone } from '../softphone/useSoftphone';
+import { callInProgress, describeCallState, describeRegistration, signallingUri } from '../softphone/words';
 
-const CALL_LABELS: Record<CallState, string> = {
-  idle: 'Idle',
-  calling: 'Calling...',
-  ringing: 'Ringing...',
-  incoming: 'Incoming call',
-  connected: 'Connected',
-  ended: 'Call ended',
-  failed: 'Call failed',
-};
-
-const REGISTRATION_LABELS: Record<RegistrationState, string> = {
-  unregistered: 'Not registered',
-  connecting: 'Registering...',
-  registered: 'Registered',
-  failed: 'Registration failed',
-};
-
-export function describeCallState(state: CallState): string {
-  return CALL_LABELS[state];
-}
-
-export function describeRegistration(state: RegistrationState): string {
-  return REGISTRATION_LABELS[state];
-}
-
-/** Whether a call is in progress, in the sense of "there is something to hang up". */
-export function callInProgress(state: CallState): boolean {
-  return state === 'calling' || state === 'ringing' || state === 'incoming' || state === 'connected';
-}
+export { callInProgress, describeCallState, describeRegistration, describeVideoLine, signallingUri } from '../softphone/words';
 
 interface Connection {
   socket: string;
@@ -73,34 +46,6 @@ export function defaultConnection(options: PageOptions): Connection {
     password: options.password ?? '',
     target: options.target ?? import.meta.env.VITE_SIP_TARGET ?? '',
   };
-}
-
-/**
- * Where to signal, from what the node advertises, for a page served over
- * https or not.
- *
- * An https page must use the secure WebSocket: a browser blocks `ws://` from
- * it as mixed content. A plain http page uses the plain one, because the
- * secure one works only once the browser trusts the node's certificate, and
- * a page reached over http is usually one that has not been asked to. Nothing
- * when the node offers nothing fit, so the caller keeps its guess.
- */
-export function signallingUri(config: ClientConfig, https: boolean): string | undefined {
-  if (https) return config.websocket_uri;
-  const plain = config.transports.find((entry) => entry.transport === 'ws');
-  return plain ? `ws://${plain.address}:${plain.port}` : undefined;
-}
-
-/**
- * One end's video m-line, in words. Port 9, the discard port, is what a
- * bundled section carries when its address comes from ICE and the bundle's
- * transport, so it is named as bundled rather than shown as a port.
- */
-export function describeVideoLine(line: VideoLine | undefined): string {
-  if (!line) return 'none';
-  if (line.port === 0) return 'declined (port 0)';
-  if (line.bundled && line.port === 9) return `bundled, ${line.direction}`;
-  return `port ${line.port}${line.bundled ? ' (bundled)' : ''}, ${line.direction}`;
 }
 
 const NO_OPTIONS: PageOptions = { register: false, answer: false };
@@ -223,7 +168,6 @@ export function SoftphoneScreen({ options = NO_OPTIONS, stack = jssipStack, api 
   );
 
   const notice = state.notice ?? playbackNotice ?? configNotice;
-  const pair = stats?.candidatePair;
 
   return (
     <>
@@ -369,47 +313,11 @@ export function SoftphoneScreen({ options = NO_OPTIONS, stack = jssipStack, api 
             </div>
           </div>
 
-          <dl className="readout" data-testid="softphone-negotiation">
-            <dt>Direction</dt><dd>{state.direction ?? '-'}</dd>
-            {iceServers && (<><dt>ICE servers</dt><dd data-testid="softphone-ice-servers">{iceServers.length ? iceServers.map((server) => server.urls).join(', ') : 'None'}{relayOnly || (!api && options.relay) ? ', relay only' : ''}</dd></>)}
-            <dt>Signaling</dt><dd>{state.signalingState ?? '-'}</dd>
-            <dt>ICE gathering</dt><dd>{state.iceGatheringState ?? '-'}</dd>
-            <dt>ICE connection</dt><dd data-testid="softphone-ice">{state.iceConnectionState ?? '-'}</dd>
-            <dt>Connection</dt><dd>{state.connectionState ?? '-'}</dd>
-            <dt>DTLS</dt><dd>{stats?.dtlsState ?? '-'}</dd>
-            <dt>Codec</dt><dd>{stats?.codec ?? '-'}</dd>
-            {(videoLine(state.localSdp) || videoLine(state.remoteSdp)) && (
-              <>
-                <dt>Video</dt>
-                <dd data-testid="softphone-video-negotiation">
-                  {`this end: ${describeVideoLine(videoLine(state.localSdp))}; far end: ${describeVideoLine(videoLine(state.remoteSdp))}`}
-                  {stats?.video ? `; ${stats.video.packetsSent} sent, ${stats.video.packetsReceived} received, ${stats.video.framesDecoded} frames decoded${stats.video.codec ? `, ${stats.video.codec}` : ''}` : ''}
-                </dd>
-              </>
-            )}
-            <dt>Candidate pair</dt>
-            <dd>
-              {pair
-                ? `${pair.local.address}:${pair.local.port} (${pair.local.type}) to ${pair.remote.address}:${pair.remote.port} (${pair.remote.type}), ${pair.state}`
-                : '-'}
-            </dd>
-            <dt>Packets</dt>
-            <dd>
-              {stats
-                ? `${stats.packetsSent} sent, ${stats.packetsReceived} received, ${stats.packetsLost} lost`
-                : '-'}
-            </dd>
-            {state.cause && (<><dt>Cause</dt><dd>{state.cause}</dd></>)}
-          </dl>
-
-          <details>
-            <summary>Local description</summary>
-            <pre className="sdp" data-testid="softphone-local-sdp">{state.localSdp ?? 'None yet.'}</pre>
-          </details>
-          <details>
-            <summary>Remote description</summary>
-            <pre className="sdp" data-testid="softphone-remote-sdp">{state.remoteSdp ?? 'None yet.'}</pre>
-          </details>
+          <CallReadout
+            state={state}
+            stats={stats}
+            extra={iceServers && (<><dt>ICE servers</dt><dd data-testid="softphone-ice-servers">{iceServers.length ? iceServers.map((server) => server.urls).join(', ') : 'None'}{relayOnly || (!api && options.relay) ? ', relay only' : ''}</dd></>)}
+          />
         </section>
       )}
     </>

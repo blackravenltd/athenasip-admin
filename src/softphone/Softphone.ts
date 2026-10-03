@@ -91,6 +91,8 @@ export interface SoftphoneState {
   iceGatheringState?: RTCIceGatheringState;
   iceConnectionState?: RTCIceConnectionState;
   connectionState?: RTCPeerConnectionState;
+  /** When the call was answered, by the controller's clock: what a call timer counts from. */
+  connectedAt?: number;
   /** This end's microphone is muted on the call. */
   muted?: boolean;
   /** This end put the call on hold. */
@@ -308,6 +310,12 @@ export class Softphone {
     this.session?.terminate();
   }
 
+  /** Refuses a call that is still ringing here with 603 Decline, which says nobody will take it. */
+  decline(): void {
+    if (!this.session || this.current.call !== 'incoming') return;
+    this.session.terminate({ status_code: 603, reason_phrase: 'Decline' });
+  }
+
   /** The browser's own report of the media, or nothing when there is no connection to ask. */
   async stats(): Promise<MediaStats | undefined> {
     if (!this.peer) return undefined;
@@ -344,6 +352,7 @@ export class Softphone {
       muted: false,
       held: false,
       heldByFarEnd: false,
+      connectedAt: undefined,
     });
 
     // JsSIP creates an outgoing call's connection, and announces it, before it
@@ -364,8 +373,9 @@ export class Softphone {
     });
     session.on('hold', (event: { originator: string }) => this.update(event.originator === 'remote' ? { heldByFarEnd: true } : { held: true }));
     session.on('unhold', (event: { originator: string }) => this.update(event.originator === 'remote' ? { heldByFarEnd: false } : { held: false }));
-    session.on('accepted', () => this.update({ call: 'connected' }));
-    session.on('confirmed', () => this.update({ call: 'connected' }));
+    const connected = () => this.update({ call: 'connected', connectedAt: this.current.connectedAt ?? this.clock() });
+    session.on('accepted', connected);
+    session.on('confirmed', connected);
     session.on('ended', (event: EndEvent) => this.finish('ended', event.cause));
     session.on('failed', (event: EndEvent) => this.finish('failed', event.cause));
   }

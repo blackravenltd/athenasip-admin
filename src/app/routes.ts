@@ -17,6 +17,8 @@ export const routes = {
 
   calls: '/calls',
 
+  phone: '/phone',
+
   media: '/media',
 
   security: '/security',

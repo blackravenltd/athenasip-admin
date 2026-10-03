@@ -1,4 +1,4 @@
-import { Suspense, lazy, type ReactNode } from 'react';
+import { Suspense, lazy, useState, type ReactNode } from 'react';
 import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import type { AdminApi } from './api/AdminApi';
 import type { Role } from './api/types';
@@ -34,6 +34,9 @@ import { pageOptions } from './softphone/page';
  * diagnostic that most sessions never open.
  */
 const SoftphoneScreen = lazy(async () => ({ default: (await import('./screens/SoftphoneScreen')).SoftphoneScreen }));
+
+/** The phone, on demand for the same reason, and held by the shell once opened. */
+const PhoneHost = lazy(() => import('./phone/PhoneHost'));
 
 /**
  * A screen this login's roles do not allow says so, rather than rendering a
@@ -71,6 +74,12 @@ export default function App({ api, session, loginHint }: { api: AdminApi; sessio
   const guard = (needed: readonly Role[], element: ReactNode) => <Require roles={needed} held={roles}>{element}</Require>;
   // The SIP section root goes to the first screen in it this login may use.
   const sipHome = can(roles, 'manage-realms') ? routes.realms : can(roles, 'manage-realm-subscribers') ? routes.subscribers : routes.registrations;
+  // Once opened, the phone stays mounted until sign-out, so a call outlives a change of screen.
+  const onPhone = location.pathname === routes.phone;
+  const [phoneOpened, setPhoneOpened] = useState(false);
+  if (signedIn && onPhone && !phoneOpened) setPhoneOpened(true);
+  if (!signedIn && phoneOpened) setPhoneOpened(false);
+  const [callSlot, setCallSlot] = useState<HTMLElement | null>(null);
 
   const logOut = () => {
     // End the session on the node as well as here. If the node cannot be
@@ -90,6 +99,7 @@ export default function App({ api, session, loginHint }: { api: AdminApi; sessio
         </Link>
         {signedIn && roles.length > 0 ? <SectionNav ariaLabel="Sections" items={visible(topNav, roles)} className="" /> : <span />}
         <div className="topbar-trailing">
+          <span className="topbar-call-slot" ref={setCallSlot} />
           {signedIn && info && (
             <>
               <SessionExpiry expiresAt={expiresAt} />
@@ -112,7 +122,7 @@ export default function App({ api, session, loginHint }: { api: AdminApi; sessio
             // In place of the screen that was asked for, so signing in lands
             // there and the address bar never changes.
             <LoginScreen api={api} session={session} ended={ended} hint={loginHint} />
-          ) : roles.length === 0 && location.pathname !== routes.me ? (
+          ) : roles.length === 0 && location.pathname !== routes.me && !onPhone ? (
             <NoPermissionsScreen info={info} />
           ) : (
             <Routes>
@@ -124,6 +134,9 @@ export default function App({ api, session, loginHint }: { api: AdminApi; sessio
               <Route path={routes.registrations} element={guard(['view-cluster-status'], <RegistrationsScreen api={api} />)} />
 
               <Route path={routes.calls} element={guard(['view-cluster-status'], <CallsScreen api={api} />)} />
+
+              {/* Drawn by the phone the shell holds, below. */}
+              <Route path={routes.phone} element={null} />
 
               <Route path={routes.media} element={guard(['manage-realms', 'view-cluster-status'], <MediaScreen api={api} />)} />
 
@@ -144,6 +157,11 @@ export default function App({ api, session, loginHint }: { api: AdminApi; sessio
               {/* An unknown path says so, rather than rendering the front page. */}
               <Route path="*" element={<NotFoundScreen />} />
             </Routes>
+          )}
+          {signedIn && phoneOpened && (
+            <Suspense fallback={onPhone ? <Loading /> : null}>
+              <PhoneHost api={api} visible={onPhone} indicator={callSlot} />
+            </Suspense>
           )}
         </div>
       </main>
