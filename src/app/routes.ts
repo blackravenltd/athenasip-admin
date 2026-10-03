@@ -15,11 +15,15 @@ export const routes = {
   subscribers: '/sip/subscribers',
   registrations: '/sip/registrations',
 
+  calls: '/calls',
+
   media: '/media',
-  rtpRelay: '/media/rtprelay',
 
   security: '/security',
   securityTls: '/security/tls',
+
+  users: '/users',
+  account: '/account',
 
   settings: '/settings',
 

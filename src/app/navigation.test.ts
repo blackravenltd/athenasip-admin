@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { sectionNavFor, topNav } from './navigation';
+import { sectionNavFor, topNav, visible } from './navigation';
 import { routes } from './routes';
 
 describe('topNav', () => {
@@ -27,7 +27,7 @@ describe('sectionNavFor', () => {
 
   it('shows the section bar on the section root itself', () => {
     expect(sectionNavFor(routes.sip)?.ariaLabel).toBe('SIP navigation');
-    expect(sectionNavFor(routes.media)?.ariaLabel).toBe('Media navigation');
+    expect(sectionNavFor(routes.security)?.ariaLabel).toBe('Security navigation');
   });
 
   it('gives the overview no section bar rather than an empty one', () => {
@@ -48,5 +48,18 @@ describe('sectionNavFor', () => {
         expect(known).toContain(child.to);
       }
     }
+  });
+});
+
+describe('visible', () => {
+  it('shows each role only what it can use, rather than letting it click through to a 403', () => {
+    const sip = (roles: Parameters<typeof visible>[1]) => sectionNavFor(routes.sip, roles)?.items.map((item) => item.label);
+    const top = (roles: Parameters<typeof visible>[1]) => visible(topNav, roles).map((item) => item.label);
+    expect(sip(['view-cluster-status'])).toEqual(['Registrations']);
+    expect(sip(['manage-realm-subscribers'])).toEqual(['Subscribers']);
+    expect(sip(['manage-realms', 'manage-realm-subscribers', 'view-cluster-status'])).toEqual(['Realms', 'Subscribers', 'Registrations']);
+    expect(top(['manage-admin-users'])).toEqual(['Overview', 'Users', 'Diagnostics']);
+    expect(top(['view-cluster-status'])).toEqual(['Overview', 'SIP', 'Calls', 'Media', 'Security', 'Diagnostics']);
+    expect(top(['manage-realms'])).toEqual(['Overview', 'SIP', 'Media', 'Diagnostics']);
   });
 });
