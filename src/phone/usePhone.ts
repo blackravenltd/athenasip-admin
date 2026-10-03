@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { AdminApi } from '../api/AdminApi';
 import { errorMessage } from '../api/errors';
 import { usableIceServers } from '../softphone/iceServers';
+import { sendingSilence } from './devices';
 import { Softphone, type CallMedia, type MediaStats, type SipStack, type SoftphoneState } from '../softphone/Softphone';
 
 export interface PhoneHandle {
@@ -13,6 +14,8 @@ export interface PhoneHandle {
   stats?: MediaStats;
   /** Why the node gave no ICE servers for the last call, when it did not. */
   iceNotice?: string;
+  /** The connected, unmuted call has sent nothing but silence for the last few seconds. */
+  silent: boolean;
   call: (target: string, media?: CallMedia) => void;
   answer: (media?: CallMedia) => void;
 }
@@ -31,6 +34,7 @@ export function usePhone(stack: SipStack, api: AdminApi): PhoneHandle {
   const [streams, setStreams] = useState<{ remote?: MediaStream; local?: MediaStream }>({});
   const [stats, setStats] = useState<MediaStats>();
   const [iceNotice, setIceNotice] = useState<string>();
+  const [energies, setEnergies] = useState<Array<number | undefined>>([]);
 
   useEffect(() => {
     const unsubscribe = phone.subscribe((next) => {
@@ -48,12 +52,15 @@ export function usePhone(stack: SipStack, api: AdminApi): PhoneHandle {
   useEffect(() => {
     if (state.call !== 'connected') {
       setStats(undefined);
+      setEnergies([]);
       return;
     }
     let cancelled = false;
     const read = async () => {
       const next = await phone.stats();
-      if (!cancelled) setStats(next);
+      if (cancelled) return;
+      setStats(next);
+      setEnergies((current) => [...current.slice(-9), next?.sentAudioEnergy]);
     };
     void read();
     const timer = setInterval(() => { void read(); }, 1000);
@@ -82,5 +89,6 @@ export function usePhone(stack: SipStack, api: AdminApi): PhoneHandle {
     withIce((servers) => phone.answer({ servers }, media));
   }, [phone, withIce]);
 
-  return { phone, state, remoteStream: streams.remote, localStream: streams.local, stats, iceNotice, call, answer };
+  const silent = state.call === 'connected' && !state.muted && !state.held && sendingSilence(energies);
+  return { phone, state, remoteStream: streams.remote, localStream: streams.local, stats, iceNotice, silent, call, answer };
 }

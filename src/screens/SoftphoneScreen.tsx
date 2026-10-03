@@ -134,6 +134,7 @@ export function SoftphoneScreen({ options = NO_OPTIONS, stack = jssipStack, api 
   // The remote picture plays muted: the <audio> element already carries its sound.
   const localStream = phone.localStream;
   const remoteHasVideo = !!remoteStream?.getVideoTracks?.().length;
+  const localHasVideo = !!localStream?.getVideoTracks?.().length;
   useEffect(() => {
     if (remoteVideoRef.current) remoteVideoRef.current.srcObject = remoteHasVideo ? remoteStream ?? null : null;
   }, [remoteStream, remoteHasVideo]);
@@ -285,7 +286,7 @@ export function SoftphoneScreen({ options = NO_OPTIONS, stack = jssipStack, api 
         {notice && <p className="error-message" role="alert">{notice}</p>}
 
         <audio ref={audioRef} autoPlay hidden playsInline />
-        {(localStream || remoteHasVideo) && (
+        {(localHasVideo || remoteHasVideo) && (
           <div className="softphone-video">
             <figure>
               <video ref={remoteVideoRef} autoPlay playsInline muted data-testid="softphone-remote-video" />

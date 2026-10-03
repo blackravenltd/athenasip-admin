@@ -77,7 +77,29 @@ async function registered(sip = stack()) {
 }
 
 beforeEach(() => { window.localStorage.clear(); });
-afterEach(() => { document.body.innerHTML = ''; });
+afterEach(() => { document.body.innerHTML = ''; vi.unstubAllGlobals(); });
+
+/** A browser with two microphones and a camera, which names them once the microphone is allowed. */
+function withDevices() {
+  let allowed = false;
+  const devices = [
+    { kind: 'audioinput', deviceId: 'default', label: 'Default' },
+    { kind: 'audioinput', deviceId: 'mic-builtin', label: 'MacBook Pro Microphone' },
+    { kind: 'audioinput', deviceId: 'mic-blackhole', label: 'BlackHole 2ch' },
+    { kind: 'videoinput', deviceId: 'cam-1', label: 'FaceTime HD Camera' },
+  ];
+  const asked: MediaStreamConstraints[] = [];
+  vi.stubGlobal('navigator', {
+    ...navigator,
+    mediaDevices: {
+      enumerateDevices: async () => devices.map((device) => ({ ...device, label: allowed ? device.label : '' })),
+      getUserMedia: async (constraints: MediaStreamConstraints) => { asked.push(constraints); allowed = true; return { getTracks: () => [] }; },
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    },
+  });
+  return asked;
+}
 
 describe('PhoneHost', () => {
   it('signs in to a line where the node says, and remembers everything but the password', async () => {
@@ -140,6 +162,28 @@ describe('PhoneHost', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Hang up' }));
     expect(session.log).toContain('terminate');
+  });
+
+  it('asks for the microphone before a line, then calls with the one chosen, remembered', async () => {
+    const asked = withDevices();
+    const sip = stack();
+    saveSettings({ uri: 'sip:1001@10.35.1.20', socket: 'ws://10.35.1.20:8088' });
+    show(sip);
+    fireEvent.click(screen.getByRole('button', { name: 'Allow the microphone' }));
+    const microphone = await screen.findByLabelText('Microphone') as HTMLSelectElement;
+    expect(asked).toEqual([{ audio: true, video: false }]);
+    expect([...microphone.options].map((option) => option.text)).toEqual(['Browser default', 'MacBook Pro Microphone', 'BlackHole 2ch']);
+
+    fireEvent.change(microphone, { target: { value: 'mic-builtin' } });
+    expect(loadSettings().microphone).toBe('mic-builtin');
+
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'pw' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Register' }));
+    act(() => { sip.agents[0].emit('registered', {}); });
+    fireEvent.change(await screen.findByLabelText('Number or address'), { target: { value: '1002' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Call' }));
+    await vi.waitFor(() => expect(sip.agents[0].calls).toHaveLength(1));
+    expect(sip.agents[0].calls[0].options.mediaConstraints).toEqual({ audio: { deviceId: { exact: 'mic-builtin' } }, video: false });
   });
 
   it('keeps the call, and its indicator, while another screen is shown', async () => {

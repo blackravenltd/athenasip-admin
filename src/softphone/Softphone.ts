@@ -189,7 +189,7 @@ export class Softphone {
     return this.remote;
   }
 
-  /** What this end is sending, once the call has its tracks: the camera's picture, for one. */
+  /** What this end is sending, once the call has its tracks: the microphone, and the camera when there is video. */
   get localStream(): MediaStream | undefined {
     return this.local;
   }
@@ -548,11 +548,11 @@ function number(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0;
 }
 
-/** The tracks a connection is sending, as one stream to show; nothing when it sends no video. */
+/** The tracks a connection is sending, as one stream: the camera to show, the microphone to meter. */
 function senderStream(peer: RTCPeerConnection | undefined): MediaStream | undefined {
   if (!peer || typeof MediaStream === 'undefined') return undefined;
   const tracks = peer.getSenders().map((sender) => sender.track).filter((track): track is MediaStreamTrack => !!track);
-  return tracks.some((track) => track.kind === 'video') ? new MediaStream(tracks) : undefined;
+  return tracks.length ? new MediaStream(tracks) : undefined;
 }
 
 /**

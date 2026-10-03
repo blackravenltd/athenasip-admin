@@ -42,6 +42,13 @@ export default function PhoneHost({ api, visible, indicator, stack = jssipStack 
     if (remoteStream) void element.play().catch(() => undefined);
   }, [remoteStream]);
 
+  // The chosen speaker, where the browser lets a page choose; the default otherwise.
+  useEffect(() => {
+    const element = audio.current as (HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> }) | null;
+    if (!element?.setSinkId) return;
+    void element.setSinkId(settings.speaker ?? '').catch(() => undefined);
+  }, [settings.speaker]);
+
   const call = state.call === 'idle' || state.call === 'ended' || state.call === 'failed' ? undefined : state.call;
 
   return (

@@ -38,7 +38,9 @@ and nothing here starts or stops their containers. Its `develop` is at `096fb78`
 `13cf9a0` or later on corvus-fi-1. It proposes API changes before building them, and asked to
 be told after every console deploy. A peer cannot approve a deploy or anything else for Tom.
 
-**Where the console runs.** On corvus-fi-1, `http://10.35.1.20:8080/`, served by the node in
+**Where the console runs.** On corvus-fi-1, `http://10.35.1.20:8080/` and `https://10.35.1.20:8443/`
+(since 2026-10-03, with wss on 8089; the certificate is from the server's snakeoil CA,
+`tls/ca/snakeca.crt` there, which a browser must trust before the phone works), served by the node in
 SPA mode from `/usr/local/share/athenasip/admin`. Deploy by building with the live flag and
 syncing; the node needs no restart. The rsync needs Tom's approval each time: the permission
 layer treats it as a production deploy.
@@ -247,39 +249,11 @@ Dated, and not reopened without asking.
 One controller (`Softphone`), two faces: the harness page, unchanged, and a Phone section the
 app shell owns so a call outlives a screen change. First round, in order:
 
-- [ ] Device pickers for microphone, camera and speaker (`setSinkId`), and a warning when the
-      call's own sent audio stays silent.
 - [ ] History from `GET /call-records` (`view-cluster-status`), filtered to this phone's
       subscriber, and a directory from the realm's subscribers (`manage-realm-subscribers`);
       each hidden, with a reason, where the user's roles do not allow it.
 
 Later: blind transfer (`refer`), a second line or call waiting.
-
-## The softphone, from the first live call (2026-10-03)
-
-corvus-fi-1 serves the console over https at `https://10.35.1.20:8443` and `wss` on 8089 since
-21:45 that evening, with the node's certificate from the server's snakeoil CA
-(`tls/ca/snakeca.crt` there). A browser must trust that CA, or accept the certificate on both
-ports, before the softphone works from the node's real address.
-
-The server session called AthenaPhone from the console's softphone on corvus-fi-1, audio both
-ways, through an SSH tunnel to localhost. What made it hard:
-
-- [ ] A microphone picker, listing `enumerateDevices()` inputs and passing the choice to the
-      call's `getUserMedia`. The Mac's default input was a virtual loopback (BlackHole), and
-      the first call sent encoded silence for 45 seconds.
-- [ ] A visible warning when the outbound level stays at zero for a few seconds of a
-      connected call, read from the call's own sender (its `audioLevel` or energy in
-      `getStats`), not from the meter's separate `getUserMedia`.
-- [ ] Meter the microphone from the track the call sends, not a second capture of the default
-      device, so the meter and the call can never disagree about which input is live.
-- [ ] The guessed WebSocket URL (page host, port 8088) is wrong through a port forward. The
-      console asks `/client/config` first, which names the node's own address; only the
-      fallback guesses. Worth saying in the field's hint when the guess is in use.
-- [ ] A reload loses the session and the subscriber password, by design (principle 5).
-      Changing Chrome's microphone permission reloads the page. Asking for the microphone
-      before signing in to the softphone, so the permission is settled first, would spare
-      the repeat.
 
 ## Milestone 2 - Live view
 

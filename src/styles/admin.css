@@ -171,3 +171,4 @@
 .dial-letters { font-size: .6rem; letter-spacing: .12em; color: var(--text-faint); min-height: .7rem; }
 @media (max-width: 800px) { .phone-layout { grid-template-columns: 1fr; } }
 .link-button { padding: 0; border: 0; background: none; color: var(--focus); font: inherit; text-decoration: underline; cursor: pointer; }
+.phone-meters { display: grid; gap: .6rem; }

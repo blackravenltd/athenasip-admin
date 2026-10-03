@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { AdminApi } from '../api/AdminApi';
 import { errorMessage, isAbort } from '../api/errors';
+import { VolumeMeter } from '../components/VolumeMeter';
 import { CallReadout } from '../softphone/CallReadout';
 import { callInProgress, describeCallState, signallingUri } from '../softphone/words';
 import { DialPad } from './DialPad';
+import { canChooseSpeaker, useDevices, type Devices } from './devices';
 import { callTimer, dialTarget, userOf } from './dial';
 import { notificationPermission } from './ringing';
 import { loadSettings, saveSettings, type PhoneSettings } from './settings';
@@ -31,7 +33,8 @@ export function PhoneScreen({ api, handle, settings, onSettings, aside }: {
   onSettings: (settings: PhoneSettings) => void;
   aside?: ReactNode;
 }) {
-  const { phone, state, stats, localStream, remoteStream, iceNotice } = handle;
+  const { phone, state, stats, localStream, remoteStream, iceNotice, silent } = handle;
+  const { devices, named, ask, error: deviceError } = useDevices();
   const [uri, setUri] = useState(settings.uri ?? '');
   const [password, setPassword] = useState('');
   const [socket, setSocket] = useState(settings.socket ?? '');
@@ -49,6 +52,7 @@ export function PhoneScreen({ api, handle, settings, onSettings, aside }: {
   const insecure = window.isSecureContext === false;
   const dialled = dialTarget(target, uri);
   const remoteHasVideo = !!remoteStream?.getVideoTracks?.().length;
+  const localHasVideo = !!localStream?.getVideoTracks?.().length;
 
   // Where to signal, from the node, unless this browser remembers somewhere.
   useEffect(() => {
@@ -168,6 +172,37 @@ export function PhoneScreen({ api, handle, settings, onSettings, aside }: {
         )}
       </section>
 
+      <section className="panel" aria-labelledby="phone-devices-heading">
+        <div className="panel-heading">
+          <div>
+            <h2 id="phone-devices-heading">Devices</h2>
+            <p>
+              Which microphone, camera and speaker calls use. The browser names its devices only once
+              this page may use one; asking now, before signing in to a line, means a change of
+              permission never interrupts a call.
+            </p>
+          </div>
+        </div>
+        {!named ? (
+          <div className="phone-actions">
+            <button className="secondary-button" type="button" disabled={insecure} onClick={() => { void ask(false); }}>Allow the microphone</button>
+            <button className="secondary-button" type="button" disabled={insecure} onClick={() => { void ask(true); }}>Allow the microphone and camera</button>
+          </div>
+        ) : (
+          <div className="field-row">
+            <DeviceSelect label="Microphone" devices={devices.microphones} value={settings.microphone} onChange={(microphone) => onSettings({ ...settings, microphone })} />
+            {devices.cameras.length > 0 && (
+              <DeviceSelect label="Camera" devices={devices.cameras} value={settings.camera} onChange={(camera) => onSettings({ ...settings, camera })} />
+            )}
+            {canChooseSpeaker() && devices.speakers.length > 0 && (
+              <DeviceSelect label="Speaker" devices={devices.speakers} value={settings.speaker} onChange={(speaker) => onSettings({ ...settings, speaker })} />
+            )}
+          </div>
+        )}
+        {deviceError && <p className="error-message" role="alert">{deviceError}</p>}
+        {named && <p className="field-hint">A change applies from the next call.</p>}
+      </section>
+
       {registered && (
         <div className="phone-layout">
           <section className="panel phone-dialler" aria-label="Dialler">
@@ -229,7 +264,20 @@ export function PhoneScreen({ api, handle, settings, onSettings, aside }: {
               </div>
             )}
 
-            {(localStream || remoteHasVideo) && (
+            {connected && (
+              <div className="phone-meters">
+                <VolumeMeter label="Your microphone" source={{ kind: 'stream', stream: localStream }} active={connected && !state.muted} />
+                <VolumeMeter label="Far end" source={{ kind: 'stream', stream: remoteStream }} active={connected} />
+              </div>
+            )}
+            {silent && (
+              <p className="error-message" role="alert">
+                Nothing but silence is leaving this browser. Check the microphone chosen under Devices:
+                a muted input, or a virtual one such as BlackHole, sends nothing the far end can hear.
+              </p>
+            )}
+
+            {(localHasVideo || remoteHasVideo) && (
               <div className="softphone-video">
                 <figure>
                   <video ref={remoteVideo} autoPlay playsInline muted aria-label="Far end video" />
@@ -274,6 +322,28 @@ export function PhoneScreen({ api, handle, settings, onSettings, aside }: {
         </section>
       )}
     </>
+  );
+}
+
+/** One device choice. The first option is the browser's default, which saves nothing. */
+function DeviceSelect({ label, devices, value, onChange }: {
+  label: string;
+  devices: Devices[keyof Devices];
+  value?: string;
+  onChange: (deviceId: string | undefined) => void;
+}) {
+  // A remembered device that is not plugged in now reads as the default, and is kept for when it is.
+  const present = devices.some((device) => device.deviceId === value);
+  return (
+    <label className="field">
+      <span>{label}</span>
+      <select value={present ? value : ''} onChange={(event) => onChange(event.target.value || undefined)}>
+        <option value="">Browser default</option>
+        {devices.filter((device) => device.deviceId && device.deviceId !== 'default').map((device, index) => (
+          <option key={device.deviceId} value={device.deviceId}>{device.label || `${label} ${index + 1}`}</option>
+        ))}
+      </select>
+    </label>
   );
 }
 

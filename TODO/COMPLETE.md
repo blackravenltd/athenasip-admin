@@ -22,6 +22,14 @@ with a one-line note on what shipped.
       the far end rings, made with oscillators (`src/phone/ringing.ts`, no sound file). A
       browser notification for a call arriving while the tab is hidden, once allowed from
       the Phone screen; closed when the call stops ringing.
+- [x] **Devices.** "Allow the microphone" (and camera) before signing in to a line, so a
+      permission change, which reloads the page in Chrome, never interrupts a call or loses a
+      typed password. Then microphone, camera and speaker (`setSinkId`, where the browser has
+      it) choices, remembered, used from the next call. The call's own microphone and the far
+      end are metered from the streams the call carries, and a connected, unmuted call whose
+      sent energy has not grown for five seconds says it is sending silence (BlackHole, on the
+      first live call). This closes the first live call's findings for the Phone; the harness
+      view keeps its plain controls.
 ## The softphone's meters and secure context (2026-10-03)
 
 - [x] **Video, when asked.** A "Video" box beside Call on the console's softphone (not the
