@@ -160,7 +160,7 @@ export default function App({ api, session, loginHint }: { api: AdminApi; sessio
           )}
           {signedIn && phoneOpened && (
             <Suspense fallback={onPhone ? <Loading /> : null}>
-              <PhoneHost api={api} visible={onPhone} indicator={callSlot} />
+              <PhoneHost api={api} roles={roles} visible={onPhone} indicator={callSlot} />
             </Suspense>
           )}
         </div>

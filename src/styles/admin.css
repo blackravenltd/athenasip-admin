@@ -172,3 +172,12 @@
 @media (max-width: 800px) { .phone-layout { grid-template-columns: 1fr; } }
 .link-button { padding: 0; border: 0; background: none; color: var(--focus); font: inherit; text-decoration: underline; cursor: pointer; }
 .phone-meters { display: grid; gap: .6rem; }
+.state-idle { background: var(--text-faint); }
+.phone-aside { display: grid; gap: 1rem; align-content: start; }
+.phone-aside h2 { margin: 0 0 .6rem; font-size: 1rem; }
+.phone-list { list-style: none; margin: 0; padding: 0; display: grid; }
+.phone-list-row { display: flex; align-items: center; justify-content: space-between; gap: .8rem; padding: .5rem 0; border-top: 1px solid var(--border-soft); }
+.phone-list-row:first-child { border-top: 0; }
+.phone-list-main { display: grid; gap: .1rem; min-width: 0; }
+.phone-list-name { display: inline-flex; align-items: center; gap: .45rem; font-weight: 600; }
+.phone-list-detail { color: var(--text-dim); font-size: .82rem; overflow-wrap: anywhere; }

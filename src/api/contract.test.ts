@@ -73,6 +73,7 @@ describe.skipIf(!present)('HttpAdminApi against the server OpenAPI document', ()
     await api.deleteSubscriber('r', 'u');
     await api.listRegistrations('r');
     await api.listCalls();
+    await api.listCallRecords(50);
     await api.getCall('a84b4c76e66710@pc33.atlanta.com');
     await api.mediaEngine();
     await api.listMediaReoffers();

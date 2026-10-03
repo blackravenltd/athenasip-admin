@@ -315,6 +315,27 @@ export interface CallMedia {
   legs: CallLeg[];
 }
 
+/**
+ * `GET /call-records`: one call that has ended, newest first, kept for the
+ * node's `calls.history_retention` (thirty days by default). A call refused
+ * before anything rang has none.
+ */
+export interface CallRecord {
+  /** The Call-ID. */
+  id: string;
+  created_at: string | null;
+  /** Null for a call nobody answered. */
+  answered_at: string | null;
+  ended_at: string | null;
+  /** Seconds from the answer to the end; 0 for a call nobody answered. */
+  duration: number;
+  caller: string | null;
+  callee: string | null;
+  /** The nodes that carried it, the caller's first. */
+  nodes: string[];
+  media_engine: string | null;
+}
+
 /** `GET /calls`: one live call. An ended call is gone from the list. */
 export interface Call {
   /** The Call-ID. */

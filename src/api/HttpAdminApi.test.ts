@@ -142,6 +142,14 @@ describe('HttpAdminApi', () => {
       expect(onUnauthorized).not.toHaveBeenCalled();
     });
 
+    it('asks for call records with a limit only when given one', async () => {
+      const fetch = vi.fn(async () => new Response('[]', { status: 200 })) as unknown as typeof globalThis.fetch;
+      const api = new HttpAdminApi({ fetch });
+      await api.listCallRecords();
+      await api.listCallRecords(20);
+      expect(vi.mocked(fetch).mock.calls.map(([url]) => url)).toEqual(['/api/v1/call-records', '/api/v1/call-records?limit=20']);
+    });
+
     it('never signs out on a 429', async () => {
       const onUnauthorized = vi.fn();
       const fetch = vi.fn(async () => new Response('{}', { status: 429, headers: { 'Retry-After': '5' } })) as unknown as typeof globalThis.fetch;

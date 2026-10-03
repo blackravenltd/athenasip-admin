@@ -2,11 +2,13 @@ import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import type { AdminApi } from '../api/AdminApi';
+import type { Role } from '../api/types';
 import { routes } from '../app/routes';
 import { jssipStack } from '../softphone/jssip';
 import type { SipStack } from '../softphone/Softphone';
 import { describeCallState } from '../softphone/words';
 import { callTimer, userOf } from './dial';
+import { PhoneAside } from './PhoneAside';
 import { PhoneScreen, useRememberedSettings } from './PhoneScreen';
 import { useIncomingNotification, useRinging } from './ringing';
 import { usePhone } from './usePhone';
@@ -22,8 +24,10 @@ import { usePhone } from './usePhone';
  *
  * Loaded on demand, because JsSIP is most of the bundle.
  */
-export default function PhoneHost({ api, visible, indicator, stack = jssipStack }: {
+export default function PhoneHost({ api, roles, visible, indicator, stack = jssipStack }: {
   api: AdminApi;
+  /** The console user's roles, which decide whether history and the directory can be read. */
+  roles: readonly Role[];
   visible: boolean;
   indicator: HTMLElement | null;
   stack?: SipStack;
@@ -54,7 +58,23 @@ export default function PhoneHost({ api, visible, indicator, stack = jssipStack 
   return (
     <>
       <audio ref={audio} autoPlay hidden playsInline />
-      {visible && <PhoneScreen api={api} handle={handle} settings={settings} onSettings={setSettings} />}
+      {visible && (
+        <PhoneScreen
+          api={api}
+          handle={handle}
+          settings={settings}
+          onSettings={setSettings}
+          aside={(
+            <PhoneAside
+              api={api}
+              roles={roles}
+              ownUri={settings.uri ?? ''}
+              call={state.call}
+              onDial={(uri) => handle.call(uri, { microphone: settings.microphone })}
+            />
+          )}
+        />
+      )}
       {indicator && call && createPortal(
         <Link className={`topbar-call topbar-call-${call}`} to={routes.phone}>
           <span className={`state-dot state-${call === 'connected' ? 'ok' : 'warn'}`} aria-hidden="true" />

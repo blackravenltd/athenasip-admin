@@ -1,6 +1,7 @@
 import type {
   Subscriber,
   Call,
+  CallRecord,
   AdminUser,
   ChangePassword,
   ClientConfig,
@@ -74,6 +75,8 @@ export interface AdminApi {
 
   /** The calls this node is carrying now. Read only, and gone once ended. */
   listCalls(signal?: AbortSignal): Promise<Call[]>;
+  /** Calls that have ended, newest first; `limit` 1 to 1000, the node's default 100. */
+  listCallRecords(limit?: number, signal?: AbortSignal): Promise<CallRecord[]>;
   /** One live call by its Call-ID; a 404 once it has ended. */
   getCall(id: string, signal?: AbortSignal): Promise<Call>;
   /** The media engine and what it can do. */

@@ -30,6 +30,12 @@ with a one-line note on what shipped.
       sent energy has not grown for five seconds says it is sending silence (BlackHole, on the
       first live call). This closes the first live call's findings for the Phone; the harness
       view keeps its plain controls.
+- [x] **History and directory.** `listCallRecords` (`GET /call-records`, `view-cluster-status`)
+      in the client, the fake and the contract test. Beside the dialler, this line's recent
+      calls from the records (outgoing, incoming, missed, duration, when), re-read as each call
+      ends, and the realm's subscribers with whether each is registered; each with a Call
+      button. Read with the console user's roles: without them the panel says which role it
+      needs, and with only `view-cluster-status` the directory lists who is registered now.
 ## The softphone's meters and secure context (2026-10-03)
 
 - [x] **Video, when asked.** A "Video" box beside Call on the console's softphone (not the

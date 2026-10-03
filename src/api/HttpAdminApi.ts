@@ -3,6 +3,7 @@ import { ApiError } from './errors';
 import type {
   Subscriber,
   Call,
+  CallRecord,
   AdminUser,
   ChangePassword,
   ClientConfig,
@@ -171,6 +172,9 @@ export class HttpAdminApi implements AdminApi {
   }
 
   listCalls(signal?: AbortSignal) { return this.request<Call[]>('GET', '/calls', { signal }); }
+  listCallRecords(limit?: number, signal?: AbortSignal) {
+    return this.request<CallRecord[]>('GET', limit ? `/call-records?limit=${limit}` : '/call-records', { signal });
+  }
   /** A Call-ID can hold `@` and `/`; encoded, it is still one segment. */
   getCall(id: string, signal?: AbortSignal) { return this.request<Call>('GET', `/calls/${segment(id)}`, { signal }); }
   mediaEngine(signal?: AbortSignal) { return this.request<MediaEngine>('GET', '/media', { signal }); }

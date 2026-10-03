@@ -249,9 +249,10 @@ Dated, and not reopened without asking.
 One controller (`Softphone`), two faces: the harness page, unchanged, and a Phone section the
 app shell owns so a call outlives a screen change. First round, in order:
 
-- [ ] History from `GET /call-records` (`view-cluster-status`), filtered to this phone's
-      subscriber, and a directory from the realm's subscribers (`manage-realm-subscribers`);
-      each hidden, with a reason, where the user's roles do not allow it.
+- [ ] Drive the Phone against corvus-fi-1 from `https://10.35.1.20:8443`: register, call
+      AthenaPhone and 1002, receive a call (ring, notification on a hidden tab), DTMF into
+      something that listens for it, hold both ways, a device change, the silence warning.
+      Everything since the first video call has only met fakes.
 
 Later: blind transfer (`refer`), a second line or call waiting.
 
@@ -264,7 +265,8 @@ Refresh button. See `COMPLETE.md` for what shipped.
       WebSocket on the HTTP listener. MQTT over WebSocket straight to the browser is the
       alternative and a much larger security surface. The server has not built either.
 - [ ] Push calls, registrations and counts rather than polling them, once there is a stream.
-- [ ] Show finished calls from `GET /api/v1/call-records` (node 0.8.0), beside the live ones.
+- [ ] Show finished calls from `GET /api/v1/call-records` (node 0.8.0) on the Calls screen,
+      beside the live ones. The Phone already reads them for one line's history.
 - [ ] Show the cluster entry `GET /api/v1/nodes` now carries (node 0.8.0) on Overview.
 - [ ] Hang up a call from the Calls screen. Needs the node to send BYEs itself, its M6.
 - [ ] Match legs to participants on the Calls screen once the node fills `participant`.

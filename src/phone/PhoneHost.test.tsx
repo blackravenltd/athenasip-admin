@@ -5,7 +5,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { UA, UAConfiguration } from 'jssip/lib/UA';
 import type { AdminApi } from '../api/AdminApi';
-import type { ClientConfig } from '../api/types';
+import type { CallRecord, ClientConfig, Registration, Role, Subscriber } from '../api/types';
 import type { SipStack } from '../softphone/Softphone';
 import PhoneHost from './PhoneHost';
 import { loadSettings, saveSettings } from './settings';
@@ -59,16 +59,16 @@ function node(): AdminApi {
   return { clientConfig: async () => CONFIG } as unknown as AdminApi;
 }
 
-function show(sip = stack(), visible = true) {
+function show(sip = stack(), visible = true, api: AdminApi = node(), roles: readonly Role[] = []) {
   const slot = document.createElement('div');
   document.body.appendChild(slot);
-  const view = render(<MemoryRouter><PhoneHost api={node()} visible={visible} indicator={slot} stack={sip} /></MemoryRouter>);
+  const view = render(<MemoryRouter><PhoneHost api={api} roles={roles} visible={visible} indicator={slot} stack={sip} /></MemoryRouter>);
   return { sip, slot, view };
 }
 
-async function registered(sip = stack()) {
+async function registered(sip = stack(), api: AdminApi = node(), roles: readonly Role[] = []) {
   saveSettings({ uri: 'sip:1001@10.35.1.20', socket: 'ws://10.35.1.20:8088' });
-  const shown = show(sip);
+  const shown = show(sip, true, api, roles);
   fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'pw' } });
   fireEvent.click(screen.getByRole('button', { name: 'Register' }));
   act(() => { sip.agents[0].emit('registered', {}); });
@@ -186,6 +186,39 @@ describe('PhoneHost', () => {
     expect(sip.agents[0].calls[0].options.mediaConstraints).toEqual({ audio: { deviceId: { exact: 'mic-builtin' } }, video: false });
   });
 
+  it('lists this line recent calls and the realm directory, and calls back from either', async () => {
+    const records: CallRecord[] = [
+      { id: 'a', caller: 'sip:1001@10.35.1.20', callee: 'sip:athenaphone@10.35.1.20', created_at: '2026-10-03T19:00:00Z', answered_at: '2026-10-03T19:00:05Z', ended_at: '2026-10-03T19:03:09Z', duration: 184, nodes: [], media_engine: null },
+      { id: 'b', caller: 'sip:1002@10.35.1.20;transport=ws', callee: 'sip:1001@10.35.1.20', created_at: null, answered_at: null, ended_at: '2026-10-03T18:00:00Z', duration: 0, nodes: [], media_engine: null },
+      { id: 'c', caller: 'sip:1002@10.35.1.20', callee: 'sip:1003@10.35.1.20', created_at: null, answered_at: null, ended_at: null, duration: 0, nodes: [], media_engine: null },
+    ];
+    const subscribers = ['1001', '1002', 'athenaphone'].map((user) => ({ uri: `sip:${user}@10.35.1.20`, user, realm: '10.35.1.20' })) as Subscriber[];
+    const registrations = [{ subscriber: 'sip:athenaphone@10.35.1.20' }] as Registration[];
+    const api = {
+      clientConfig: async () => CONFIG,
+      listCallRecords: async () => records,
+      listSubscribers: async (realm: string) => (realm === '10.35.1.20' ? subscribers : []),
+      listRegistrations: async () => registrations,
+    } as unknown as AdminApi;
+    const sip = stack();
+    await registered(sip, api, ['view-cluster-status', 'manage-realm-subscribers']);
+
+    const recent = await screen.findByRole('list', { name: 'Recent calls' });
+    expect([...recent.querySelectorAll('li')].map((row) => row.querySelector('.phone-list-detail')!.textContent!.replace(/, [^,]+ago$|, \d+ \w+$/, ''))).toEqual(['Outgoing, 3:04', 'Missed']);
+    const directory = await screen.findByRole('list', { name: 'Directory' });
+    expect(within(directory).getAllByRole('listitem').map((row) => row.querySelector('.phone-list-detail')!.textContent)).toEqual(['Not registered', 'Registered']);
+
+    fireEvent.click(within(directory).getByRole('button', { name: 'Call athenaphone' }));
+    await vi.waitFor(() => expect(sip.agents[0].calls).toHaveLength(1));
+    expect(sip.agents[0].calls[0].target).toBe('sip:athenaphone@10.35.1.20');
+  });
+
+  it('says why there is no history or directory when the console user has no role for them', async () => {
+    await registered();
+    expect(screen.getByText(/call records, which need the View cluster status role/)).toBeTruthy();
+    expect(screen.getByText(/needs the Manage subscribers or View cluster status role/)).toBeTruthy();
+  });
+
   it('keeps the call, and its indicator, while another screen is shown', async () => {
     const sip = stack();
     const { slot, view } = await registered(sip);
@@ -194,7 +227,7 @@ describe('PhoneHost', () => {
     await vi.waitFor(() => expect(sip.agents[0].sessions).toHaveLength(1));
     act(() => { sip.agents[0].sessions[0].emit('accepted', {}); });
 
-    view.rerender(<MemoryRouter><PhoneHost api={node()} visible={false} indicator={slot} stack={sip} /></MemoryRouter>);
+    view.rerender(<MemoryRouter><PhoneHost api={node()} roles={[]} visible={false} indicator={slot} stack={sip} /></MemoryRouter>);
     expect(screen.queryByRole('heading', { name: 'Phone' })).toBeNull();
     expect(slot.textContent).toMatch(/^Connected athenaphone 0:0\d$/);
     expect(sip.agents[0].sessions[0].log).toEqual([]);

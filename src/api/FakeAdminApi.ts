@@ -3,6 +3,7 @@ import { ApiError } from './errors';
 import type {
   Subscriber,
   Call,
+  CallRecord,
   AdminUser,
   ChangePassword,
   ClientConfig,
@@ -106,6 +107,7 @@ export class FakeAdminApi implements AdminApi {
   private subscribers: Subscriber[];
   private registrations: Stored[];
   private calls: StoredCall[];
+  private records: StoredRecord[] = RECORDS;
   private reoffers: Array<Omit<MediaReoffer, 'last_at'> & { age_s: number }> = [{
     subscriber: 'sip:reception@blackraven.co.nz', rejected: 'webrtc', took: 'rtp', count: 2, age_s: 420, suggested_media_profile: 'rtp',
   }];
@@ -544,6 +546,22 @@ export class FakeAdminApi implements AdminApi {
     return this.settle(STATUS, () => this.calls.map((call) => this.liveCall(call)), signal);
   }
 
+  listCallRecords(limit = 100, signal?: AbortSignal): Promise<CallRecord[]> {
+    return this.settle(STATUS, () => {
+      if (!Number.isInteger(limit) || limit < 1 || limit > 1000) {
+        throw new ApiError('limit must be between 1 and 1000', 400, 'invalid_request');
+      }
+      const now = Date.now();
+      const at = (secondsAgo: number) => new Date(now - secondsAgo * 1000).toISOString();
+      return this.records.slice(0, limit).map(({ ended_ago_s, rang_s, answered, ...record }) => ({
+        ...record,
+        ended_at: at(ended_ago_s),
+        answered_at: record.duration || answered ? at(ended_ago_s + record.duration) : null,
+        created_at: at(ended_ago_s + record.duration + rang_s),
+      }));
+    }, signal);
+  }
+
   getCall(id: string, signal?: AbortSignal): Promise<Call> {
     return this.settle(STATUS, () => {
       const call = this.calls.find((candidate) => candidate.id === id);
@@ -739,3 +757,17 @@ function validRoles(roles: readonly Role[]): Role[] {
   if (unknown.length > 0) throw new ApiError(`there is no role called ${unknown[0]}`, 400, 'unknown_role');
   return ROLES.filter((role) => roles.includes(role));
 }
+
+/**
+ * Ended calls, held as offsets from now and turned into instants at read
+ * time, newest first, as the node lists them. `answered` marks a call
+ * answered and hung up within the second, which a duration of 0 alone
+ * would read as unanswered.
+ */
+type StoredRecord = Omit<CallRecord, 'created_at' | 'answered_at' | 'ended_at'> & { ended_ago_s: number; rang_s: number; answered?: boolean };
+
+const RECORDS: StoredRecord[] = [
+  { id: 'r1@192.168.1.24', caller: 'sip:tom@sip.athenasip.org', callee: 'sip:tomweb@sip.athenasip.org', duration: 184, ended_ago_s: 900, rang_s: 6, nodes: ['corvus-fi-1'], media_engine: 'builtin' },
+  { id: 'r2@203.0.113.40', caller: 'sip:reception@blackraven.co.nz', callee: 'sip:tom@sip.athenasip.org', duration: 0, ended_ago_s: 3_600, rang_s: 25, nodes: ['corvus-fi-1'], media_engine: null },
+  { id: 'r3@192.168.1.24', caller: 'sip:tomweb@sip.athenasip.org', callee: 'sip:tom@sip.athenasip.org', duration: 42, ended_ago_s: 86_400, rang_s: 3, nodes: ['corvus-fi-1'], media_engine: 'builtin' },
+];
