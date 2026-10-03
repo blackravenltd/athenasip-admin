@@ -48,8 +48,24 @@ export interface MediaStats {
    */
   totalAudioEnergy?: number;
   codec?: string;
+  /** The video stream's own counters, kept apart so the audio figures above stay audio's. */
+  video?: VideoStats;
   dtlsState?: string;
   candidatePair?: { local: CandidateEnd; remote: CandidateEnd; state: string };
+}
+
+/** What the browser counted for video, when a call carries any. */
+export interface VideoStats {
+  packetsSent: number;
+  packetsReceived: number;
+  framesDecoded: number;
+  codec?: string;
+}
+
+/** One description's video m-line: its port, 0 for declined, and its direction attribute. */
+export interface VideoLine {
+  port: number;
+  direction: 'sendrecv' | 'sendonly' | 'recvonly' | 'inactive';
 }
 
 export interface SoftphoneState {
@@ -115,7 +131,7 @@ export interface IceOptions {
 
 const NO_ICE: IceOptions = { servers: [] };
 
-const MEDIA: MediaStreamConstraints = { audio: true, video: false };
+const media = (video: boolean): MediaStreamConstraints => ({ audio: true, video });
 
 export class Softphone {
   private current: SoftphoneState = INITIAL;
@@ -125,6 +141,7 @@ export class Softphone {
   private session?: RTCSession;
   private peer?: RTCPeerConnection;
   private remote?: MediaStream;
+  private local?: MediaStream;
   private ice: IceOptions = NO_ICE;
 
   constructor(private readonly sip: SipStack, private readonly clock: () => number = Date.now) {
@@ -135,9 +152,14 @@ export class Softphone {
     return this.current;
   }
 
-  /** The far end's audio, once there is any. */
+  /** The far end's audio and video, once there is any. */
   get remoteStream(): MediaStream | undefined {
     return this.remote;
+  }
+
+  /** What this end is sending, once the call has its tracks: the camera's picture, for one. */
+  get localStream(): MediaStream | undefined {
+    return this.local;
   }
 
   /** Every state change since construction, oldest first. */
@@ -205,23 +227,25 @@ export class Softphone {
     this.ice = ice;
   }
 
-  call(target: string, ice: IceOptions = this.ice): void {
+  /** Video is asked for, never assumed: the harness page's calls are audio only. */
+  call(target: string, ice: IceOptions = this.ice, video = false): void {
     if (!this.agent || this.session) return;
     this.update({ notice: undefined, cause: undefined });
     try {
       this.agent.call(target, {
-        mediaConstraints: MEDIA,
+        mediaConstraints: media(video),
         pcConfig: peerConfiguration(ice.servers, ice.relayOnly ?? false),
-        rtcOfferConstraints: { offerToReceiveAudio: true, offerToReceiveVideo: false },
+        rtcOfferConstraints: { offerToReceiveAudio: true, offerToReceiveVideo: video },
       });
     } catch (cause) {
       this.update({ call: 'failed', notice: `Could not call: ${String(cause)}` });
     }
   }
 
-  answer(ice: IceOptions = this.ice): void {
+  /** Without video, the browser answers an offered video line receive-only: it shows the far end's camera and sends none. */
+  answer(ice: IceOptions = this.ice, video = false): void {
     if (!this.session || this.current.call !== 'incoming') return;
-    this.session.answer({ mediaConstraints: MEDIA, pcConfig: peerConfiguration(ice.servers, ice.relayOnly ?? false) });
+    this.session.answer({ mediaConstraints: media(video), pcConfig: peerConfiguration(ice.servers, ice.relayOnly ?? false) });
   }
 
   hangUp(): void {
@@ -271,6 +295,9 @@ export class Softphone {
     if (session.connection) this.observe(session.connection);
     session.on('peerconnection', (event: PeerConnectionEvent) => this.observe(event.peerconnection));
     session.on('sdp', (event: SDPEvent) => {
+      // By the local description the tracks are on the connection, so this is
+      // when there is something of our own to show.
+      if (event.originator === 'local') this.local = senderStream(this.peer ?? session.connection);
       this.update(event.originator === 'local' ? { localSdp: event.sdp } : { remoteSdp: event.sdp });
     });
     session.on('progress', () => {
@@ -296,7 +323,11 @@ export class Softphone {
     peer.addEventListener('iceconnectionstatechange', snapshot);
     peer.addEventListener('connectionstatechange', snapshot);
     peer.addEventListener('track', (event: RTCTrackEvent) => {
-      this.remote = event.streams[0] ?? new MediaStream([event.track]);
+      // Audio and video arrive as two events. With no stream named, the second
+      // joins the first rather than replacing it.
+      if (event.streams[0]) this.remote = event.streams[0];
+      else if (this.remote) this.remote.addTrack(event.track);
+      else this.remote = new MediaStream([event.track]);
       // The stream is not part of the snapshot, so the snapshot has to be
       // re-emitted for a screen to attach it.
       this.emit();
@@ -308,6 +339,7 @@ export class Softphone {
     this.session = undefined;
     this.peer = undefined;
     this.remote = undefined;
+    this.local = undefined;
     const notice = call === 'failed' && cause ? `Call failed: ${cause}` : undefined;
     this.update({ call, cause, notice });
   }
@@ -317,6 +349,7 @@ export class Softphone {
     this.session = undefined;
     this.peer = undefined;
     this.remote = undefined;
+    this.local = undefined;
     this.agent?.stop();
     this.agent = undefined;
   }
@@ -376,14 +409,26 @@ export function summarise(report: RTCStatsReport): MediaStats {
 
   const stats: MediaStats = { packetsSent: 0, packetsReceived: 0, bytesSent: 0, bytesReceived: 0, packetsLost: 0 };
   let selectedPairId: string | undefined;
+  const video = (): VideoStats => (stats.video ??= { packetsSent: 0, packetsReceived: 0, framesDecoded: 0 });
 
   for (const record of records.values()) {
     switch (record.type) {
       case 'outbound-rtp':
+        if (record.kind === 'video') {
+          video().packetsSent += number(record.packetsSent);
+          break;
+        }
         stats.packetsSent += number(record.packetsSent);
         stats.bytesSent += number(record.bytesSent);
         break;
       case 'inbound-rtp': {
+        if (record.kind === 'video') {
+          video().packetsReceived += number(record.packetsReceived);
+          video().framesDecoded += number(record.framesDecoded);
+          const codec = typeof record.codecId === 'string' ? records.get(record.codecId) : undefined;
+          if (codec && typeof codec.mimeType === 'string') video().codec = codec.mimeType;
+          break;
+        }
         stats.packetsReceived += number(record.packetsReceived);
         stats.bytesReceived += number(record.bytesReceived);
         stats.packetsLost += number(record.packetsLost);
@@ -425,4 +470,28 @@ function candidate(record: Record<string, unknown>): CandidateEnd {
 
 function number(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+}
+
+/** The tracks a connection is sending, as one stream to show; nothing when it sends no video. */
+function senderStream(peer: RTCPeerConnection | undefined): MediaStream | undefined {
+  if (!peer || typeof MediaStream === 'undefined') return undefined;
+  const tracks = peer.getSenders().map((sender) => sender.track).filter((track): track is MediaStreamTrack => !!track);
+  return tracks.some((track) => track.kind === 'video') ? new MediaStream(tracks) : undefined;
+}
+
+/**
+ * A description's video m-line, or nothing when it has none.
+ *
+ * Port 0 is a decline, whatever the attributes say (RFC 3264). The direction
+ * defaults to sendrecv when the section names none, as it does at session
+ * level too.
+ */
+export function videoLine(sdp: string | undefined): VideoLine | undefined {
+  if (!sdp) return undefined;
+  const sections = sdp.split(/\r?\n(?=m=)/);
+  const section = sections.find((candidate) => candidate.startsWith('m=video '));
+  if (!section) return undefined;
+  const port = Number(/^m=video (\d+)/.exec(section)?.[1] ?? 0);
+  const named = /^a=(sendrecv|sendonly|recvonly|inactive)\s*$/m.exec(section)?.[1] as VideoLine['direction'] | undefined;
+  return { port, direction: named ?? 'sendrecv' };
 }

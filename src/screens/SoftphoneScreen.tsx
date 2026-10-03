@@ -4,7 +4,7 @@ import { errorMessage, isAbort } from '../api/errors';
 import type { ClientConfig } from '../api/types';
 import { VolumeMeter } from '../components/VolumeMeter';
 import { usableIceServers } from '../softphone/iceServers';
-import type { CallState, IceOptions, RegistrationState, SipStack } from '../softphone/Softphone';
+import { videoLine, type CallState, type IceOptions, type RegistrationState, type SipStack, type VideoLine } from '../softphone/Softphone';
 import { jssipStack } from '../softphone/jssip';
 import type { PageOptions } from '../softphone/page';
 import { useSoftphone } from '../softphone/useSoftphone';
@@ -91,6 +91,12 @@ export function signallingUri(config: ClientConfig, https: boolean): string | un
   return plain ? `ws://${plain.address}:${plain.port}` : undefined;
 }
 
+/** One end's video m-line, in words. */
+export function describeVideoLine(line: VideoLine | undefined): string {
+  if (!line) return 'none';
+  return line.port === 0 ? 'declined (port 0)' : `port ${line.port}, ${line.direction}`;
+}
+
 const NO_OPTIONS: PageOptions = { register: false, answer: false };
 
 /**
@@ -120,6 +126,9 @@ export function SoftphoneScreen({ options = NO_OPTIONS, stack = jssipStack, api 
   const [configNotice, setConfigNotice] = useState<string>();
   const [iceServers, setIceServers] = useState<RTCIceServer[]>();
   const [relayOnly, setRelayOnly] = useState(false);
+  const [video, setVideo] = useState(false);
+  const localVideoRef = useRef<HTMLVideoElement>(null);
+  const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const { phone, state, remoteStream, stats } = useSoftphone(stack, options);
   const audioRef = useRef<HTMLAudioElement>(null);
   const [playbackNotice, setPlaybackNotice] = useState<string>();
@@ -171,6 +180,16 @@ export function SoftphoneScreen({ options = NO_OPTIONS, stack = jssipStack, api 
       place({ servers, relayOnly });
     });
   };
+  // The remote picture plays muted: the <audio> element already carries its sound.
+  const localStream = phone.localStream;
+  const remoteHasVideo = !!remoteStream?.getVideoTracks?.().length;
+  useEffect(() => {
+    if (remoteVideoRef.current) remoteVideoRef.current.srcObject = remoteHasVideo ? remoteStream ?? null : null;
+  }, [remoteStream, remoteHasVideo]);
+  useEffect(() => {
+    if (localVideoRef.current) localVideoRef.current.srcObject = localStream ?? null;
+  }, [localStream]);
+
   useEffect(() => {
     const element = audioRef.current;
     if (!element || !remoteStream) return;
@@ -235,6 +254,18 @@ export function SoftphoneScreen({ options = NO_OPTIONS, stack = jssipStack, api 
             <span>Relay only: send media through the node's TURN server even when a direct path exists, to prove TURN works</span>
           </label>
         )}
+        {api && (
+          <label className="checkbox-field">
+            <input
+              type="checkbox"
+              checked={video}
+              disabled={inCall}
+              data-testid="softphone-video"
+              onChange={(event) => setVideo(event.target.checked)}
+            />
+            <span>Video: send the camera as well, on calls placed and answered from here</span>
+          </label>
+        )}
         <p className="field-hint">
           Nothing typed here is stored. The password is held in this page only, and is gone on
           reload.
@@ -257,13 +288,13 @@ export function SoftphoneScreen({ options = NO_OPTIONS, stack = jssipStack, api 
                 className="primary-button"
                 type="button"
                 data-testid="softphone-call"
-                onClick={() => withIceServers((ice) => phone.call(connection.target, ice))}
+                onClick={() => withIceServers((ice) => phone.call(connection.target, ice, video))}
                 disabled={inCall || !connection.target}
               >
                 Call
               </button>
               {state.call === 'incoming' && (
-                <button className="primary-button" type="button" data-testid="softphone-answer" onClick={() => withIceServers((ice) => phone.answer(ice))}>
+                <button className="primary-button" type="button" data-testid="softphone-answer" onClick={() => withIceServers((ice) => phone.answer(ice, video))}>
                   Answer
                 </button>
               )}
@@ -304,6 +335,18 @@ export function SoftphoneScreen({ options = NO_OPTIONS, stack = jssipStack, api 
         {notice && <p className="error-message" role="alert">{notice}</p>}
 
         <audio ref={audioRef} autoPlay hidden playsInline />
+        {(localStream || remoteHasVideo) && (
+          <div className="softphone-video">
+            <figure>
+              <video ref={remoteVideoRef} autoPlay playsInline muted data-testid="softphone-remote-video" />
+              <figcaption>Far end</figcaption>
+            </figure>
+            <figure>
+              <video ref={localVideoRef} autoPlay playsInline muted data-testid="softphone-local-video" />
+              <figcaption>This browser</figcaption>
+            </figure>
+          </div>
+        )}
         <VolumeMeter label="Far end" source={{ kind: 'stream', stream: remoteStream }} active={state.call === 'connected'} />
         <VolumeMeter label="Microphone" source={{ kind: 'microphone' }} active={registered} />
       </section>
@@ -329,6 +372,15 @@ export function SoftphoneScreen({ options = NO_OPTIONS, stack = jssipStack, api 
             <dt>Connection</dt><dd>{state.connectionState ?? '-'}</dd>
             <dt>DTLS</dt><dd>{stats?.dtlsState ?? '-'}</dd>
             <dt>Codec</dt><dd>{stats?.codec ?? '-'}</dd>
+            {(videoLine(state.localSdp) || videoLine(state.remoteSdp)) && (
+              <>
+                <dt>Video</dt>
+                <dd data-testid="softphone-video-negotiation">
+                  {`this end: ${describeVideoLine(videoLine(state.localSdp))}; far end: ${describeVideoLine(videoLine(state.remoteSdp))}`}
+                  {stats?.video ? `; ${stats.video.packetsSent} sent, ${stats.video.packetsReceived} received, ${stats.video.framesDecoded} frames decoded${stats.video.codec ? `, ${stats.video.codec}` : ''}` : ''}
+                </dd>
+              </>
+            )}
             <dt>Candidate pair</dt>
             <dd>
               {pair

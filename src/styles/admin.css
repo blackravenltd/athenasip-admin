@@ -145,3 +145,8 @@
 .session-who:hover, .session-who:focus-visible { color: var(--text); }
 .session-expiry { font-size: .8rem; color: var(--warn); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.softphone-video { display: grid; grid-template-columns: 2fr 1fr; gap: .8rem; align-items: start; }
+.softphone-video figure { margin: 0; }
+.softphone-video video { width: 100%; border-radius: .5rem; background: #000; aspect-ratio: 4 / 3; object-fit: contain; }
+.softphone-video figcaption { margin-top: .3rem; color: var(--text-faint); font-size: .82rem; }
+@media (max-width: 800px) { .softphone-video { grid-template-columns: 1fr; } }

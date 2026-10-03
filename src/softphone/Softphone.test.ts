@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { describe, expect, it } from 'vitest';
 import type { UA, UAConfiguration } from 'jssip/lib/UA';
-import { Softphone, summarise, type SipStack } from './Softphone';
+import { Softphone, summarise, videoLine, type SipStack } from './Softphone';
 
 /**
  * A user agent that never opens a socket. The test fires the events JsSIP
@@ -12,14 +12,16 @@ class FakeAgent extends EventEmitter {
   started = 0;
   stopped = 0;
   calls: string[] = [];
+  callOptions: Array<Record<string, unknown>> = [];
   sessions: FakeSession[] = [];
   constructor(readonly configuration: UAConfiguration) { super(); }
   start() { this.started += 1; }
   stop() { this.stopped += 1; }
   /** Set to have the next outgoing session arrive with its connection already made, as JsSIP does. */
   nextConnection?: FakePeer;
-  call(target: string) {
+  call(target: string, options: Record<string, unknown> = {}) {
     this.calls.push(target);
+    this.callOptions.push(options);
     const session = new FakeSession();
     session.connection = this.nextConnection;
     this.sessions.push(session);
@@ -30,10 +32,11 @@ class FakeAgent extends EventEmitter {
 
 class FakeSession extends EventEmitter {
   answered = 0;
+  answerOptions: Array<Record<string, unknown>> = [];
   terminated: unknown[] = [];
   remote_identity = { uri: { toString: () => 'sip:1002@example.com' } };
   connection?: FakePeer;
-  answer() { this.answered += 1; }
+  answer(options: Record<string, unknown> = {}) { this.answered += 1; this.answerOptions.push(options); }
   terminate(options?: unknown) { this.terminated.push(options ?? null); }
 }
 
@@ -154,6 +157,27 @@ describe('Softphone', () => {
     expect(phone.state.call).toBe('connected');
   });
 
+  it('asks for the camera only when told to, calling or answering', () => {
+    const sip = stack();
+    const phone = new Softphone(sip);
+    phone.register(CONFIG);
+    const [agent] = sip.agents;
+    agent.emit('registered', {});
+
+    phone.call('sip:1002@example.com');
+    expect(agent.callOptions[0]).toMatchObject({ mediaConstraints: { audio: true, video: false }, rtcOfferConstraints: { offerToReceiveVideo: false } });
+    lastSession(agent).emit('ended', { originator: 'local', cause: 'Terminated' });
+
+    phone.call('sip:1002@example.com', { servers: [] }, true);
+    expect(agent.callOptions[1]).toMatchObject({ mediaConstraints: { audio: true, video: true }, rtcOfferConstraints: { offerToReceiveVideo: true } });
+    lastSession(agent).emit('ended', { originator: 'local', cause: 'Terminated' });
+
+    const session = new FakeSession();
+    agent.emit('newRTCSession', { originator: 'remote', session, request: {} });
+    phone.answer({ servers: [] }, true);
+    expect(session.answerOptions[0]).toMatchObject({ mediaConstraints: { audio: true, video: true } });
+  });
+
   it('refuses a second call with 486 rather than replacing the first', () => {
     const sip = stack();
     const phone = new Softphone(sip);
@@ -270,7 +294,44 @@ describe('Softphone', () => {
   });
 });
 
+describe('videoLine', () => {
+  const sdp = (video: string) => ['v=0', 'o=- 1 1 IN IP4 10.0.0.5', 's=-', 't=0 0', 'm=audio 9 UDP/TLS/RTP/SAVPF 111', 'a=sendrecv', video].join('\r\n');
+
+  it('reads the video m-line port and direction, and nothing when there is none', () => {
+    expect(videoLine(sdp('m=video 9 UDP/TLS/RTP/SAVPF 96\r\na=recvonly'))).toEqual({ port: 9, direction: 'recvonly' });
+    expect(videoLine(sdp('m=video 51000 UDP/TLS/RTP/SAVPF 96'))).toEqual({ port: 51000, direction: 'sendrecv' });
+    expect(videoLine(sdp('m=video 0 UDP/TLS/RTP/SAVPF 96\r\na=inactive'))).toEqual({ port: 0, direction: 'inactive' });
+    expect(videoLine(sdp(''))).toBeUndefined();
+    expect(videoLine(undefined)).toBeUndefined();
+  });
+
+  it('does not take the audio section direction for the video one', () => {
+    expect(videoLine(sdp('m=video 9 UDP/TLS/RTP/SAVPF 96'))?.direction).toBe('sendrecv');
+    expect(videoLine(['v=0', 'm=audio 9 RTP/AVP 0', 'a=recvonly', 'm=video 9 RTP/AVP 96'].join('\n'))?.direction).toBe('sendrecv');
+  });
+});
+
 describe('summarise', () => {
+  it('keeps video counters apart from the audio ones', () => {
+    const report = new Map<string, Record<string, unknown>>([
+      ['ca', { type: 'codec', mimeType: 'audio/opus' }],
+      ['cv', { type: 'codec', mimeType: 'video/VP8' }],
+      ['ia', { type: 'inbound-rtp', kind: 'audio', packetsReceived: 100, bytesReceived: 8000, packetsLost: 0, codecId: 'ca' }],
+      ['iv', { type: 'inbound-rtp', kind: 'video', packetsReceived: 900, bytesReceived: 900000, packetsLost: 3, framesDecoded: 240, codecId: 'cv' }],
+      ['oa', { type: 'outbound-rtp', kind: 'audio', packetsSent: 110, bytesSent: 8800 }],
+      ['ov', { type: 'outbound-rtp', kind: 'video', packetsSent: 950, bytesSent: 950000 }],
+    ]);
+    expect(summarise(report as unknown as RTCStatsReport)).toEqual({
+      packetsSent: 110,
+      packetsReceived: 100,
+      bytesSent: 8800,
+      bytesReceived: 8000,
+      packetsLost: 0,
+      codec: 'audio/opus',
+      video: { packetsSent: 950, packetsReceived: 900, framesDecoded: 240, codec: 'video/VP8' },
+    });
+  });
+
   it('resolves the selected candidate pair, the codec and the counters from a stats report', () => {
     const report = new Map<string, Record<string, unknown>>([
       ['t', { type: 'transport', dtlsState: 'connected', selectedCandidatePairId: 'p' }],

@@ -7,16 +7,16 @@ import { READOUT_KEY } from '../softphone/page';
 import type { SipStack } from '../softphone/Softphone';
 import type { AdminApi } from '../api/AdminApi';
 import type { ClientConfig } from '../api/types';
-import { SoftphoneScreen, callInProgress, defaultConnection, describeCallState, signallingUri } from './SoftphoneScreen';
+import { SoftphoneScreen, callInProgress, defaultConnection, describeCallState, describeVideoLine, signallingUri } from './SoftphoneScreen';
 
 class FakeAgent extends EventEmitter {
   sessions: FakeSession[] = [];
   stopped = 0;
-  calls: Array<{ target: string; options: { pcConfig?: RTCConfiguration } }> = [];
+  calls: Array<{ target: string; options: { pcConfig?: RTCConfiguration; mediaConstraints?: MediaStreamConstraints } }> = [];
   constructor(readonly configuration: UAConfiguration) { super(); }
   start() {}
   stop() { this.stopped += 1; }
-  call(target: string, options: { pcConfig?: RTCConfiguration }) {
+  call(target: string, options: { pcConfig?: RTCConfiguration; mediaConstraints?: MediaStreamConstraints }) {
     this.calls.push({ target, options });
     const session = new FakeSession();
     this.sessions.push(session);
@@ -82,6 +82,14 @@ describe('signallingUri', () => {
   });
 });
 
+describe('describeVideoLine', () => {
+  it('names a decline by its port, and an accepted line by port and direction', () => {
+    expect(describeVideoLine({ port: 0, direction: 'inactive' })).toBe('declined (port 0)');
+    expect(describeVideoLine({ port: 9, direction: 'sendrecv' })).toBe('port 9, sendrecv');
+    expect(describeVideoLine(undefined)).toBe('none');
+  });
+});
+
 describe('SoftphoneScreen', () => {
   it("signals where the node says, and calls with the node's ICE servers fetched at the moment of calling", async () => {
     const sip = stack();
@@ -132,6 +140,18 @@ describe('SoftphoneScreen', () => {
     expect(screen.getByTestId('softphone-ice-servers').textContent).toBe('stun:node:3478, turn:node:3478, relay only');
     // The harness page has no console to ask, so it offers no relay switch of its own.
     expect(screen.queryByTestId('softphone-relay-only')).toBeNull();
+  });
+
+  it('sends the camera when Video is ticked', async () => {
+    const sip = stack();
+    render(<SoftphoneScreen api={node({ transports: [], ice_servers: [] })} stack={sip} options={{ socket: 'wss://node:9443', uri: 'sip:1001@example.com', target: 'sip:athenaphone@10.35.1.20', register: true, answer: false }} />);
+    const [agent] = sip.agents;
+    act(() => { agent.emit('registered', {}); });
+    fireEvent.click(screen.getByTestId('softphone-video'));
+    fireEvent.click(screen.getByRole('button', { name: 'Call' }));
+
+    await vi.waitFor(() => expect(agent.calls).toHaveLength(1));
+    expect(agent.calls[0].options.mediaConstraints).toEqual({ audio: true, video: true });
   });
 
   it('forces media through TURN when asked, and says so', async () => {

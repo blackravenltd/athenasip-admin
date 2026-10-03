@@ -23,7 +23,8 @@ placed or answered, because a TURN credential is minted per request and expires.
 entry that arrives without a credential is dropped rather than handed to the browser half
 built (`src/softphone/iceServers.ts`). The harness page takes no API and changes nothing:
 its socket comes from the query string and it uses no ICE servers, so the contract below is
-untouched.
+untouched. The console's page can also send video ("Video" beside Call); the harness page is
+audio only, and its readout's audio counters stay audio's, since video is counted apart.
 
 Underneath both is `src/softphone/Softphone.ts`, which owns the JsSIP user agent and session
 and has nothing of React in it. It publishes an immutable snapshot after every change: the

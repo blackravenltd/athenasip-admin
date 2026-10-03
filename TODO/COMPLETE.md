@@ -5,6 +5,11 @@ with a one-line note on what shipped.
 
 ## The softphone's meters and secure context (2026-10-03)
 
+- [x] **Video, when asked.** A "Video" box beside Call on the console's softphone (not the
+      harness page, which stays audio only) sends the camera on calls placed and answered.
+      The far end's picture and this browser's own show beside the call; the readout gives
+      each end's video m-line (port and direction, or "declined (port 0)") and the video's
+      own packet, frame and codec counts, kept apart from the audio's.
 - [x] **The Far end meter reads the remote stream.** It used `createMediaElementSource` on the
       `<audio>` element, which works once per element, and restarted on every render (once a
       second, as the stats arrive), so it went dead within a second of a call connecting. It
