@@ -18,7 +18,7 @@ layer changed under every screen at once). Not pushed. Commit only when asked, n
 attribution (the user's global rule).
 
 **Deployed** (Tom approved in this session, 2026-10-03 evening): corvus-fi-1 serves
-`assets/index-DOA5HbWG.js` on 8080 and 8443, built from `788418d`, and the server session has been told.
+`assets/index-Wp2NJHfn.js` on 8080 and 8443, built from `42f1da6` (the Phone), and the server session has been told.
 
 **Waiting on Tom:** sign in on corvus-fi-1 and click through every screen as users with
 different roles.
