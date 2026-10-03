@@ -1,7 +1,7 @@
 import ReactDOM from 'react-dom/client';
 import '@fontsource-variable/roboto/wght.css';
 import { SoftphoneScreen } from '../screens/SoftphoneScreen';
-import { pageOptions, withoutPassword } from './page';
+import { pageOptions, withoutSecrets } from './page';
 import '../styles.css';
 
 /**
@@ -15,8 +15,8 @@ import '../styles.css';
  */
 const options = pageOptions(window.location.search);
 
-// The password was read; it has no business staying in the address bar.
-const cleaned = withoutPassword(window.location.href);
+// The password and any TURN credential were read; they have no business staying in the address bar.
+const cleaned = withoutSecrets(window.location.href);
 if (cleaned) window.history.replaceState(window.history.state, '', cleaned);
 
 const rootElement = document.getElementById('root');

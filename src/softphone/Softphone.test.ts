@@ -278,7 +278,7 @@ describe('summarise', () => {
       ['l', { type: 'local-candidate', address: '10.0.0.5', port: 51000, candidateType: 'host', protocol: 'udp' }],
       ['r', { type: 'remote-candidate', address: '10.35.1.132', port: 23000, candidateType: 'host', protocol: 'udp' }],
       ['c', { type: 'codec', mimeType: 'audio/opus' }],
-      ['in', { type: 'inbound-rtp', kind: 'audio', packetsReceived: 120, bytesReceived: 9600, packetsLost: 2, audioLevel: 0.4, codecId: 'c' }],
+      ['in', { type: 'inbound-rtp', kind: 'audio', packetsReceived: 120, bytesReceived: 9600, packetsLost: 2, audioLevel: 0.4, totalAudioEnergy: 0.25, codecId: 'c' }],
       ['out', { type: 'outbound-rtp', kind: 'audio', packetsSent: 130, bytesSent: 10400 }],
     ]);
     expect(summarise(report as unknown as RTCStatsReport)).toEqual({
@@ -288,6 +288,7 @@ describe('summarise', () => {
       bytesReceived: 9600,
       packetsLost: 2,
       audioLevel: 0.4,
+      totalAudioEnergy: 0.25,
       codec: 'audio/opus',
       dtlsState: 'connected',
       candidatePair: {
@@ -308,6 +309,7 @@ describe('summarise', () => {
     const stats = summarise(report as unknown as RTCStatsReport);
     expect(stats.candidatePair?.remote.address).toBe('10.35.1.132');
     expect(stats.packetsReceived).toBe(0);
+    expect(stats.totalAudioEnergy).toBeUndefined();
   });
 });
 

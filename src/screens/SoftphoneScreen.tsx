@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
+import type { AdminApi } from '../api/AdminApi';
+import { errorMessage, isAbort } from '../api/errors';
 import { VolumeMeter } from '../components/VolumeMeter';
-import type { CallState, RegistrationState, SipStack } from '../softphone/Softphone';
+import { usableIceServers } from '../softphone/iceServers';
+import type { CallState, IceOptions, RegistrationState, SipStack } from '../softphone/Softphone';
 import { jssipStack } from '../softphone/jssip';
 import type { PageOptions } from '../softphone/page';
 import { useSoftphone } from '../softphone/useSoftphone';
@@ -43,6 +46,13 @@ interface Connection {
 }
 
 /**
+ * The WebSocket port a node is assumed to serve SIP on, when nothing says.
+ * 8088 is what the deployed node and the interop fixture use, and what most
+ * SIP servers serve WebSocket on.
+ */
+const DEFAULT_WS_PORT = 8088;
+
+/**
  * Where the defaults come from.
  *
  * The page's own query string first, because that is how a harness opens it;
@@ -54,8 +64,8 @@ export function defaultConnection(options: PageOptions): Connection {
   const socket = options.socket
     ?? import.meta.env.VITE_SIP_WS_URL
     ?? (typeof window === 'undefined'
-      ? 'ws://localhost:9500'
-      : `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.hostname}:9500`);
+      ? `ws://localhost:${DEFAULT_WS_PORT}`
+      : `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.hostname}:${DEFAULT_WS_PORT}`);
   return {
     socket,
     uri: options.uri ?? import.meta.env.VITE_SIP_URI ?? '',
@@ -80,8 +90,19 @@ const NO_OPTIONS: PageOptions = { register: false, answer: false };
  * component is served on its own page for that, opened with a query string
  * and read through the window-level readout; see `docs/softphone.md`.
  */
-export function SoftphoneScreen({ options = NO_OPTIONS, stack = jssipStack }: { options?: PageOptions; stack?: SipStack }) {
+export function SoftphoneScreen({ options = NO_OPTIONS, stack = jssipStack, api }: {
+  options?: PageOptions;
+  stack?: SipStack;
+  /**
+   * The console's node, which says where to signal and what to use for ICE.
+   * The harness page has none, and keeps its query string and no ICE servers.
+   */
+  api?: AdminApi;
+}) {
   const [connection, setConnection] = useState<Connection>(() => defaultConnection(options));
+  const [configNotice, setConfigNotice] = useState<string>();
+  const [iceServers, setIceServers] = useState<RTCIceServer[]>();
+  const [relayOnly, setRelayOnly] = useState(false);
   const { phone, state, remoteStream, stats } = useSoftphone(stack, options);
   const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -92,6 +113,50 @@ export function SoftphoneScreen({ options = NO_OPTIONS, stack = jssipStack }: { 
   // rather than a callback ref threaded through everything.
   useEffect(() => setAudioElement(audioRef.current), []);
 
+  // Where to signal, from the node, unless the query string or the environment said.
+  // Only replaces the guessed default, never something already typed.
+  useEffect(() => {
+    if (!api || options.socket || import.meta.env.VITE_SIP_WS_URL) return;
+    const guessed = defaultConnection(options).socket;
+    const controller = new AbortController();
+    api.clientConfig(controller.signal).then((config) => {
+      if (config.websocket_uri) {
+        const uri = config.websocket_uri;
+        setConnection((current) => (current.socket === guessed ? { ...current, socket: uri } : current));
+      } else if (window.location.protocol === 'https:') {
+        setConfigNotice('This node has no secure WebSocket listener, so a page served over https cannot reach it.');
+      }
+    }).catch((cause: unknown) => {
+      if (!isAbort(cause)) setConfigNotice(`Could not read the node's client configuration: ${errorMessage(cause)}`);
+    });
+    return () => controller.abort();
+    // The options are the page's, fixed for its life.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [api]);
+
+  /**
+   * TURN credentials are minted per request and expire, so they are fetched as
+   * the call is placed or answered, never held from earlier. Without the node's
+   * answer the call still goes ahead with none, as the harness page's does.
+   */
+  const withIceServers = (place: (ice?: IceOptions) => void) => {
+    if (!api) {
+      // The page's own `ice` and `relay`, which the phone already holds.
+      if (options.ice) setIceServers(usableIceServers(options.ice));
+      place();
+      return;
+    }
+    api.clientConfig().then(
+      (config) => usableIceServers(config.ice_servers),
+      (cause: unknown) => {
+        setConfigNotice(`No ICE servers from the node, calling without: ${errorMessage(cause)}`);
+        return [];
+      },
+    ).then((servers) => {
+      setIceServers(servers);
+      place({ servers, relayOnly });
+    });
+  };
   useEffect(() => {
     const element = audioRef.current;
     if (!element || !remoteStream) return;
@@ -118,7 +183,7 @@ export function SoftphoneScreen({ options = NO_OPTIONS, stack = jssipStack }: { 
     </label>
   );
 
-  const notice = state.notice ?? playbackNotice;
+  const notice = state.notice ?? playbackNotice ?? configNotice;
   const pair = stats?.candidatePair;
 
   return (
@@ -144,6 +209,18 @@ export function SoftphoneScreen({ options = NO_OPTIONS, stack = jssipStack }: { 
           {field('password', 'Password', 'password')}
           {field('target', 'Call target')}
         </div>
+        {api && (
+          <label className="checkbox-field">
+            <input
+              type="checkbox"
+              checked={relayOnly}
+              disabled={inCall}
+              data-testid="softphone-relay-only"
+              onChange={(event) => setRelayOnly(event.target.checked)}
+            />
+            <span>Relay only: send media through the node's TURN server even when a direct path exists, to prove TURN works</span>
+          </label>
+        )}
         <p className="field-hint">
           Nothing typed here is stored. The password is held in this page only, and is gone on
           reload.
@@ -166,13 +243,13 @@ export function SoftphoneScreen({ options = NO_OPTIONS, stack = jssipStack }: { 
                 className="primary-button"
                 type="button"
                 data-testid="softphone-call"
-                onClick={() => phone.call(connection.target)}
+                onClick={() => withIceServers((ice) => phone.call(connection.target, ice))}
                 disabled={inCall || !connection.target}
               >
                 Call
               </button>
               {state.call === 'incoming' && (
-                <button className="primary-button" type="button" data-testid="softphone-answer" onClick={() => phone.answer()}>
+                <button className="primary-button" type="button" data-testid="softphone-answer" onClick={() => withIceServers((ice) => phone.answer(ice))}>
                   Answer
                 </button>
               )}
@@ -225,6 +302,7 @@ export function SoftphoneScreen({ options = NO_OPTIONS, stack = jssipStack }: { 
 
           <dl className="readout" data-testid="softphone-negotiation">
             <dt>Direction</dt><dd>{state.direction ?? '-'}</dd>
+            {iceServers && (<><dt>ICE servers</dt><dd data-testid="softphone-ice-servers">{iceServers.length ? iceServers.map((server) => server.urls).join(', ') : 'None'}{relayOnly || (!api && options.relay) ? ', relay only' : ''}</dd></>)}
             <dt>Signaling</dt><dd>{state.signalingState ?? '-'}</dd>
             <dt>ICE gathering</dt><dd>{state.iceGatheringState ?? '-'}</dd>
             <dt>ICE connection</dt><dd data-testid="softphone-ice">{state.iceConnectionState ?? '-'}</dd>

@@ -5,15 +5,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { UA, UAConfiguration } from 'jssip/lib/UA';
 import { READOUT_KEY } from '../softphone/page';
 import type { SipStack } from '../softphone/Softphone';
+import type { AdminApi } from '../api/AdminApi';
+import type { ClientConfig } from '../api/types';
 import { SoftphoneScreen, callInProgress, defaultConnection, describeCallState } from './SoftphoneScreen';
 
 class FakeAgent extends EventEmitter {
   sessions: FakeSession[] = [];
   stopped = 0;
+  calls: Array<{ target: string; options: { pcConfig?: RTCConfiguration } }> = [];
   constructor(readonly configuration: UAConfiguration) { super(); }
   start() {}
   stop() { this.stopped += 1; }
-  call() {
+  call(target: string, options: { pcConfig?: RTCConfiguration }) {
+    this.calls.push({ target, options });
     const session = new FakeSession();
     this.sessions.push(session);
     this.emit('newRTCSession', { originator: 'local', session, request: {} });
@@ -51,7 +55,75 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+/** Only what the softphone asks of the node. */
+function node(config: ClientConfig): AdminApi & { asked: number } {
+  const api = { asked: 0, clientConfig: async () => { api.asked += 1; return config; } };
+  return api as unknown as AdminApi & { asked: number };
+}
+
 describe('SoftphoneScreen', () => {
+  it("signals where the node says, and calls with the node's ICE servers fetched at the moment of calling", async () => {
+    const sip = stack();
+    const api = node({
+      websocket_uri: 'wss://node:9443',
+      transports: [],
+      ice_servers: [
+        { urls: 'stun:node:3478' },
+        { urls: 'turn:node:3478' },
+        { urls: 'turn:node:3478', username: '4102444800', credential: 'c', expires_at: 4_102_444_800 },
+      ],
+    });
+    render(<SoftphoneScreen api={api} stack={sip} options={{ uri: 'sip:1001@example.com', target: 'sip:1002@example.com', register: false, answer: false }} />);
+    const socket = screen.getByTestId('softphone-socket') as HTMLInputElement;
+    await vi.waitFor(() => expect(socket.value).toBe('wss://node:9443'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Register' }));
+    const [agent] = sip.agents;
+    act(() => { agent.emit('registered', {}); });
+    fireEvent.click(screen.getByRole('button', { name: 'Call' }));
+
+    await vi.waitFor(() => expect(agent.calls).toHaveLength(1));
+    expect(api.asked).toBe(2);
+    // The TURN entry the node could mint no credential for is not handed to the browser.
+    expect(agent.calls[0].options.pcConfig).toEqual({ iceServers: [
+      { urls: 'stun:node:3478' },
+      { urls: 'turn:node:3478', username: '4102444800', credential: 'c' },
+    ] });
+    expect(screen.getByTestId('softphone-ice-servers').textContent).toBe('stun:node:3478, turn:node:3478');
+  });
+
+  it('on the harness page, calls with the ICE servers and relay policy the query string gave', () => {
+    const sip = stack();
+    const ice = [{ urls: 'stun:node:3478' }, { urls: 'turn:node:3478' }, { urls: 'turn:node:3478', username: '4102444800:token', credential: 'c', expires_at: 4_102_444_800 }];
+    render(<SoftphoneScreen stack={sip} options={{ socket: 'ws://node:8088', uri: 'sip:1001@example.com', target: 'sip:1002@example.com', register: true, answer: false, ice, relay: true }} />);
+    const [agent] = sip.agents;
+    act(() => { agent.emit('registered', {}); });
+    fireEvent.click(screen.getByRole('button', { name: 'Call' }));
+
+    expect(agent.calls[0].options.pcConfig).toEqual({
+      iceServers: [{ urls: 'stun:node:3478' }, { urls: 'turn:node:3478', username: '4102444800:token', credential: 'c' }],
+      iceTransportPolicy: 'relay',
+    });
+    expect(screen.getByTestId('softphone-ice-servers').textContent).toBe('stun:node:3478, turn:node:3478, relay only');
+    // The harness page has no console to ask, so it offers no relay switch of its own.
+    expect(screen.queryByTestId('softphone-relay-only')).toBeNull();
+  });
+
+  it('forces media through TURN when asked, and says so', async () => {
+    const sip = stack();
+    const turn = { urls: 'turn:node:3478', username: '4102444800', credential: 'c', expires_at: 4_102_444_800 };
+    render(<SoftphoneScreen api={node({ transports: [], ice_servers: [turn] })} stack={sip} options={{ socket: 'wss://node:9443', uri: 'sip:1001@example.com', target: 'sip:1002@example.com', register: true, answer: false }} />);
+    const [agent] = sip.agents;
+    act(() => { agent.emit('registered', {}); });
+    fireEvent.click(screen.getByTestId('softphone-relay-only'));
+    fireEvent.click(screen.getByRole('button', { name: 'Call' }));
+
+    await vi.waitFor(() => expect(agent.calls).toHaveLength(1));
+    expect(agent.calls[0].options.pcConfig).toEqual({ iceServers: [{ urls: 'turn:node:3478', username: '4102444800', credential: 'c' }], iceTransportPolicy: 'relay' });
+    expect(screen.getByTestId('softphone-ice-servers').textContent).toBe('turn:node:3478, relay only');
+  });
+
+
   it('registers with what was typed and shows the registration state', async () => {
     const sip = stack();
     render(<SoftphoneScreen stack={sip} />);
@@ -148,7 +220,7 @@ describe('the pure parts', () => {
 
   it('defaults the socket to the page host when nothing says otherwise', () => {
     const connection = defaultConnection({ register: false, answer: false });
-    expect(connection.socket).toMatch(/^ws:\/\/.*:9500$/);
+    expect(connection.socket).toMatch(/^ws:\/\/.*:8088$/);
     expect(connection.password).toBe('');
   });
 });

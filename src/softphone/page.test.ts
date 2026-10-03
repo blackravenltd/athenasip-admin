@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { expose, pageOptions, READOUT_KEY, withoutPassword } from './page';
+import { expose, pageOptions, READOUT_KEY, withoutSecrets } from './page';
 import type { Softphone } from './Softphone';
 
 describe('pageOptions', () => {
@@ -12,25 +12,37 @@ describe('pageOptions', () => {
         target: 'sip:1002@10.0.0.2',
         register: true,
         answer: true,
+        ice: undefined,
+        relay: false,
       });
+  });
+
+  it('reads the ICE servers as JSON and the relay flag, keeping only entries with a urls', () => {
+    const ice = JSON.stringify([{ urls: 'turn:h:3478', username: '1:token', credential: 'c', expires_at: 1 }, { nope: true }]);
+    expect(pageOptions(`?ice=${encodeURIComponent(ice)}&relay=1`)).toMatchObject({
+      ice: [{ urls: 'turn:h:3478', username: '1:token', credential: 'c', expires_at: 1 }],
+      relay: true,
+    });
+    expect(pageOptions('?ice=not-json').ice).toBeUndefined();
+    expect(pageOptions('?ice=%7B%7D').ice).toBeUndefined();
   });
 
   it('treats an absent or empty value as not given, and anything but 1 or true as off', () => {
     expect(pageOptions('?uri=&register=0&answer=yes')).toEqual({
-      socket: undefined, uri: undefined, password: undefined, target: undefined, register: false, answer: false,
+      socket: undefined, uri: undefined, password: undefined, target: undefined, register: false, answer: false, ice: undefined, relay: false,
     });
     expect(pageOptions('')).toMatchObject({ register: false, answer: false });
   });
 });
 
-describe('withoutPassword', () => {
-  it('removes the password and nothing else', () => {
-    expect(withoutPassword('http://127.0.0.1:8080/softphone.html?uri=sip%3A1001%40x&password=pw&register=1'))
-      .toBe('http://127.0.0.1:8080/softphone.html?uri=sip%3A1001%40x&register=1');
+describe('withoutSecrets', () => {
+  it('removes the password and the ICE servers and nothing else', () => {
+    expect(withoutSecrets('http://127.0.0.1:8080/softphone.html?uri=sip%3A1001%40x&password=pw&ice=%5B%5D&relay=1&register=1'))
+      .toBe('http://127.0.0.1:8080/softphone.html?uri=sip%3A1001%40x&relay=1&register=1');
   });
 
   it('says so when there was nothing to remove, so the history is left alone', () => {
-    expect(withoutPassword('http://127.0.0.1:8080/softphone.html?uri=sip%3A1001%40x')).toBeUndefined();
+    expect(withoutSecrets('http://127.0.0.1:8080/softphone.html?uri=sip%3A1001%40x')).toBeUndefined();
   });
 });
 

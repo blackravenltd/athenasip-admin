@@ -10,6 +10,7 @@
  * Both are for the AthenaSIP end-to-end run, and both are documented in
  * `docs/softphone.md`. Nothing here is loaded by the provisioning screens.
  */
+import type { IceServer } from '../api/types';
 import type { MediaStats, Softphone, SoftphoneState, Transition } from './Softphone';
 
 export interface PageOptions {
@@ -21,15 +22,23 @@ export interface PageOptions {
   register: boolean;
   /** Answer an incoming call as soon as it arrives. */
   answer: boolean;
+  /**
+   * ICE servers, as `GET /client/config` gives them. The harness fetches them
+   * itself, where its token already is, so this page never holds one.
+   */
+  ice?: IceServer[];
+  /** Media only through the TURN server, `iceTransportPolicy: "relay"`. */
+  relay?: boolean;
 }
 
 /**
  * The options a page was opened with.
  *
  * `ws`, `uri`, `password` and `target` prefill the fields; `register=1`
- * presses Register, and `answer=1` presses Answer when a call arrives. A
- * password in a URL is a harness convenience and nothing else; the page
- * removes it from the address bar as soon as it has read it.
+ * presses Register, and `answer=1` presses Answer when a call arrives. `ice`
+ * is a JSON array of ICE servers and `relay=1` forces media through TURN. A
+ * password or a TURN credential in a URL is a harness convenience and nothing
+ * else; the page removes both from the address bar as soon as it has read them.
  */
 export function pageOptions(search: string): PageOptions {
   const params = new URLSearchParams(search);
@@ -48,14 +57,30 @@ export function pageOptions(search: string): PageOptions {
     target: text('target'),
     register: flag('register'),
     answer: flag('answer'),
+    ice: iceServers(text('ice')),
+    relay: flag('relay'),
   };
 }
 
-/** The URL with the password removed, or `undefined` when there was none to remove. */
-export function withoutPassword(url: string): string | undefined {
+/** Only entries with a string `urls` survive; anything that is not a JSON array is no servers at all. */
+function iceServers(json: string | undefined): IceServer[] | undefined {
+  if (json === undefined) return undefined;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(json);
+  } catch {
+    return undefined;
+  }
+  if (!Array.isArray(parsed)) return undefined;
+  return parsed.filter((entry): entry is IceServer => typeof entry === 'object' && entry !== null && typeof (entry as IceServer).urls === 'string');
+}
+
+/** The URL with the password and the ICE servers removed, or `undefined` when there was neither. */
+export function withoutSecrets(url: string): string | undefined {
   const parsed = new URL(url);
-  if (!parsed.searchParams.has('password')) return undefined;
-  parsed.searchParams.delete('password');
+  const secrets = ['password', 'ice'].filter((key) => parsed.searchParams.has(key));
+  if (secrets.length === 0) return undefined;
+  for (const key of secrets) parsed.searchParams.delete(key);
   return parsed.toString();
 }
 

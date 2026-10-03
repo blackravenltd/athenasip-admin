@@ -42,6 +42,11 @@ export interface MediaStats {
   packetsLost: number;
   /** The far end's level as the browser measured it, 0 to 1, when it reports one. */
   audioLevel?: number;
+  /**
+   * The far end's accumulated energy, which only grows. An instant's level can
+   * land in a gap between beeps; the energy says the payload was not silence.
+   */
+  totalAudioEnergy?: number;
   codec?: string;
   dtlsState?: string;
   candidatePair?: { local: CandidateEnd; remote: CandidateEnd; state: string };
@@ -94,8 +99,21 @@ export type Listener = (state: SoftphoneState) => void;
 
 const INITIAL: SoftphoneState = { registration: 'unregistered', call: 'idle' };
 
-/** No ICE servers: the media engine is the only remote candidate, and it advertises an address the browser can reach. */
-const PEER_CONFIGURATION: RTCConfiguration = { iceServers: [] };
+/**
+ * With no ICE servers the media engine is the only remote candidate, and it
+ * advertises an address the browser can reach. That is the harness page's
+ * case; the console passes what the node's `/client/config` names.
+ */
+const peerConfiguration = (iceServers: RTCIceServer[], relayOnly: boolean): RTCConfiguration =>
+  (relayOnly ? { iceServers, iceTransportPolicy: 'relay' } : { iceServers });
+
+/** What ICE may use for one call. `relayOnly` is how TURN is proven when a direct path would win. */
+export interface IceOptions {
+  servers: RTCIceServer[];
+  relayOnly?: boolean;
+}
+
+const NO_ICE: IceOptions = { servers: [] };
 
 const MEDIA: MediaStreamConstraints = { audio: true, video: false };
 
@@ -107,6 +125,7 @@ export class Softphone {
   private session?: RTCSession;
   private peer?: RTCPeerConnection;
   private remote?: MediaStream;
+  private ice: IceOptions = NO_ICE;
 
   constructor(private readonly sip: SipStack, private readonly clock: () => number = Date.now) {
     this.record();
@@ -181,13 +200,18 @@ export class Softphone {
     this.reset({ registration: 'unregistered' });
   }
 
-  call(target: string): void {
+  /** What a call or an answer uses when it is not told otherwise: the harness page's `ice` and `relay`. */
+  useIce(ice: IceOptions): void {
+    this.ice = ice;
+  }
+
+  call(target: string, ice: IceOptions = this.ice): void {
     if (!this.agent || this.session) return;
     this.update({ notice: undefined, cause: undefined });
     try {
       this.agent.call(target, {
         mediaConstraints: MEDIA,
-        pcConfig: PEER_CONFIGURATION,
+        pcConfig: peerConfiguration(ice.servers, ice.relayOnly ?? false),
         rtcOfferConstraints: { offerToReceiveAudio: true, offerToReceiveVideo: false },
       });
     } catch (cause) {
@@ -195,9 +219,9 @@ export class Softphone {
     }
   }
 
-  answer(): void {
+  answer(ice: IceOptions = this.ice): void {
     if (!this.session || this.current.call !== 'incoming') return;
-    this.session.answer({ mediaConstraints: MEDIA, pcConfig: PEER_CONFIGURATION });
+    this.session.answer({ mediaConstraints: MEDIA, pcConfig: peerConfiguration(ice.servers, ice.relayOnly ?? false) });
   }
 
   hangUp(): void {
@@ -364,6 +388,7 @@ export function summarise(report: RTCStatsReport): MediaStats {
         stats.bytesReceived += number(record.bytesReceived);
         stats.packetsLost += number(record.packetsLost);
         if (typeof record.audioLevel === 'number') stats.audioLevel = record.audioLevel;
+        if (typeof record.totalAudioEnergy === 'number') stats.totalAudioEnergy = (stats.totalAudioEnergy ?? 0) + record.totalAudioEnergy;
         const codec = typeof record.codecId === 'string' ? records.get(record.codecId) : undefined;
         if (codec && typeof codec.mimeType === 'string') stats.codec = codec.mimeType;
         break;

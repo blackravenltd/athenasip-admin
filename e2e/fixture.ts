@@ -11,8 +11,23 @@ export interface Fixture {
   /** The API at the same listener, used only to check the node is serving. */
   apiUrl: string;
   socket: string;
-  /** The address the node advertises, and where rtpengine says its media is. */
+  /** The address the node advertises. */
   publicAddress: string;
+  /** Where rtpengine says its media is: the public address, unless the fixture moved it. */
+  advertise: string;
+  /**
+   * Present when the engine advertises an address other than the node's, which
+   * only the TURN server can reach: the relay phase. Its range is what a relayed
+   * pair's local port falls inside, a fact about the fixture rather than the
+   * browser's label for the candidate.
+   */
+  relay?: { min: number; max: number };
+  /**
+   * A user of the node, for signing in to read `GET /client/config` from the
+   * Node side; the page never holds the session. The password is generated per
+   * run by `up.sh`, so there is no default, and only the relay phase needs it.
+   */
+  apiUser?: { username: string; password: string };
   realm: string;
   accounts: [string, string];
   password: string;
@@ -27,11 +42,26 @@ export function fixtureFromEnvironment(env: NodeJS.ProcessEnv = process.env): Fi
   if (accounts.length !== 2) {
     throw new Error(`ATHENA_INTEROP_ACCOUNTS names ${accounts.length} account(s); a call needs exactly two`);
   }
+  const advertise = env.ATHENA_INTEROP_RTPENGINE_ADVERTISE || publicAddress;
+  let relay: Fixture['relay'];
+  if (advertise !== publicAddress) {
+    const min = Number(env.ATHENA_INTEROP_TURN_MIN);
+    const max = Number(env.ATHENA_INTEROP_TURN_MAX);
+    if (!Number.isInteger(min) || !Number.isInteger(max) || min > max) {
+      throw new Error(`The engine advertises ${advertise}, which only TURN can reach, but ATHENA_INTEROP_TURN_MIN and _MAX do not give a relay range`);
+    }
+    relay = { min, max };
+  }
   return {
     pageUrl: (env.ATHENA_INTEROP_PAGE_URL ?? `http://127.0.0.1:${apiPort}`).replace(/\/+$/, ''),
     apiUrl: `http://127.0.0.1:${apiPort}/api/v1`,
     socket: env.ATHENA_INTEROP_WS_URL ?? `ws://127.0.0.1:${wsPort}`,
     publicAddress,
+    advertise,
+    relay,
+    apiUser: env.ATHENA_INTEROP_API_USER && env.ATHENA_INTEROP_API_PASSWORD
+      ? { username: env.ATHENA_INTEROP_API_USER, password: env.ATHENA_INTEROP_API_PASSWORD }
+      : undefined,
     realm: env.ATHENA_INTEROP_REALM ?? publicAddress,
     accounts: [accounts[0], accounts[1]],
     password: env.ATHENA_INTEROP_PASSWORD ?? 'athenaphone',
@@ -44,7 +74,7 @@ export function sipUri(fixture: Fixture, user: string): string {
 }
 
 /** The softphone page, opened already knowing what to do. */
-export function softphoneUrl(fixture: Fixture, user: string, options: { target?: string; answer?: boolean }): string {
+export function softphoneUrl(fixture: Fixture, user: string, options: { target?: string; answer?: boolean; ice?: unknown[] }): string {
   const url = new URL('/softphone.html', `${fixture.pageUrl}/`);
   url.searchParams.set('ws', fixture.socket);
   url.searchParams.set('uri', sipUri(fixture, user));
@@ -52,5 +82,7 @@ export function softphoneUrl(fixture: Fixture, user: string, options: { target?:
   url.searchParams.set('register', '1');
   if (options.target) url.searchParams.set('target', options.target);
   if (options.answer) url.searchParams.set('answer', '1');
+  if (options.ice) url.searchParams.set('ice', JSON.stringify(options.ice));
+  if (fixture.relay) url.searchParams.set('relay', '1');
   return url.toString();
 }

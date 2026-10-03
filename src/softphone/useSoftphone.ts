@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { MediaStats, SipStack, SoftphoneState } from './Softphone';
 import { Softphone } from './Softphone';
+import { usableIceServers } from './iceServers';
 import { expose, type PageOptions } from './page';
 
 export interface SoftphoneHandle {
@@ -22,7 +23,14 @@ export interface SoftphoneHandle {
  * `answer=1` answers whatever arrives.
  */
 export function useSoftphone(stack: SipStack, options: PageOptions): SoftphoneHandle {
-  const phone = useMemo(() => new Softphone(stack), [stack]);
+  const phone = useMemo(() => {
+    const created = new Softphone(stack);
+    // What the page was opened with; the console passes its own per call instead.
+    created.useIce({ servers: usableIceServers(options.ice ?? []), relayOnly: options.relay });
+    return created;
+    // The options are what the page was opened with, and are read once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stack]);
   const [state, setState] = useState<SoftphoneState>(phone.state);
   const [remoteStream, setRemoteStream] = useState<MediaStream>();
   const [stats, setStats] = useState<MediaStats>();
