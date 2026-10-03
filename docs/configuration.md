@@ -36,8 +36,9 @@ nothing implies anything else: there is no superuser, and a new user has none.
 | Manage cluster | Node membership and configuration. Nothing in the console uses it yet. |
 
 A user with no roles can sign in and is told so. A username and password is the only way in:
-the node has no configured API tokens. The first user on a fresh node, and getting back in when
-every password is lost, is `athenasip --add-user NAME` on the node's host. A node that predates
+the node has no configured API tokens. The first user on a fresh node is
+`athenasip --add-user NAME` on the node's host, and a lost password is
+`athenasip --reset-password NAME` there (on nodes after 0.8.0; it ends that user's sessions). A node that predates
 user logins answers the login with 404, and the console says it cannot sign in to it.
 
 The model is the server's, in `../athenasip/docs/authentication.md`.

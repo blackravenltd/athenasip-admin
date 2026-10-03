@@ -30,9 +30,9 @@ export function describeRefusal(cause: unknown): string {
 /**
  * Asks who you are, and signs in as that.
  *
- * A username and password is the only way in. The first user, and getting
- * back in when every password is lost, is `athenasip --add-user` on the
- * node's host, which this console has no part in.
+ * A username and password is the only way in. The first user is
+ * `athenasip --add-user` on the node's host, and a lost password is
+ * `athenasip --reset-password`, which this console has no part in.
  *
  * It renders in place of whatever screen was asked for, so the address bar
  * never changes and signing in lands the person where they were going. That
@@ -103,8 +103,8 @@ export function LoginScreen({ api, session, ended, hint }: {
         </label>
         <p className="field-hint">
           Nothing here is stored. The session lives in this page only, and a reload asks again.
-          No user yet, or every password lost? Run <code>athenasip --add-user NAME</code> on the
-          node&apos;s host.
+          No user yet? Run <code>athenasip --add-user NAME</code> on the node&apos;s host. Lost your
+          password? Run <code>athenasip --reset-password NAME</code> there.
           {hint && <> {hint}</>}
         </p>
         {error && <p className="error-message" role="alert">{error}</p>}
