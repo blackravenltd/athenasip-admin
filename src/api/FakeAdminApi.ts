@@ -107,7 +107,7 @@ export class FakeAdminApi implements AdminApi {
   private registrations: Stored[];
   private calls: StoredCall[];
   private reoffers: Array<Omit<MediaReoffer, 'last_at'> & { age_s: number }> = [{
-    account: 'sip:reception@blackraven.co.nz', rejected: 'webrtc', took: 'rtp', count: 2, age_s: 420, suggested_media_profile: 'rtp',
+    subscriber: 'sip:reception@blackraven.co.nz', rejected: 'webrtc', took: 'rtp', count: 2, age_s: 420, suggested_media_profile: 'rtp',
   }];
   private readonly madeAt = Date.now();
   private users: StoredUser[];
@@ -158,8 +158,8 @@ export class FakeAdminApi implements AdminApi {
     // binding would have expired a few minutes into a development session.
     this.registrations = [
       {
-        account: 'sip:tom@sip.athenasip.org',
-        account_id: this.accounts[0].id,
+        subscriber: 'sip:tom@sip.athenasip.org',
+        subscriber_id: this.accounts[0].id,
         contact: 'sip:tom@192.168.1.24:5061;transport=tls',
         age_s: 60,
         expires_in_s: 240,
@@ -169,8 +169,8 @@ export class FakeAdminApi implements AdminApi {
         path: '',
       },
       {
-        account: 'sip:tomweb@sip.athenasip.org',
-        account_id: this.accounts[1].id,
+        subscriber: 'sip:tomweb@sip.athenasip.org',
+        subscriber_id: this.accounts[1].id,
         contact: 'sip:tomweb@df7jal23ls0d.invalid;transport=ws',
         age_s: 255,
         expires_in_s: 45,
@@ -440,7 +440,7 @@ export class FakeAdminApi implements AdminApi {
       const gone = new Set(this.accounts.filter((account) => account.realm === name).map((account) => account.uri));
       this.realms = this.realms.filter((candidate) => candidate.name !== name);
       this.accounts = this.accounts.filter((account) => account.realm !== name);
-      this.registrations = this.registrations.filter((binding) => !gone.has(binding.account));
+      this.registrations = this.registrations.filter((binding) => !gone.has(binding.subscriber));
       return undefined;
     }, signal);
   }
@@ -491,7 +491,7 @@ export class FakeAdminApi implements AdminApi {
       if (!account) throw new ApiError('no such account', 404, 'not_found');
       this.accounts = this.accounts.filter((candidate) => candidate !== account);
       // Its registrations go with it.
-      this.registrations = this.registrations.filter((binding) => binding.account !== account.uri);
+      this.registrations = this.registrations.filter((binding) => binding.subscriber !== account.uri);
       return undefined;
     }, signal);
   }
@@ -500,7 +500,7 @@ export class FakeAdminApi implements AdminApi {
     return this.settle(STATUS, () => {
       const now = Math.floor(Date.now() / 1000);
       return this.registrations
-        .filter((binding) => !realm || binding.account.endsWith(`@${realm}`))
+        .filter((binding) => !realm || binding.subscriber.endsWith(`@${realm}`))
         .map(({ age_s, expires_in_s, ...binding }) => ({
           ...binding,
           registered_at: now - age_s,
@@ -567,12 +567,12 @@ export class FakeAdminApi implements AdminApi {
   /** Every binding in a realm that probes, with what its last probes found. */
   listQualifiedClients(signal?: AbortSignal): Promise<QualifiedClient[]> {
     return this.settle(STATUS, () => this.registrations.flatMap((binding) => {
-      const realm = this.realms.find((candidate) => binding.account.endsWith(`@${candidate.name}`));
+      const realm = this.realms.find((candidate) => binding.subscriber.endsWith(`@${candidate.name}`));
       const interval = realm && this.present(realm).behaviour_effective.qualify_interval;
       if (!interval) return [];
-      const heard = QUALIFY_SEEN[binding.account];
+      const heard = QUALIFY_SEEN[binding.subscriber];
       return [{
-        account: binding.account,
+        subscriber: binding.subscriber,
         contact: binding.contact,
         interval,
         answered_at: heard?.answered_age_s === undefined ? null : new Date(Date.now() - heard.answered_age_s * 1000).toISOString(),

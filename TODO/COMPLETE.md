@@ -10,6 +10,8 @@ with a one-line note on what shipped.
 - [x] **Deleting a realm deletes its subscribers.** The fake removes them and their
       registrations, and the delete dialogue says they go with it instead of warning that
       they stay behind.
+- [x] **`subscriber` fields.** Registrations carry `subscriber` and `subscriber_id`, and the
+      re-offer and qualify lists `subscriber`, renamed from `account` with the route.
 - [x] **429 everywhere.** Any rate-limited request reads "The node is limiting requests. Try
       again in N seconds."; it never signs out, and the Calls poll holds for Retry-After (10
       seconds when the node names none) before reading again.

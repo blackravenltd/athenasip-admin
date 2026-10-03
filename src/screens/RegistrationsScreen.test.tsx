@@ -25,7 +25,7 @@ describe('contactTransport', () => {
 });
 
 describe('describeProbe', () => {
-  const client = { account: 'sip:a@b', contact: 'sip:a@c', interval: 60, said_media_profile: null };
+  const client = { subscriber: 'sip:a@b', contact: 'sip:a@c', interval: 60, said_media_profile: null };
   const now = Date.parse('2026-10-02T10:00:00Z');
 
   it('treats one missed probe as a lost packet and several as a client gone', () => {

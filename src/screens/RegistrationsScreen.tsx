@@ -37,7 +37,7 @@ export function describeProbe(client: QualifiedClient, now: number): { label: st
 }
 
 function key(registration: Registration): string {
-  return `${registration.account} ${registration.contact}`;
+  return `${registration.subscriber} ${registration.contact}`;
 }
 
 export function RegistrationsScreen({ api }: { api: AdminApi }) {
@@ -75,10 +75,10 @@ export function RegistrationsScreen({ api }: { api: AdminApi }) {
               const transport = contactTransport(registration.contact);
               return (
                 <li className="record-row" key={key(registration)}>
-                  <div className="record-main" role="group" aria-label={registration.account}>
+                  <div className="record-main" role="group" aria-label={registration.subscriber}>
                     <span className="record-name">
                       <span className={`state-dot state-${expiry.tone}`} aria-hidden="true" />
-                      {registration.account}
+                      {registration.subscriber}
                     </span>
                     <span className="record-detail"><code>{registration.contact}</code></span>
                     {registration.path && <span className="record-detail">Path <code>{registration.path}</code></span>}
@@ -118,11 +118,11 @@ export function RegistrationsScreen({ api }: { api: AdminApi }) {
             {probed.value.map((client) => {
               const probe = describeProbe(client, now * 1000);
               return (
-                <li className="record-row" key={`${client.account} ${client.contact}`}>
-                  <div className="record-main" role="group" aria-label={`Probe of ${client.account}`}>
+                <li className="record-row" key={`${client.subscriber} ${client.contact}`}>
+                  <div className="record-main" role="group" aria-label={`Probe of ${client.subscriber}`}>
                     <span className="record-name">
                       <span className={`state-dot state-${probe.tone}`} aria-hidden="true" />
-                      {client.account}
+                      {client.subscriber}
                     </span>
                     <span className="record-detail"><code>{client.contact}</code></span>
                     <span className="record-detail">Every {describeSeconds(client.interval)}</span>

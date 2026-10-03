@@ -69,7 +69,7 @@ export function describeReoffer(reoffer: MediaReoffer): string {
 function ReofferRow({ api, reoffer }: { api: AdminApi; reoffer: MediaReoffer }) {
   const { busy, error, run } = useSubmit();
   const [done, setDone] = useState(false);
-  const account = accountOf(reoffer.account);
+  const account = accountOf(reoffer.subscriber);
   const suggested = reoffer.suggested_media_profile;
 
   const apply = () => {
@@ -81,8 +81,8 @@ function ReofferRow({ api, reoffer }: { api: AdminApi; reoffer: MediaReoffer }) 
 
   return (
     <li className="record-row">
-      <div className="record-main" role="group" aria-label={reoffer.account}>
-        <span className="record-name">{reoffer.account}</span>
+      <div className="record-main" role="group" aria-label={reoffer.subscriber}>
+        <span className="record-name">{reoffer.subscriber}</span>
         <span className="record-detail">{describeReoffer(reoffer)} Last {new Date(reoffer.last_at).toLocaleString()}.</span>
         {error && <span className="field-error" role="alert">{error}</span>}
       </div>
@@ -95,7 +95,7 @@ function ReofferRow({ api, reoffer }: { api: AdminApi; reoffer: MediaReoffer }) 
               className="secondary-button"
               type="button"
               disabled={busy}
-              aria-label={`Set ${reoffer.account} to ${MEDIA_PROFILE_TEXT[suggested].label}`}
+              aria-label={`Set ${reoffer.subscriber} to ${MEDIA_PROFILE_TEXT[suggested].label}`}
               onClick={apply}
             >
               Set its profile to {MEDIA_PROFILE_TEXT[suggested].label}
@@ -244,7 +244,7 @@ export function MediaScreen({ api }: { api: AdminApi }) {
           <Empty>No phone has refused what it was offered.</Empty>
         ) : (
           <ul className="record-list">
-            {reoffers.value.map((reoffer) => <ReofferRow key={reoffer.account} api={api} reoffer={reoffer} />)}
+            {reoffers.value.map((reoffer) => <ReofferRow key={reoffer.subscriber} api={api} reoffer={reoffer} />)}
           </ul>
         )}
       </section>

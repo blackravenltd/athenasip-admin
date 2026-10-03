@@ -85,7 +85,7 @@ describe('FakeAdminApi', () => {
 
   it('probes the clients of a realm that probes, and none once it stops', async () => {
     const api = new FakeAdminApi();
-    expect((await api.listQualifiedClients()).map((client) => client.account)).toEqual(['sip:tom@sip.athenasip.org', 'sip:tomweb@sip.athenasip.org']);
+    expect((await api.listQualifiedClients()).map((client) => client.subscriber)).toEqual(['sip:tom@sip.athenasip.org', 'sip:tomweb@sip.athenasip.org']);
     await api.updateRealm('sip.athenasip.org', { behaviour: { qualify_interval: 0 } });
     await expect(api.listQualifiedClients()).resolves.toEqual([]);
   });
@@ -93,7 +93,7 @@ describe('FakeAdminApi', () => {
   it('takes an account’s registrations with it', async () => {
     const api = new FakeAdminApi();
     await api.deleteAccount('sip.athenasip.org', 'tom');
-    const accounts = (await api.listRegistrations()).map((binding) => binding.account);
+    const accounts = (await api.listRegistrations()).map((binding) => binding.subscriber);
     expect(accounts).not.toContain('sip:tom@sip.athenasip.org');
   });
 

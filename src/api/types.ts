@@ -254,8 +254,8 @@ export interface UpdateAccount {
 /** A live binding. Read only: a binding is written by a REGISTER and by nothing else. */
 export interface Registration {
   /** The account's URI. */
-  account: string;
-  account_id: number;
+  subscriber: string;
+  subscriber_id: number;
   contact: string;
   /** Unix time in seconds, as the server's `std::time_t`. */
   registered_at: number;
@@ -344,7 +344,7 @@ export interface MediaEngine {
  */
 export interface MediaReoffer {
   /** The account's address of record, as the call's Request-URI named it. */
-  account: string;
+  subscriber: string;
   rejected: 'rtp' | 'webrtc';
   /** Null when the other profile was refused as well. */
   took: 'rtp' | 'webrtc' | null;
@@ -357,7 +357,7 @@ export interface MediaReoffer {
 
 /** `GET /qualify`: a registered client this node is probing with OPTIONS, down the flow it registered on. */
 export interface QualifiedClient {
-  account: string;
+  subscriber: string;
   contact: string;
   /** Seconds between probes. */
   interval: number;

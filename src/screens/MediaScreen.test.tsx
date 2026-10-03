@@ -21,7 +21,7 @@ describe('accountOf', () => {
 
 describe('describeReoffer', () => {
   it('says what was refused and what was taken, or that both were', () => {
-    const base = { account: 'sip:a@b', count: 2, last_at: '2026-10-02T00:00:00Z' };
+    const base = { subscriber: 'sip:a@b', count: 2, last_at: '2026-10-02T00:00:00Z' };
     expect(describeReoffer({ ...base, rejected: 'webrtc', took: 'rtp', suggested_media_profile: 'rtp' })).toBe('Refused WebRTC and took Plain RTP, 2 times.');
     expect(describeReoffer({ ...base, count: 1, rejected: 'rtp', took: null, suggested_media_profile: null })).toBe('Refused Plain RTP and then the other as well, once.');
   });
