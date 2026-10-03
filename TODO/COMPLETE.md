@@ -3,6 +3,13 @@
 The record of what exists and works in the tree. Move items from `ACTIVE.md` as they land,
 with a one-line note on what shipped.
 
+
+## The phone (2026-10-03, uncommitted at the time of writing)
+
+- [x] **In-call controls in the controller.** `mute`, `hold` (and the far end's hold, as
+      `heldByFarEnd`), `sendDtmf` as RFC 4733 telephone events in the media, and `CallMedia`
+      for video and the microphone and camera by `deviceId`. `summarise` reads the sent
+      microphone's accumulated energy from the `media-source` record, for a silence warning.
 ## The softphone's meters and secure context (2026-10-03)
 
 - [x] **Video, when asked.** A "Video" box beside Call on the console's softphone (not the

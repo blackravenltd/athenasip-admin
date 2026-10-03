@@ -294,13 +294,13 @@ export function SoftphoneScreen({ options = NO_OPTIONS, stack = jssipStack, api 
                 className="primary-button"
                 type="button"
                 data-testid="softphone-call"
-                onClick={() => withIceServers((ice) => phone.call(connection.target, ice, video))}
+                onClick={() => withIceServers((ice) => phone.call(connection.target, ice, { video }))}
                 disabled={inCall || !connection.target}
               >
                 Call
               </button>
               {state.call === 'incoming' && (
-                <button className="primary-button" type="button" data-testid="softphone-answer" onClick={() => withIceServers((ice) => phone.answer(ice, video))}>
+                <button className="primary-button" type="button" data-testid="softphone-answer" onClick={() => withIceServers((ice) => phone.answer(ice, { video }))}>
                   Answer
                 </button>
               )}

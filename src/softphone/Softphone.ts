@@ -18,6 +18,7 @@
  * in a test by a user agent that never opens a socket, and the bundle that
  * carries JsSIP is loaded only by the page that needs it.
  */
+import type { DTMF_TRANSPORT } from 'jssip/lib/Constants';
 import type { RTCSession, EndEvent, PeerConnectionEvent, SDPEvent } from 'jssip/lib/RTCSession';
 import type { UA, UAConfiguration, RTCSessionEvent, UnRegisteredEvent } from 'jssip/lib/UA';
 
@@ -47,6 +48,12 @@ export interface MediaStats {
    * land in a gap between beeps; the energy says the payload was not silence.
    */
   totalAudioEnergy?: number;
+  /**
+   * This end's accumulated microphone energy, from the media source the call
+   * sends. A connected call whose figure stands still is sending silence:
+   * a muted, missing or virtual microphone.
+   */
+  sentAudioEnergy?: number;
   codec?: string;
   /** The video stream's own counters, kept apart so the audio figures above stay audio's. */
   video?: VideoStats;
@@ -84,9 +91,25 @@ export interface SoftphoneState {
   iceGatheringState?: RTCIceGatheringState;
   iceConnectionState?: RTCIceConnectionState;
   connectionState?: RTCPeerConnectionState;
+  /** This end's microphone is muted on the call. */
+  muted?: boolean;
+  /** This end put the call on hold. */
+  held?: boolean;
+  /** The far end put the call on hold. */
+  heldByFarEnd?: boolean;
   /** A message for the person at the keyboard, when something needs saying. */
   notice?: string;
 }
+
+/** What a call sends: whether there is video, and which devices, by `deviceId`, when not the default. */
+export interface CallMedia {
+  video?: boolean;
+  microphone?: string;
+  camera?: string;
+}
+
+/** The keys a dial pad sends: RFC 4733 events 0 to 15. */
+export const DTMF_TONES = '0123456789*#ABCD';
 
 export interface SoftphoneConfig {
   socket: string;
@@ -133,7 +156,12 @@ export interface IceOptions {
 
 const NO_ICE: IceOptions = { servers: [] };
 
-const media = (video: boolean): MediaStreamConstraints => ({ audio: true, video });
+function constraints({ video, microphone, camera }: CallMedia): MediaStreamConstraints {
+  return {
+    audio: microphone ? { deviceId: { exact: microphone } } : true,
+    video: video ? (camera ? { deviceId: { exact: camera } } : true) : false,
+  };
+}
 
 export class Softphone {
   private current: SoftphoneState = INITIAL;
@@ -230,14 +258,14 @@ export class Softphone {
   }
 
   /** Video is asked for, never assumed: the harness page's calls are audio only. */
-  call(target: string, ice: IceOptions = this.ice, video = false): void {
+  call(target: string, ice: IceOptions = this.ice, media: CallMedia = {}): void {
     if (!this.agent || this.session) return;
     this.update({ notice: undefined, cause: undefined });
     try {
       this.agent.call(target, {
-        mediaConstraints: media(video),
+        mediaConstraints: constraints(media),
         pcConfig: peerConfiguration(ice.servers, ice.relayOnly ?? false),
-        rtcOfferConstraints: { offerToReceiveAudio: true, offerToReceiveVideo: video },
+        rtcOfferConstraints: { offerToReceiveAudio: true, offerToReceiveVideo: media.video ?? false },
       });
     } catch (cause) {
       this.update({ call: 'failed', notice: `Could not call: ${String(cause)}` });
@@ -245,9 +273,35 @@ export class Softphone {
   }
 
   /** Without video, the browser answers an offered video line receive-only: it shows the far end's camera and sends none. */
-  answer(ice: IceOptions = this.ice, video = false): void {
+  answer(ice: IceOptions = this.ice, media: CallMedia = {}): void {
     if (!this.session || this.current.call !== 'incoming') return;
-    this.session.answer({ mediaConstraints: media(video), pcConfig: peerConfiguration(ice.servers, ice.relayOnly ?? false) });
+    this.session.answer({ mediaConstraints: constraints(media), pcConfig: peerConfiguration(ice.servers, ice.relayOnly ?? false) });
+  }
+
+  /** Stops or restarts sending the microphone, without renegotiating. */
+  mute(on: boolean): void {
+    if (!this.session || this.current.call !== 'connected') return;
+    if (on) this.session.mute({ audio: true });
+    else this.session.unmute({ audio: true });
+    this.update({ muted: on });
+  }
+
+  /** Puts the call on hold with a re-INVITE, or takes it off. */
+  hold(on: boolean): void {
+    if (!this.session || this.current.call !== 'connected') return;
+    const accepted = on ? this.session.hold() : this.session.unhold();
+    if (accepted) this.update({ held: on });
+  }
+
+  /**
+   * Sends one dial pad key as an RFC 4733 telephone event in the media, the
+   * way a phone menu at the far end expects it, rather than as SIP INFO
+   * through the node.
+   */
+  sendDtmf(tone: string): void {
+    if (!this.session || this.current.call !== 'connected') return;
+    if (tone.length !== 1 || !DTMF_TONES.includes(tone.toUpperCase())) return;
+    this.session.sendDTMF(tone.toUpperCase(), { transportType: 'RFC2833' as DTMF_TRANSPORT });
   }
 
   hangUp(): void {
@@ -287,6 +341,9 @@ export class Softphone {
       iceGatheringState: undefined,
       iceConnectionState: undefined,
       connectionState: undefined,
+      muted: false,
+      held: false,
+      heldByFarEnd: false,
     });
 
     // JsSIP creates an outgoing call's connection, and announces it, before it
@@ -305,6 +362,8 @@ export class Softphone {
     session.on('progress', () => {
       if (this.current.direction === 'outgoing') this.update({ call: 'ringing' });
     });
+    session.on('hold', (event: { originator: string }) => this.update(event.originator === 'remote' ? { heldByFarEnd: true } : { held: true }));
+    session.on('unhold', (event: { originator: string }) => this.update(event.originator === 'remote' ? { heldByFarEnd: false } : { held: false }));
     session.on('accepted', () => this.update({ call: 'connected' }));
     session.on('confirmed', () => this.update({ call: 'connected' }));
     session.on('ended', (event: EndEvent) => this.finish('ended', event.cause));
@@ -440,6 +499,11 @@ export function summarise(report: RTCStatsReport): MediaStats {
         if (codec && typeof codec.mimeType === 'string') stats.codec = codec.mimeType;
         break;
       }
+      case 'media-source':
+        if (record.kind === 'audio' && typeof record.totalAudioEnergy === 'number') {
+          stats.sentAudioEnergy = (stats.sentAudioEnergy ?? 0) + record.totalAudioEnergy;
+        }
+        break;
       case 'transport':
         if (typeof record.dtlsState === 'string') stats.dtlsState = record.dtlsState;
         if (typeof record.selectedCandidatePairId === 'string') selectedPairId = record.selectedCandidatePairId;

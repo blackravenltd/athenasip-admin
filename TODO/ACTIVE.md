@@ -121,7 +121,8 @@ point it there.
 4. **Usable without a telecoms background.** Every screen explains the concept before it asks
    you to configure it, the way Realms does.
 5. **No secrets in the bundle.** Credentials are entered, held in memory, and never compiled
-   in or written to browser storage.
+   in or written to browser storage. The phone may remember what is not secret (its SIP URI,
+   WebSocket, devices), never a password (Tom, 2026-10-03).
 
 ## Decisions
 
@@ -147,8 +148,11 @@ Dated, and not reopened without asking.
   reserved for state, and nothing else may use them.
 - (2026-09-18) Dark only. A second theme is a second set of contrast decisions to get wrong,
   for a console read beside a terminal.
-- (2026-09-18) The softphone is a diagnostic, not a product. It stays under Diagnostics and
-  out of the provisioning navigation.
+- (2026-09-18, reversed by Tom 2026-10-03) The softphone was a diagnostic. It is now a phone:
+  a top-level Phone section for any signed-in user, which signs in to SIP separately as a
+  subscriber and keeps its call while the console's screens change. The diagnostics move into
+  a "Call details" panel on it. The harness page (`softphone.html`) and its contract with the
+  server's browser test stay exactly as they are, and Diagnostics keeps the harness view.
 - (2026-09-18) Client-side paging is a placeholder (`usePagination`), isolated so that
   server-side paging replaces it in one place.
 - (2026-09-18) Follow the server's branch policy: work on `develop`, `main` carries the last
@@ -237,6 +241,24 @@ Dated, and not reopened without asking.
       that only fails after ringing is caught. The automated call answers within milliseconds,
       which is how it missed the server's DTLS-role bug (fixed there in `ec43d9c`). Agreed
       with the server session; the knob is ours.
+
+## The phone (decided 2026-10-03)
+
+One controller (`Softphone`), two faces: the harness page, unchanged, and a Phone section the
+app shell owns so a call outlives a screen change. First round, in order:
+
+- [ ] The Phone section: route, navigation entry, a top-bar call indicator, the phone owned by
+      the shell; a dial pad, in-call controls, video panes, and the readout as "Call details".
+      Remembers its SIP URI, WebSocket and devices, never the password.
+- [ ] Ringing: a tone made in Web Audio (no asset), and a browser notification for an
+      incoming call when the tab is hidden.
+- [ ] Device pickers for microphone, camera and speaker (`setSinkId`), and a warning when the
+      call's own sent audio stays silent.
+- [ ] History from `GET /call-records` (`view-cluster-status`), filtered to this phone's
+      subscriber, and a directory from the realm's subscribers (`manage-realm-subscribers`);
+      each hidden, with a reason, where the user's roles do not allow it.
+
+Later: blind transfer (`refer`), a second line or call waiting.
 
 ## The softphone, from the first live call (2026-10-03)
 

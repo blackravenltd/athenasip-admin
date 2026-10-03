@@ -37,6 +37,12 @@ class FakeSession extends EventEmitter {
   remote_identity = { uri: { toString: () => 'sip:1002@example.com' } };
   connection?: FakePeer;
   answer(options: Record<string, unknown> = {}) { this.answered += 1; this.answerOptions.push(options); }
+  log: string[] = [];
+  mute(options: unknown) { this.log.push(`mute ${JSON.stringify(options)}`); }
+  unmute(options: unknown) { this.log.push(`unmute ${JSON.stringify(options)}`); }
+  hold() { this.log.push('hold'); return true; }
+  unhold() { this.log.push('unhold'); return true; }
+  sendDTMF(tone: string, options: { transportType?: string }) { this.log.push(`dtmf ${tone} ${options.transportType}`); }
   terminate(options?: unknown) { this.terminated.push(options ?? null); }
 }
 
@@ -168,14 +174,55 @@ describe('Softphone', () => {
     expect(agent.callOptions[0]).toMatchObject({ mediaConstraints: { audio: true, video: false }, rtcOfferConstraints: { offerToReceiveVideo: false } });
     lastSession(agent).emit('ended', { originator: 'local', cause: 'Terminated' });
 
-    phone.call('sip:1002@example.com', { servers: [] }, true);
+    phone.call('sip:1002@example.com', { servers: [] }, { video: true });
     expect(agent.callOptions[1]).toMatchObject({ mediaConstraints: { audio: true, video: true }, rtcOfferConstraints: { offerToReceiveVideo: true } });
     lastSession(agent).emit('ended', { originator: 'local', cause: 'Terminated' });
 
     const session = new FakeSession();
     agent.emit('newRTCSession', { originator: 'remote', session, request: {} });
-    phone.answer({ servers: [] }, true);
+    phone.answer({ servers: [] }, { video: true });
     expect(session.answerOptions[0]).toMatchObject({ mediaConstraints: { audio: true, video: true } });
+  });
+
+  it('chooses the devices it was told to, by id', () => {
+    const sip = stack();
+    const phone = new Softphone(sip);
+    phone.register(CONFIG);
+    const [agent] = sip.agents;
+    agent.emit('registered', {});
+    phone.call('sip:1002@example.com', { servers: [] }, { video: true, microphone: 'mic-2', camera: 'cam-1' });
+    expect(agent.callOptions[0]).toMatchObject({ mediaConstraints: { audio: { deviceId: { exact: 'mic-2' } }, video: { deviceId: { exact: 'cam-1' } } } });
+  });
+
+  it('mutes, holds and sends dial pad keys only on a connected call', () => {
+    const sip = stack();
+    const phone = new Softphone(sip);
+    phone.register(CONFIG);
+    const [agent] = sip.agents;
+    agent.emit('registered', {});
+    phone.call('sip:1002@example.com');
+    const session = lastSession(agent);
+
+    phone.mute(true);
+    phone.sendDtmf('1');
+    expect(session.log).toEqual([]);
+
+    session.emit('accepted', {});
+    phone.mute(true);
+    expect(phone.state.muted).toBe(true);
+    phone.mute(false);
+    phone.hold(true);
+    expect(phone.state.held).toBe(true);
+    phone.sendDtmf('#');
+    phone.sendDtmf('b');
+    phone.sendDtmf('X');
+    phone.sendDtmf('12');
+    expect(session.log).toEqual(['mute {"audio":true}', 'unmute {"audio":true}', 'hold', 'dtmf # RFC2833', 'dtmf B RFC2833']);
+
+    session.emit('hold', { originator: 'remote' });
+    expect(phone.state.heldByFarEnd).toBe(true);
+    session.emit('unhold', { originator: 'remote' });
+    expect(phone.state.heldByFarEnd).toBe(false);
   });
 
   it('refuses a second call with 486 rather than replacing the first', () => {
@@ -326,6 +373,8 @@ describe('summarise', () => {
       ['iv', { type: 'inbound-rtp', kind: 'video', packetsReceived: 900, bytesReceived: 900000, packetsLost: 3, framesDecoded: 240, codecId: 'cv' }],
       ['oa', { type: 'outbound-rtp', kind: 'audio', packetsSent: 110, bytesSent: 8800 }],
       ['ov', { type: 'outbound-rtp', kind: 'video', packetsSent: 950, bytesSent: 950000 }],
+      ['ma', { type: 'media-source', kind: 'audio', totalAudioEnergy: 0.5 }],
+      ['mv', { type: 'media-source', kind: 'video', frames: 300 }],
     ]);
     expect(summarise(report as unknown as RTCStatsReport)).toEqual({
       packetsSent: 110,
@@ -334,6 +383,7 @@ describe('summarise', () => {
       bytesReceived: 8000,
       packetsLost: 0,
       codec: 'audio/opus',
+      sentAudioEnergy: 0.5,
       video: { packetsSent: 950, packetsReceived: 900, framesDecoded: 240, codec: 'video/VP8' },
     });
   });
