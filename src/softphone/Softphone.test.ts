@@ -298,11 +298,17 @@ describe('videoLine', () => {
   const sdp = (video: string) => ['v=0', 'o=- 1 1 IN IP4 10.0.0.5', 's=-', 't=0 0', 'm=audio 9 UDP/TLS/RTP/SAVPF 111', 'a=sendrecv', video].join('\r\n');
 
   it('reads the video m-line port and direction, and nothing when there is none', () => {
-    expect(videoLine(sdp('m=video 9 UDP/TLS/RTP/SAVPF 96\r\na=recvonly'))).toEqual({ port: 9, direction: 'recvonly' });
-    expect(videoLine(sdp('m=video 51000 UDP/TLS/RTP/SAVPF 96'))).toEqual({ port: 51000, direction: 'sendrecv' });
-    expect(videoLine(sdp('m=video 0 UDP/TLS/RTP/SAVPF 96\r\na=inactive'))).toEqual({ port: 0, direction: 'inactive' });
+    expect(videoLine(sdp('m=video 9 UDP/TLS/RTP/SAVPF 96\r\na=recvonly'))).toEqual({ port: 9, direction: 'recvonly', bundled: false });
+    expect(videoLine(sdp('m=video 51000 UDP/TLS/RTP/SAVPF 96'))).toEqual({ port: 51000, direction: 'sendrecv', bundled: false });
+    expect(videoLine(sdp('m=video 0 UDP/TLS/RTP/SAVPF 96\r\na=inactive'))).toEqual({ port: 0, direction: 'inactive', bundled: false });
     expect(videoLine(sdp(''))).toBeUndefined();
     expect(videoLine(undefined)).toBeUndefined();
+  });
+
+  it('knows a video line in the BUNDLE group', () => {
+    const bundled = ['v=0', 'a=group:BUNDLE 0 1', 'm=audio 9 UDP/TLS/RTP/SAVPF 111', 'a=mid:0', 'm=video 9 UDP/TLS/RTP/SAVPF 96', 'a=mid:1'].join('\r\n');
+    expect(videoLine(bundled)).toEqual({ port: 9, direction: 'sendrecv', bundled: true });
+    expect(videoLine(bundled.replace('a=group:BUNDLE 0 1', 'a=group:BUNDLE 0'))?.bundled).toBe(false);
   });
 
   it('does not take the audio section direction for the video one', () => {

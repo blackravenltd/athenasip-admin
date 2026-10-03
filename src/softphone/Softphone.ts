@@ -66,6 +66,8 @@ export interface VideoStats {
 export interface VideoLine {
   port: number;
   direction: 'sendrecv' | 'sendonly' | 'recvonly' | 'inactive';
+  /** In the session's BUNDLE group, so it shares a transport and its own port may be a placeholder. */
+  bundled: boolean;
 }
 
 export interface SoftphoneState {
@@ -493,5 +495,7 @@ export function videoLine(sdp: string | undefined): VideoLine | undefined {
   if (!section) return undefined;
   const port = Number(/^m=video (\d+)/.exec(section)?.[1] ?? 0);
   const named = /^a=(sendrecv|sendonly|recvonly|inactive)\s*$/m.exec(section)?.[1] as VideoLine['direction'] | undefined;
-  return { port, direction: named ?? 'sendrecv' };
+  const mid = /^a=mid:(\S+)/m.exec(section)?.[1];
+  const group = /^a=group:BUNDLE((?: \S+)*)\s*$/m.exec(sections[0])?.[1].trim().split(' ') ?? [];
+  return { port, direction: named ?? 'sendrecv', bundled: mid !== undefined && group.includes(mid) };
 }

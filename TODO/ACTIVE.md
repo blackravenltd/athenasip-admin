@@ -244,10 +244,6 @@ ports, before the softphone works from the node's real address.
 The server session called AthenaPhone from the console's softphone on corvus-fi-1, audio both
 ways, through an SSH tunnel to localhost. What made it hard:
 
-- [ ] A live video call, console softphone as 1001 to `sip:athenaphone@10.35.1.20` from
-      `https://10.35.1.20:8443`, once deployed. Video was brought forward from Parked on
-      2026-10-03 at Tom's request, relayed by the server session. The node passes a WebRTC
-      offer through untouched on corvus-fi-1, so media is direct between browser and phone.
 - [ ] A microphone picker, listing `enumerateDevices()` inputs and passing the choice to the
       call's `getUserMedia`. The Mac's default input was a virtual loopback (BlackHole), and
       the first call sent encoded silence for 45 seconds.

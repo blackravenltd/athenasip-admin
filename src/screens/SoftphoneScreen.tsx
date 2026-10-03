@@ -91,10 +91,16 @@ export function signallingUri(config: ClientConfig, https: boolean): string | un
   return plain ? `ws://${plain.address}:${plain.port}` : undefined;
 }
 
-/** One end's video m-line, in words. */
+/**
+ * One end's video m-line, in words. Port 9, the discard port, is what a
+ * bundled section carries when its address comes from ICE and the bundle's
+ * transport, so it is named as bundled rather than shown as a port.
+ */
 export function describeVideoLine(line: VideoLine | undefined): string {
   if (!line) return 'none';
-  return line.port === 0 ? 'declined (port 0)' : `port ${line.port}, ${line.direction}`;
+  if (line.port === 0) return 'declined (port 0)';
+  if (line.bundled && line.port === 9) return `bundled, ${line.direction}`;
+  return `port ${line.port}${line.bundled ? ' (bundled)' : ''}, ${line.direction}`;
 }
 
 const NO_OPTIONS: PageOptions = { register: false, answer: false };

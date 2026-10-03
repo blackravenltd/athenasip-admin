@@ -84,8 +84,10 @@ describe('signallingUri', () => {
 
 describe('describeVideoLine', () => {
   it('names a decline by its port, and an accepted line by port and direction', () => {
-    expect(describeVideoLine({ port: 0, direction: 'inactive' })).toBe('declined (port 0)');
-    expect(describeVideoLine({ port: 9, direction: 'sendrecv' })).toBe('port 9, sendrecv');
+    expect(describeVideoLine({ port: 0, direction: 'inactive', bundled: true })).toBe('declined (port 0)');
+    expect(describeVideoLine({ port: 9, direction: 'sendrecv', bundled: false })).toBe('port 9, sendrecv');
+    expect(describeVideoLine({ port: 9, direction: 'sendrecv', bundled: true })).toBe('bundled, sendrecv');
+    expect(describeVideoLine({ port: 51454, direction: 'sendrecv', bundled: true })).toBe('port 51454 (bundled), sendrecv');
     expect(describeVideoLine(undefined)).toBe('none');
   });
 });
