@@ -8,7 +8,7 @@ export interface Devices {
 
 const NONE: Devices = { microphones: [], cameras: [], speakers: [] };
 
-/** Whether this browser can send audio to a chosen output, which not every one can. */
+/** Whether this browser can send audio to a chosen output (`setSinkId`). */
 export function canChooseSpeaker(): boolean {
   return typeof HTMLMediaElement !== 'undefined' && 'setSinkId' in HTMLMediaElement.prototype;
 }
@@ -16,11 +16,9 @@ export function canChooseSpeaker(): boolean {
 /**
  * The browser's inputs and outputs, and a way to ask for the microphone.
  *
- * A browser names its devices only once the page may use one, so until then
- * the lists hold devices with empty labels, which is no use for choosing. The
- * phone asks before anyone signs in to a line: in Chrome, changing a
- * permission reloads the page, and that is cheaper before a password is typed
- * than during a call.
+ * Device labels are empty until the page is allowed to use a device; `named`
+ * says whether they are filled in. The phone asks before registering, because
+ * changing a permission in Chrome reloads the page.
  */
 export function useDevices(): { devices: Devices; named: boolean; ask: (video: boolean) => Promise<void>; error?: string } {
   const [devices, setDevices] = useState<Devices>(NONE);
@@ -63,10 +61,9 @@ export function useDevices(): { devices: Devices; named: boolean; ask: (video: b
 }
 
 /**
- * Whether a connected call has been sending silence: the sent microphone's
- * accumulated energy has not grown across the last `readings` samples, one a
- * second. A real microphone in a quiet room still moves it; a virtual
- * loopback device or a dead input does not. Muted calls are not asked about.
+ * Whether a call is sending silence: the sent audio's accumulated energy has
+ * not grown across the last `readings` samples, taken one a second. A real
+ * microphone in a quiet room still moves it; a dead or loopback input does not.
  */
 export function sendingSilence(energies: readonly (number | undefined)[], readings = 5): boolean {
   if (energies.length < readings) return false;

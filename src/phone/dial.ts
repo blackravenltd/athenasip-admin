@@ -1,7 +1,6 @@
 /**
- * What to call, from what was typed: a SIP URI as it is, a bare `user@host`
- * given its scheme, and a bare number or name placed in this phone's own
- * realm, which is how a desk phone dials an extension.
+ * The URI to call for what was typed: a SIP URI is kept, a bare `user@host`
+ * gets a scheme, and a bare number or name is placed in the phone's own realm.
  */
 export function dialTarget(typed: string, ownUri: string): string | undefined {
   const text = typed.trim();
@@ -12,7 +11,7 @@ export function dialTarget(typed: string, ownUri: string): string | undefined {
   return realm ? `sip:${text}@${realm}` : undefined;
 }
 
-/** The user part of a SIP URI, for a person to read; the whole thing when it has none. */
+/** The user part of a SIP URI, or the whole URI when it has none. */
 export function userOf(uri: string | null | undefined): string {
   if (!uri) return 'unknown';
   return /^sips?:([^@;>]+)@/i.exec(uri)?.[1] ?? uri.replace(/^sips?:/i, '');

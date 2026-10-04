@@ -5,17 +5,13 @@ import { pageOptions, withoutSecrets } from './page';
 import '../styles.css';
 
 /**
- * The softphone on a page of its own.
- *
- * This is the browser end of AthenaSIP's end-to-end run: a static file the
- * node serves from its own listener, which needs no router and no history
- * fallback, opened with a query string that says which node to register
- * against and what to do. It is the same component the console shows under
- * Diagnostics, without the console around it.
+ * The softphone on a page of its own: the component the console shows under
+ * Diagnostics, served by the node as a static file and driven by its query
+ * string (see `page.ts`). It needs no router.
  */
 const options = pageOptions(window.location.search);
 
-// The password and any TURN credential were read; they have no business staying in the address bar.
+// Take the password and any TURN credential out of the address bar.
 const cleaned = withoutSecrets(window.location.href);
 if (cleaned) window.history.replaceState(window.history.state, '', cleaned);
 

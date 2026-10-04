@@ -7,28 +7,24 @@ import { expose, type PageOptions } from './page';
 export interface SoftphoneHandle {
   phone: Softphone;
   state: SoftphoneState;
-  /** The far end's audio, once there is any. */
+  /** The far end's audio and video, once any arrives. */
   remoteStream?: MediaStream;
   /** The browser's counters, refreshed every second while a call is up. */
   stats?: MediaStats;
 }
 
 /**
- * One `Softphone` for the life of a component, wired into React.
- *
- * The controller is created once, its snapshots become state, and it is
- * stopped when the component goes, so that leaving the page never leaves a
- * registration behind. The page options are applied here as well: a page
- * opened with `register=1` registers on mount, and one opened with
- * `answer=1` answers whatever arrives.
+ * One `Softphone` for the life of a component. It is disposed on unmount, so
+ * leaving the page leaves no registration behind. Page options apply here:
+ * `register=1` registers on mount and `answer=1` answers incoming calls.
  */
 export function useSoftphone(stack: SipStack, options: PageOptions): SoftphoneHandle {
   const phone = useMemo(() => {
     const created = new Softphone(stack);
-    // What the page was opened with; the console passes its own per call instead.
+    // The page's ICE options; the console passes its own per call.
     created.useIce({ servers: usableIceServers(options.ice ?? []), relayOnly: options.relay });
     return created;
-    // The options are what the page was opened with, and are read once.
+    // `options` is read once.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stack]);
   const [state, setState] = useState<SoftphoneState>(phone.state);
@@ -48,12 +44,11 @@ export function useSoftphone(stack: SipStack, options: PageOptions): SoftphoneHa
     };
   }, [phone]);
 
-  // Auto-register once, on mount, when the page was opened asking for it.
   useEffect(() => {
     if (options.register && options.socket && options.uri) {
       phone.register({ socket: options.socket, uri: options.uri, password: options.password ?? '' });
     }
-    // The options are what the page was opened with, and are read once.
+    // `options` is read once.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phone]);
 

@@ -7,15 +7,13 @@ import type { Session } from './Session';
 export function describeRefusal(cause: unknown): string {
   if (cause instanceof ApiError) {
     if (cause.isUnauthorized) {
-      // The node gives one answer for a wrong name, a wrong password and a
-      // disabled user, deliberately, and so does this.
+      // One answer for a wrong name, a wrong password and a disabled user, as the node gives.
       return 'That username and password were not accepted.';
     }
     if (cause.status === 404) {
       return 'This node predates user logins, and this console cannot sign in to it. Update the node.';
     }
     if (cause.status === 503) {
-      // The node could not ask its datastore, so it cannot tell whether the password is good.
       return 'The node cannot reach its datastore, so it cannot check a password right now. Try again shortly.';
     }
     if (cause.status === 429) {
@@ -28,15 +26,11 @@ export function describeRefusal(cause: unknown): string {
 }
 
 /**
- * Asks who you are, and signs in as that.
+ * Signs in with a username and password. The first user is created with
+ * `athenasip --add-user` on the node's host, and a lost password is reset with
+ * `athenasip --reset-password` there.
  *
- * A username and password is the only way in. The first user is
- * `athenasip --add-user` on the node's host, and a lost password is
- * `athenasip --reset-password`, which this console has no part in.
- *
- * It renders in place of whatever screen was asked for, so the address bar
- * never changes and signing in lands the person where they were going. That
- * is also what happens when a session ends mid-use.
+ * `ended` says why the last session ended, if it ended on its own.
  */
 export function LoginScreen({ api, session, ended, hint }: {
   api: AdminApi;

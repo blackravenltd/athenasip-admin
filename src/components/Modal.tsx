@@ -10,18 +10,11 @@ interface ModalProps {
 }
 
 /**
- * A focus-managed dialogue.
+ * A focus-managed dialogue: focus moves in on open and back on close, Escape
+ * cancels, and Tab cycles within the panel.
  *
- * Focus moves in on open and back to where it came from on close, Escape
- * cancels, and Tab cycles within the panel rather than wandering into the page
- * behind it. None of that is optional for a console somebody drives from the
- * keyboard, and all of it is the kind of thing each screen gets slightly wrong
- * if each screen writes it.
- *
- * It renders into `document.body` rather than where it is declared. The main
- * panel is a stacking context of its own, so a dialogue inside it could never
- * rise above the sticky navigation, which covered the top of any dialogue
- * taller than the space below it.
+ * It renders into `document.body`: the main panel is its own stacking context,
+ * so a dialogue inside it cannot rise above the sticky navigation.
  */
 export function Modal({ open, title, children, actions, onClose }: ModalProps) {
   const titleId = useId();
@@ -94,13 +87,12 @@ interface FormModalProps {
 }
 
 /**
- * Editing one record.
+ * A dialogue for editing one record. Lists are read-only; every mutation opens
+ * one of these.
  *
- * This is the client's single idiom for changing anything: a list shows
- * records compactly and read-only, and every mutation opens one of these. The
- * commit is wired twice on purpose — the form's `submit`, so Enter in a field
- * commits, and the button's `click` — because the actions row belongs to the
- * dialogue rather than to the form.
+ * The commit is wired twice, to the form's `submit` (so Enter in a field
+ * commits) and to the button's `click`, because the actions row sits outside
+ * the form.
  */
 export function FormModal({
   open,

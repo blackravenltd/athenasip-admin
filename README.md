@@ -6,54 +6,44 @@
 
 **Project Status: ALPHA - DO NOT USE**
 
-An OSS React administration frontend for [AthenaSIP](https://github.com/blackravenltd/athenasip).
+The administration console for [AthenaSIP](https://github.com/blackravenltd/athenasip), with
+a browser phone. It is a static React bundle that the SIP server serves beside its admin API.
 
-The SIP server is the source of truth. This client renders and edits what the server's admin
-API exposes, and ships as a static bundle the server serves from its own HTTP listener.
+## Features
 
-## Key Features
+* **Provisioning** - realms, subscribers, users and roles.
+* **Live view** - registrations, calls, the media engine and the cluster.
+* **A browser phone** - audio and video calls, dial pad, hold, mute, history and directory.
+* **Low dependency** - React, React Router and JsSIP, with hand-written CSS.
+* **Same origin** - the node serves the bundle and the API, so nothing is cross-origin.
 
-* **React and TypeScript** on Vite, with Vitest for tests.
-* **Low dependency** - React, React Router and JsSIP. The interface is hand-written CSS
-  with no UI framework.
-* **Same origin by default** - the server serves this bundle and the API from one process,
-  so there is no cross-origin configuration to get wrong.
-
-## Documentation
-
-* [Installation](docs/installation.md)
-* [Quick Start](docs/quick_start.md)
-* [Configuration](docs/configuration.md)
-* [Architecture](docs/architecture.md)
-* [The softphone and the end-to-end run](docs/softphone.md)
-
-For more information, please see the [docs](docs/) directory. Current work is tracked in
-[TODO/ACTIVE.md](TODO/ACTIVE.md).
-
-## Running it
+## Quick start
 
 ```
 npm install
 npm run dev
 ```
 
-By default `npm run dev` runs against an in-memory fake of the admin API that enforces the
-same rules the server does; sign in as `admin` with the password `admin`. Point it at a real node with
-`VITE_ATHENASIP_LIVE=true npm run dev`; the dev server proxies `/api` to
-`http://127.0.0.1:8080`, overridable with `ATHENASIP_API`. A build to deploy needs
-`VITE_ATHENASIP_LIVE=true` as well.
+This runs against an in-memory fake of the API. Sign in as `admin`, password `admin`.
 
 ```
-npm test          # Vitest
+npm test          # unit tests (Vitest)
 npm run typecheck # tsc, both projects
-npm run build     # typecheck then a production bundle into build/
-npm run test:e2e  # two browsers call each other through a running AthenaSIP node
+npm run build     # typecheck, then a bundle in build/
+npm run test:e2e  # browsers call through a running node; see docs/softphone.md
 ```
 
-The end-to-end run needs the server's interop fixture up with rtpengine on the media path;
-see [docs/softphone.md](docs/softphone.md).
+## Documentation
+
+* [Quick start](docs/quick_start.md)
+* [Installation](docs/installation.md)
+* [Configuration](docs/configuration.md)
+* [Architecture](docs/architecture.md)
+* [The phone, the harness page and the end-to-end runs](docs/softphone.md)
+* [Goals](docs/goals.md)
+
+Current work is in [TODO/ACTIVE.md](TODO/ACTIVE.md).
 
 ## License
 
-AthenaSIP Admin is licensed under [GPLv3](https://www.gnu.org/licenses/gpl-3.0.en.html).
-Please see the [LICENSE](LICENSE) file.
+[GPLv3](https://www.gnu.org/licenses/gpl-3.0.en.html). See [LICENSE](LICENSE).

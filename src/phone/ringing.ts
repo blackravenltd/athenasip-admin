@@ -4,17 +4,16 @@ import type { CallState } from '../softphone/Softphone';
 export type Tone = 'ring' | 'ringback';
 
 /**
- * Each tone as bursts of a pair of frequencies, in seconds: the British
- * double ring for a call arriving here, and the same cadence quieter for a
- * call ringing at the far end. Made with oscillators, so there is no sound
- * file in the bundle.
+ * Each tone as bursts of a frequency pair (Hz), with burst times and period in
+ * seconds: the British double ring for an incoming call, and the same cadence
+ * quieter for ringback. Played with oscillators; there are no sound files.
  */
 const CADENCE: Record<Tone, { frequencies: [number, number]; gain: number; bursts: Array<[number, number]>; period: number }> = {
   ring: { frequencies: [400, 450], gain: 0.18, bursts: [[0, 0.4], [0.6, 1.0]], period: 3 },
   ringback: { frequencies: [400, 450], gain: 0.06, bursts: [[0, 0.4], [0.6, 1.0]], period: 3 },
 };
 
-/** The tone a call state wants, or none. */
+/** The tone for a call state, or none. */
 export function toneFor(call: CallState): Tone | undefined {
   if (call === 'incoming') return 'ring';
   if (call === 'ringing') return 'ringback';
@@ -22,9 +21,9 @@ export function toneFor(call: CallState): Tone | undefined {
 }
 
 /**
- * Plays one tone until stopped. A browser may hold an `AudioContext` until
- * the page has been clicked; the phone is registered by a click, so by the
- * time anything rings it has been.
+ * Plays one tone until the returned function is called. Browsers suspend an
+ * `AudioContext` until the page has been clicked; registering the phone is
+ * that click.
  */
 export function startTone(tone: Tone, create: () => AudioContext = () => new AudioContext()): () => void {
   let context: AudioContext;
@@ -69,7 +68,7 @@ export function startTone(tone: Tone, create: () => AudioContext = () => new Aud
   };
 }
 
-/** Rings while the call state asks for a tone, and stops the moment it does not. */
+/** Plays the tone for the call state, and stops when the state has none. */
 export function useRinging(call: CallState, create?: () => AudioContext): void {
   const tone = toneFor(call);
   const createRef = useRef(create);
@@ -80,14 +79,14 @@ export function useRinging(call: CallState, create?: () => AudioContext): void {
   }, [tone]);
 }
 
-/** Whether this browser can show a notification, and has been allowed to. */
+/** The browser's notification permission, or `unsupported`. */
 export function notificationPermission(): NotificationPermission | 'unsupported' {
   return typeof Notification === 'undefined' ? 'unsupported' : Notification.permission;
 }
 
 /**
- * A notification for a call arriving while this tab is out of sight, closed
- * when the call stops ringing. Clicking it brings the console forward.
+ * Notifies of a call arriving while the tab is hidden, and closes the
+ * notification when the ringing stops. Clicking it focuses the console.
  */
 export function useIncomingNotification(call: CallState, who: string): void {
   useEffect(() => {

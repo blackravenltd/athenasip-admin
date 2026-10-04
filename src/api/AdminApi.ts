@@ -23,38 +23,31 @@ import type {
 } from './types';
 
 /**
- * Everything this client can ask an AthenaSIP node to do.
+ * Everything this client can ask an AthenaSIP node to do, per the server's
+ * `docs/api/openapi.yaml` (version 1, under `/api/v1`) and
+ * `docs/authentication.md`. A session token from a login is the bearer on
+ * everything but health and the login itself.
  *
- * The contract is the server's `docs/api/openapi.yaml`, version 1: health,
- * the node list, realms, subscribers, registrations, live calls and the media
- * engine under `/api/v1`, with a session token from a user's login as the
- * bearer on everything but health and the login itself. Users and roles are
- * the server's `docs/authentication.md`.
+ * `HttpAdminApi` speaks to a real node and is the only file that knows HTTP.
+ * `FakeAdminApi` holds the same records in memory and enforces the same
+ * rules; development without a node and every screen test run against it.
  *
- * Two implementations, and the seam is the point:
- *
- *   - `HttpAdminApi` speaks to a real node. It is the only file in this
- *     repository that knows a URL, a verb or a status code exists.
- *   - `FakeAdminApi` holds the same records in memory and enforces the same
- *     rules, users and roles included. It is what development runs against
- *     without a node, and what every screen test runs against.
- *
- * Every method takes an `AbortSignal` because every one of them is called from
- * a component that can unmount mid-flight.
+ * Every method takes an `AbortSignal` so a component that unmounts
+ * mid-flight can cancel.
  */
 export interface AdminApi {
   /**
    * Exchanges a username and password for a session. A 401 is a wrong
    * password or a disabled user and does not end any session in progress; a
-   * 404 is a node that predates user logins, which this console cannot use.
+   * 404 is a node without user logins, which this console cannot use.
    */
   login(username: string, password: string, signal?: AbortSignal): Promise<LoginResult>;
   /** Ends the presented session on the node. */
   logout(signal?: AbortSignal): Promise<void>;
-  /** Who a session token is and what it may do, without keeping it: the session's own when `token` is left out. */
+  /** Who a token is and what it may do, without keeping it. The session's own when `token` is left out. */
   session(token?: string, signal?: AbortSignal): Promise<SessionInfo>;
 
-  /** Open. Resolves on a degraded node as well as a healthy one; the status says which. */
+  /** Open. Resolves on a degraded node too; the status says which. */
   health(signal?: AbortSignal): Promise<Health>;
   nodes(signal?: AbortSignal): Promise<ClusterNode[]>;
   /** Minted per request: fetch it when a call is placed, never cache it at sign-in. */
@@ -73,13 +66,12 @@ export interface AdminApi {
   /** Read only. Every realm's when `realm` is left out. */
   listRegistrations(realm?: string, signal?: AbortSignal): Promise<Registration[]>;
 
-  /** The calls this node is carrying now. Read only, and gone once ended. */
+  /** The calls this node is carrying. Read only; a call is gone once ended. */
   listCalls(signal?: AbortSignal): Promise<Call[]>;
   /** Calls that have ended, newest first; `limit` 1 to 1000, the node's default 100. */
   listCallRecords(limit?: number, signal?: AbortSignal): Promise<CallRecord[]>;
   /** One live call by its Call-ID; a 404 once it has ended. */
   getCall(id: string, signal?: AbortSignal): Promise<Call>;
-  /** The media engine and what it can do. */
   mediaEngine(signal?: AbortSignal): Promise<MediaEngine>;
   /** Subscribers whose endpoint refused the media profile it was offered, most recent first. */
   listMediaReoffers(signal?: AbortSignal): Promise<MediaReoffer[]>;
@@ -91,6 +83,6 @@ export interface AdminApi {
   updateUser(username: string, changes: UpdateAdminUser, signal?: AbortSignal): Promise<AdminUser>;
   deleteUser(username: string, signal?: AbortSignal): Promise<void>;
   changePassword(username: string, change: ChangePassword, signal?: AbortSignal): Promise<void>;
-  /** Ends every session the user holds, which is what makes disabling a user immediate. */
+  /** Ends every session the user holds. */
   revokeSessions(username: string, signal?: AbortSignal): Promise<void>;
 }

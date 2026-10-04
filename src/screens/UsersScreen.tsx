@@ -23,10 +23,7 @@ function same(a: string, b: string | null): boolean {
   return b !== null && a.toLowerCase() === b.toLowerCase();
 }
 
-/**
- * The roles as checkboxes. A role a user holds is exactly what is ticked:
- * nothing implies anything, so nothing is ticked on anybody's behalf.
- */
+/** The roles as checkboxes. No role implies another. */
 function RoleFields({ roles, busy, locked, onChange }: {
   roles: readonly Role[];
   busy: boolean;
@@ -154,7 +151,7 @@ function EditUserDialogue({ api, user, self, onClose, onSaved }: {
       <RoleFields
         roles={roles}
         busy={busy}
-        // Locking the last administrator out of a node is not something to do by accident.
+        // Guards against locking the last administrator out.
         locked={self ? { 'manage-admin-users': 'You cannot remove this role from yourself.' } : undefined}
         onChange={setRoles}
       />
@@ -275,10 +272,7 @@ function UserRow({ api, user, self, nowSeconds, onChanged }: {
   );
 }
 
-/**
- * The users who can sign in to this node: the people and systems that
- * administer it, each with the roles it has been given.
- */
+/** The users who can sign in to this node, each with its roles. */
 export function UsersScreen({ api, username }: { api: AdminApi; username: string | null }) {
   const result = useRefreshableAsync((signal) => api.listUsers(signal), [api]);
   const refresh = result.refresh;

@@ -46,8 +46,7 @@ function stack(): SipStack & { agents: FakeAgent[] } {
 }
 
 beforeEach(() => {
-  // jsdom has no media devices and no AudioContext; the meters warn and
-  // stand down, which is the behaviour and is not what is under test.
+  // jsdom has no media devices and no AudioContext, so the meters warn.
   vi.spyOn(console, 'warn').mockImplementation(() => {});
 });
 

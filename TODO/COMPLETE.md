@@ -4,6 +4,12 @@ The record of what exists and works in the tree. Move items from `ACTIVE.md` as 
 with a one-line note on what shipped.
 
 
+
+## Documentation and comments (2026-10-04)
+
+- [x] **Rationalised.** The README and `docs/` rewritten short and current, for an installer
+      or contributor, covering the Phone. Code comments cut to what the code does not say,
+      with no history; compiled output is identical before and after.
 ## The phone (2026-10-03, uncommitted at the time of writing)
 
 - [x] **In-call controls in the controller.** `mute`, `hold` (and the far end's hold, as

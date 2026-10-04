@@ -3,11 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { UA, UAConfiguration } from 'jssip/lib/UA';
 import { Softphone, summarise, videoLine, type SipStack } from './Softphone';
 
-/**
- * A user agent that never opens a socket. The test fires the events JsSIP
- * would, in the order JsSIP fires them, and asserts on what the controller
- * made of them.
- */
+/** A user agent that never opens a socket. Tests fire JsSIP's events in JsSIP's order. */
 class FakeAgent extends EventEmitter {
   started = 0;
   stopped = 0;
@@ -17,7 +13,7 @@ class FakeAgent extends EventEmitter {
   constructor(readonly configuration: UAConfiguration) { super(); }
   start() { this.started += 1; }
   stop() { this.stopped += 1; }
-  /** Set to have the next outgoing session arrive with its connection already made, as JsSIP does. */
+  /** The next outgoing session arrives with this connection already made, as JsSIP does. */
   nextConnection?: FakePeer;
   call(target: string, options: Record<string, unknown> = {}) {
     this.calls.push(target);
@@ -303,9 +299,6 @@ describe('Softphone', () => {
   });
 
   it('watches an outgoing call\'s connection, which JsSIP makes before it announces the session', () => {
-    // The first run against a real node connected, carried media both ways,
-    // and the caller never reported an ICE state: its connection's event had
-    // fired before the controller was listening.
     const sip = stack();
     const phone = new Softphone(sip);
     phone.register(CONFIG);

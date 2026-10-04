@@ -3,11 +3,11 @@ import { videoLine, type MediaStats, type SoftphoneState } from './Softphone';
 import { describeVideoLine } from './words';
 
 /**
- * What the browser and the node agreed for one call, and whether anything is
- * moving: the harness view's Negotiation panel and the Phone's "Call details".
+ * What was negotiated for one call and whether media is moving: the harness
+ * view's Negotiation panel and the Phone's "Call details".
  *
- * The test ids are the harness contract's as much as the markup's, so they
- * stay the same wherever this is drawn. `extra` rows go after the direction.
+ * The test ids are part of the harness contract. `extra` rows go after the
+ * direction.
  */
 export function CallReadout({ state, stats, extra }: { state: SoftphoneState; stats?: MediaStats; extra?: ReactNode }) {
   const pair = stats?.candidatePair;

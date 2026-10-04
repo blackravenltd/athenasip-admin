@@ -8,17 +8,13 @@ import type { SoftphoneReadout, VideoNegotiation } from '../src/softphone/page';
 /**
  * A browser calls a phone with video, through a real AthenaSIP node.
  *
- * One page registers and calls `ATHENA_INTEROP_TARGET`, which is not another
- * page but a device that answers by itself (the AthenaPhone A85, first). It
- * sends Chromium's fake camera and microphone, so nothing here needs a real
- * device, and asserts what only a working call can show: ICE and DTLS
- * connected, audio both ways, video sent, and frames decoded from the phone.
- * The far end's audio is not required to carry sound: a phone on a desk may
- * well be sending silence, and its packets are the proof that it sends.
+ * One page registers and calls `ATHENA_INTEROP_TARGET`, a device that answers
+ * by itself, sending Chromium's fake camera and microphone. It asserts ICE
+ * and DTLS connected, audio packets both ways, video sent, and frames decoded
+ * from the phone. The phone's audio need not carry sound: it may be silent.
  *
- * The node, its engine and the phone belong to the server's run, which sets
- * the environment (see `docs/softphone.md`) and starts a static server of
- * `build/`. This spec only opens the page.
+ * The server's run provides the node, its engine and the phone, sets the
+ * environment (see `docs/softphone.md`) and serves `build/`.
  */
 
 declare global {
@@ -31,7 +27,7 @@ test.skip(!fixture.target, 'ATHENA_INTEROP_TARGET names no phone to call');
 
 test.use({
   ignoreHTTPSErrors: fixture.ignoreTls,
-  // `ignoreHTTPSErrors` is the page's; the WebSocket is the browser's, so it is told as well.
+  // `ignoreHTTPSErrors` covers the page only; the WebSocket needs the browser flag.
   launchOptions: {
     args: [
       '--use-fake-device-for-media-stream',
@@ -84,7 +80,7 @@ test('a browser calls the phone with video, and hangs up', async ({ browser }, i
   expect(stats!.video!.packetsSent, 'sent no video').toBeGreaterThan(0);
   expect(stats!.video!.framesDecoded, `decoded ${stats!.video!.framesDecoded} frames from the phone in ${fixture.mediaSeconds}s`).toBeGreaterThanOrEqual(fixture.minFrames);
   expect(stats!.candidatePair, 'no selected candidate pair').toBeDefined();
-  // Only when the run says where the engine is: then the browser must be sending there, anchored.
+  // Only when the run says where the engine is: the browser must be sending there.
   if (process.env.ATHENA_INTEROP_RTPENGINE_ADVERTISE) {
     expect(stats!.candidatePair!.remote.address, 'not sending to the engine\'s advertised address').toBe(fixture.advertise);
   }

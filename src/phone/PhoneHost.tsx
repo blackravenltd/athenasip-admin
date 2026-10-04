@@ -15,15 +15,12 @@ import { useIncomingNotification, useRinging } from './ringing';
 import { usePhone } from './usePhone';
 
 /**
- * The phone as the shell holds it.
+ * The phone, held by the shell.
  *
- * Mounted the first time someone opens the Phone section and kept until they
- * sign out of the console, so a call is not dropped by looking at another
- * screen. It plays the far end's audio from here, not from the Phone screen,
- * for the same reason, and puts a call indicator in the top bar (`indicator`,
- * a slot the shell owns) so a call is never out of sight.
- *
- * Loaded on demand, because JsSIP is most of the bundle.
+ * Mounted when the Phone section is first opened and kept until sign-out, so
+ * a call survives a change of screen. For the same reason the far end's audio
+ * plays from here, and a call indicator is rendered into `indicator`, a slot
+ * in the top bar.
  */
 export default function PhoneHost({ api, roles, visible, indicator, stack = jssipStack }: {
   api: AdminApi;
@@ -48,7 +45,7 @@ export default function PhoneHost({ api, roles, visible, indicator, stack = jssi
     if (remoteStream) void element.play().catch(() => undefined);
   }, [remoteStream]);
 
-  // The chosen speaker, where the browser lets a page choose; the default otherwise.
+  // Use the chosen speaker where the browser supports `setSinkId`.
   useEffect(() => {
     const element = audio.current as (HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> }) | null;
     if (!element?.setSinkId) return;

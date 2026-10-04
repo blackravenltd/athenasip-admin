@@ -3,13 +3,7 @@ import type { SessionInfo } from '../api/types';
 import { routes } from '../app/routes';
 import { describeWho } from './roles';
 
-/**
- * What a user with no roles sees: a clear statement, not an empty console.
- *
- * A user with no roles is a real state rather than a mistake. It is the
- * default for a new user and the state of one being set up or wound down, so
- * it is said plainly, with who is signed in and what to do about it.
- */
+/** Shown to a user with no roles, which is the default for a new user. */
 export function NoPermissionsScreen({ info }: { info: SessionInfo }) {
   return (
     <section className="panel login-panel">

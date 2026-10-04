@@ -10,7 +10,7 @@ export interface PhoneHandle {
   state: SoftphoneState;
   remoteStream?: MediaStream;
   localStream?: MediaStream;
-  /** The browser's counters, every second while a call is connected. */
+  /** The browser's media counters, updated every second while a call is connected. */
   stats?: MediaStats;
   /** Why the node gave no ICE servers for the last call, when it did not. */
   iceNotice?: string;
@@ -23,12 +23,10 @@ export interface PhoneHandle {
 /**
  * The console's phone: one `Softphone` for as long as the shell holds it.
  *
- * Unlike the harness page's hook it puts nothing on `window` and reads no
- * query string. TURN credentials are minted per request and expire, so the
- * ICE servers are asked for as each call is placed or answered; without the
- * node's answer the call goes ahead with none. `readsConfig` is whether the
- * console user may ask (`/client/config` needs View cluster status): without
- * it nothing is asked, rather than collecting a 403 on every call.
+ * TURN credentials expire, so ICE servers are fetched as each call is placed
+ * or answered; if the node does not answer, the call proceeds with none.
+ * `readsConfig` is whether the user may read `/client/config` (View cluster
+ * status); without it the request is not made.
  */
 export function usePhone(stack: SipStack, api: AdminApi, readsConfig = true): PhoneHandle {
   const phone = useMemo(() => new Softphone(stack), [stack]);

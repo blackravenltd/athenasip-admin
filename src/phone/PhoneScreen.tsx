@@ -11,20 +11,17 @@ import { notificationPermission } from './ringing';
 import { loadSettings, saveSettings, type PhoneSettings } from './settings';
 import type { PhoneHandle } from './usePhone';
 
-/** The WebSocket a node is assumed to serve SIP on when nothing says. */
+/** The fallback SIP WebSocket: this host, port 8088. */
 function guessedSocket(): string {
   return `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.hostname}:8088`;
 }
 
 /**
- * The console's phone.
+ * The phone's screen. The phone registers as a subscriber, separately from
+ * the console user's sign-in. The shell owns the phone itself (`handle`), so
+ * a call carries on while other screens are shown.
  *
- * It signs in to SIP as a subscriber, separately from the console's own
- * sign-in: the user managing the cluster and the phone ringing on the desk are
- * different things. The shell owns the phone, so a call carries on while the
- * console's other screens are used; this screen is only its face.
- *
- * `aside` is where history and the directory go, beside the dialler.
+ * `aside` is rendered beside the dialler: history and the directory.
  */
 export function PhoneScreen({ api, handle, readsConfig = true, settings, onSettings, aside }: {
   api: AdminApi;
@@ -56,7 +53,7 @@ export function PhoneScreen({ api, handle, readsConfig = true, settings, onSetti
   const remoteHasVideo = !!remoteStream?.getVideoTracks?.().length;
   const localHasVideo = !!localStream?.getVideoTracks?.().length;
 
-  // Where to signal, from the node, unless this browser remembers somewhere.
+  // Ask the node for the WebSocket unless one is remembered.
   useEffect(() => {
     if (socket) return;
     if (!readsConfig) {
@@ -73,7 +70,7 @@ export function PhoneScreen({ api, handle, readsConfig = true, settings, onSetti
       setSocketNotice(`Could not ask the node where to connect, so this is a guess: ${errorMessage(cause)}`);
     });
     return () => controller.abort();
-    // Asked once, for a socket nobody has chosen.
+    // Asked once per `api`, not again when `socket` changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [api]);
 
@@ -345,14 +342,14 @@ export function PhoneScreen({ api, handle, readsConfig = true, settings, onSetti
   );
 }
 
-/** One device choice. The first option is the browser's default, which saves nothing. */
+/** One device choice. The first option is the browser's default, stored as no value. */
 function DeviceSelect({ label, devices, value, onChange }: {
   label: string;
   devices: Devices[keyof Devices];
   value?: string;
   onChange: (deviceId: string | undefined) => void;
 }) {
-  // A remembered device that is not plugged in now reads as the default, and is kept for when it is.
+  // A remembered device that is absent shows as the default, and stays remembered.
   const present = devices.some((device) => device.deviceId === value);
   return (
     <label className="field">
@@ -367,7 +364,7 @@ function DeviceSelect({ label, devices, value, onChange }: {
   );
 }
 
-/** The settings as they stand, and a setter that remembers them. */
+/** The phone's settings, and a setter that also stores them. */
 export function useRememberedSettings(): [PhoneSettings, (settings: PhoneSettings) => void] {
   const [settings, setSettings] = useState<PhoneSettings>(() => loadSettings());
   const update = (next: PhoneSettings) => {

@@ -55,7 +55,7 @@ const CONFIG: ClientConfig = {
   ice_servers: [{ urls: 'stun:10.35.1.20:3478' }],
 };
 
-/** A node that answers what View cluster status may ask, with an empty history and nobody registered. */
+/** A node that answers what View cluster status may read, with no call history and nobody registered. */
 function node(): AdminApi & { asked: string[] } {
   const asked: string[] = [];
   return {
@@ -88,7 +88,7 @@ async function registered(sip = stack(), api: AdminApi = node(), roles: readonly
 beforeEach(() => { window.localStorage.clear(); });
 afterEach(() => { document.body.innerHTML = ''; vi.unstubAllGlobals(); });
 
-/** A browser with two microphones and a camera, which names them once the microphone is allowed. */
+/** A browser with two microphones and a camera, labelled only once the microphone is allowed. */
 function withDevices() {
   let allowed = false;
   const devices = [

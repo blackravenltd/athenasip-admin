@@ -1,13 +1,9 @@
 /**
- * What the phone remembers between visits: everything but the password.
+ * What the phone remembers between visits: the SIP URI, the WebSocket and the
+ * devices, none of which is a secret. The password is never stored.
  *
- * Principle 5, as Tom amended it on 2026-10-03: the SIP URI, the WebSocket
- * and the devices are not secrets, and typing them after every reload is what
- * made the softphone painful to use. The password is never written here.
- *
- * Browser storage can be missing, full or refused (a private window, a
- * preview, a policy), so every read and write is allowed to fail and the
- * phone works the same without it, from blank fields.
+ * Browser storage can be missing, full or refused, so every read and write
+ * may fail, and the phone then starts from blank fields.
  */
 export interface PhoneSettings {
   socket?: string;
@@ -48,7 +44,7 @@ export function saveSettings(settings: PhoneSettings, storage: Pick<Storage, 'se
   try {
     storage?.setItem(KEY, JSON.stringify(kept));
   } catch {
-    // Remembering is a convenience; the phone works without it.
+    // The phone works without stored settings.
   }
 }
 

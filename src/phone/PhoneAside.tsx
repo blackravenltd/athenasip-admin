@@ -7,7 +7,7 @@ import { useRefreshableAsync } from '../hooks/useRefreshableAsync';
 import type { CallState } from '../softphone/Softphone';
 import { callTimer, userOf } from './dial';
 
-/** `user@host` of a SIP URI, lower case, without scheme, port or parameters: what two spellings of one address share. */
+/** `user@host` of a SIP URI, lower case, without scheme, port or parameters, for comparing addresses. */
 export function addressOf(uri: string | null | undefined): string | undefined {
   const match = /^(?:sips?:)?([^@;>?]+)@([^:;>?]+)/i.exec(uri ?? '');
   return match ? `${match[1]}@${match[2]}`.toLowerCase() : undefined;
@@ -16,14 +16,14 @@ export function addressOf(uri: string | null | undefined): string | undefined {
 export interface HistoryEntry {
   id: string;
   direction: 'outgoing' | 'incoming';
-  /** The other party's URI as the record named it. */
+  /** The other party's URI, as the record gives it. */
   other: string;
   endedAt?: number;
   answered: boolean;
   duration: number;
 }
 
-/** The node's records that involve this line, as this line saw them. */
+/** The node's call records that involve this line, from this line's point of view. */
 export function historyFor(records: readonly CallRecord[], ownUri: string): HistoryEntry[] {
   const own = addressOf(ownUri);
   if (!own) return [];
@@ -42,7 +42,7 @@ export function historyFor(records: readonly CallRecord[], ownUri: string): Hist
   });
 }
 
-/** When, for a person: minutes and hours ago today, the date before that. */
+/** A relative time: minutes or hours ago for today, the date before that. */
 export function when(at: number | undefined, now = Date.now()): string {
   if (at === undefined || Number.isNaN(at)) return '';
   const minutes = Math.round((now - at) / 60_000);
@@ -53,9 +53,9 @@ export function when(at: number | undefined, now = Date.now()): string {
 }
 
 /**
- * Beside the dialler: this line's recent calls, from the node's call records,
- * and the realm's subscribers to call. Each is read with the console user's
- * own roles, not the line's, and says so where those roles do not reach.
+ * Beside the dialler: this line's recent calls and the realm's subscribers.
+ * Each is read with the console user's roles, not the line's, and says so
+ * where those roles do not allow it.
  */
 export function PhoneAside({ api, roles, ownUri, call, onDial }: {
   api: AdminApi;
@@ -87,7 +87,7 @@ export function PhoneAside({ api, roles, ownUri, call, onDial }: {
       .sort((a, b) => userOf(a.uri).localeCompare(userOf(b.uri), undefined, { numeric: true }));
   }, [api, realm, own, readsSubscribers, readsStatus]);
 
-  // The node writes a record as a call ends; read again once it has had a moment to.
+  // The node writes a record as a call ends, so re-read shortly after.
   const refreshRecords = records.refresh;
   const refreshDirectory = directory.refresh;
   useEffect(() => {

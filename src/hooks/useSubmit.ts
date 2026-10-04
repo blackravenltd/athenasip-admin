@@ -4,7 +4,7 @@ import { errorMessage, isAbort } from '../api/errors';
 export interface SubmitState {
   busy: boolean;
   error?: string;
-  /** What was thrown, for a form that shows some failures beside a field rather than below the form. */
+  /** What was thrown, for a form that shows some failures beside a field. */
   failure?: unknown;
   clearError: () => void;
   /** Resolves to true when the call succeeded, so the caller can close a dialogue. */
@@ -12,12 +12,9 @@ export interface SubmitState {
 }
 
 /**
- * One write, with the busy flag and the error capture every dialogue needs.
- *
- * Every mutation in this client goes through here so that none of them can
- * forget the parts that must not vary: the controls disable while it is in
- * flight, a failure is caught and shown rather than thrown at the console, and
- * the busy flag is cleared on both paths.
+ * Runs one write with a busy flag and error capture. Every mutation goes
+ * through here: `busy` is set while it is in flight, a failure is caught into
+ * `error`, and an abort is ignored.
  */
 export function useSubmit(): SubmitState {
   const [busy, setBusy] = useState(false);

@@ -50,8 +50,8 @@ describe('HttpAdminApi', () => {
   });
 
   it('addresses a subscriber by realm and user, each one path segment', async () => {
-    // The document says a user with an @ or a / in it is one segment, and a
-    // realm with a slash must not reach another route.
+    // Per the OpenAPI document a user with an @ or a / in it is one segment,
+    // and a realm with a slash must not reach another route.
     const fetch = respond(null, { status: 204 });
     await new HttpAdminApi({ fetch }).deleteSubscriber('a/../b', 'x@y');
     expect(fetch).toHaveBeenCalledWith('/api/v1/realms/a%2F..%2Fb/subscribers/x%40y', expect.objectContaining({ method: 'DELETE' }));
@@ -95,8 +95,7 @@ describe('HttpAdminApi', () => {
   });
 
   it('answers a degraded node with its health rather than failing', async () => {
-    // A 503 from health is the node saying its datastore is gone, which is
-    // exactly what the overview has to show.
+    // A 503 from health is the node saying its datastore is gone, which the overview shows.
     const body = { status: 'degraded', node: 'n', version: '0.7.0', datastore: 'redis 0.0.1' };
     const fetch = respond(JSON.stringify(body), { status: 503 });
     await expect(new HttpAdminApi({ fetch }).health()).resolves.toEqual(body);

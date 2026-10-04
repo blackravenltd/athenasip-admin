@@ -1,91 +1,75 @@
 # AthenaSIP Admin - Architecture
 
-## Shape
+## Layout
 
 ```
 src/
-  main.tsx          Mounts the app and chooses which AdminApi it talks to.
-  App.tsx           The shell: topbar, section bar, routes.
-  app/              routes.ts (every path, named once) and navigation.ts.
-  api/              The seam. AdminApi, an HTTP implementation, an in-memory fake.
-  auth/             The session, roles in words, the sign-in and No permissions screens.
-  realms/           A realm's registration and media policy, as a form and as words.
-  components/       Shared UI: SectionNav, Modal, Status, VolumeMeter.
-  hooks/            useRefreshableAsync, useSubmit, usePagination.
-  screens/          One file per screen, each taking its AdminApi as a prop.
-  softphone/        The WebRTC endpoint: a controller with no React in it, the JsSIP seam,
-                    the page contract, and the entry for softphone.html.
-  styles/           tokens.css (the palette), base.css (shell), admin.css (surfaces).
+  main.tsx      Mounts the app and chooses the AdminApi: HTTP, or the in-memory fake.
+  App.tsx       The shell: top bar, section bar, routes, and the phone it holds.
+  app/          routes.ts (every path, named once) and navigation.ts.
+  api/          AdminApi, its HTTP implementation, the fake, types and errors.
+  auth/         The session, roles, and the sign-in screens.
+  screens/      One file per screen. Each takes its AdminApi as a prop.
+  realms/       A realm's behaviour settings, as form fields and as words.
+  phone/        The Phone section: host, screen, dial pad, ringing, devices, settings.
+  softphone/    The JsSIP controller, the harness page and its contract.
+  components/   SectionNav, Modal, Status, VolumeMeter.
+  hooks/        useRefreshableAsync, useSubmit, usePagination.
+  styles/       tokens.css (palette), base.css (shell), admin.css (surfaces).
+e2e/            Playwright specs, run against a real node.
 ```
 
-## The API seam
+## The API
 
-`src/api/AdminApi.ts` is an interface describing everything this client can ask a node to do.
-Its contract is the server's `docs/api/openapi.yaml`, version 1: health, the node list, realms,
-subscribers, registrations, live calls and the media engine under `/api/v1`. There are two implementations:
+`AdminApi` (`src/api/AdminApi.ts`) is everything the console can ask of a node. Its contract
+is the server's `docs/api/openapi.yaml`.
 
-- `HttpAdminApi` speaks to a real node. It is the only file in the repository that knows a
-  URL, a verb or a status code exists. `src/api/contract.test.ts` checks every request it
-  makes against the OpenAPI document in the sibling checkout, and skips when that checkout is
-  not there.
-- `FakeAdminApi` holds the same records in memory and enforces the same rules, read from the
-  server's handlers: a duplicate is a `conflict`, an unknown realm `not_found`, a missing
-  field `invalid_request`, a user without the route's role `forbidden`, and deleting a
-  realm deletes its subscribers and their registrations because the server's does. It is what development runs
-  against without a node, and what every screen test runs against.
+- `HttpAdminApi` is the only code that knows a URL, a verb or a status code.
+  `contract.test.ts` checks every request it makes against the OpenAPI document in a sibling
+  `../athenasip` checkout, and skips when there is none.
+- `FakeAdminApi` holds the same records in memory and enforces the node's rules. Development
+  and every screen test run against it, so a test never passes against a fixture the app
+  does not use.
 
-A realm is addressed by its name and a subscriber by its user, never by id: the server's ids
-are 64-bit and arrive in JavaScript rounded.
+Components never call `fetch`. A realm is addressed by name and a subscriber by user, never
+by id: the server's ids are 64-bit and would arrive rounded.
 
-## Authentication and roles
+## Authentication
 
-The console is a client of the admin API exactly as curl is. It signs in with `POST
-/auth/login`, learns who it is and what it may do from `GET /session`, and presents the token as
-a bearer on every request. `Session` (`src/auth/Session.ts`) holds it in memory only, and ends
-itself at the node's expiry.
+The console is a client of the API as curl is. `POST /auth/login` returns a bearer token,
+which `Session` (`src/auth/Session.ts`) holds in memory and drops at the node's expiry.
 
-Roles are the server's five (`src/api/types.ts`, described for people in `src/auth/roles.ts`),
-and nothing implies anything else. Navigation items and routes name the roles any of which
-admits them; what a login cannot use is hidden, a screen reached directly says which role it
-needs, and a login with no roles sees a No permissions page. The node's 403 is the rule and the
-hiding a courtesy.
+- A 401 on any request ends the session.
+- A 403 re-reads `GET /session`, so a role removed mid-session leaves the navigation at once.
+- A 429 or 503 never signs anyone out.
 
-A 401 from any request ends the session wherever it happened, and the sign-in screen says why.
-A 403 re-reads `/session`, because the node re-checks roles on every request and a role taken
-away mid-session should leave the navigation at once. Every bearer is a session from a user's
-login; the node has no configured tokens, and the console offers no other way in.
+Navigation items and routes name the roles that admit them (`src/app/navigation.ts`,
+`App.tsx`). A user with no roles sees a No permissions page, and can still use the phone.
 
-## Records and dialogues
+## Screens
 
-A list shows records compactly and read-only. Nothing in a row is an input, so a list never
-holds half-saved state. Every mutation opens a `FormModal` or a `ConfirmModal`, which own the
-parts that must not vary between screens: focus management, Escape to cancel, Cancel before
-the commit, and one busy flag disabling both.
+A list is read-only: nothing in a row is an input. Every change opens a `FormModal` or
+`ConfirmModal` (`src/components/Modal.tsx`), which own focus, Escape and the busy state, and
+runs through `useSubmit`.
 
-## Loading
+`useRefreshableAsync` keeps the last value on screen during a refresh and shows a spinner
+only on first load. Every request is aborted on unmount, and an abort is never an error.
 
-`useRefreshableAsync` distinguishes a first load, which has nothing to show and shows a
-spinner, from a refresh, which already has a list on screen and keeps it. Replacing a working
-list with a spinner to fetch the same list back is how a page that is working looks broken.
+## The phone and the softphone
 
-Aborts are not failures. Every request is cancelled on unmount and superseded on refresh.
+`Softphone` (`src/softphone/Softphone.ts`) wraps JsSIP with no React in it and publishes a
+snapshot after every change. It has two faces:
 
-## The softphone
+- **The Phone section** (`src/phone/`). `PhoneHost` is loaded on first use and stays mounted
+  until sign-out, so a call outlives a change of screen.
+- **The harness** (`SoftphoneScreen`), in the console under Diagnostics and alone on
+  `softphone.html`, which the end-to-end runs drive.
 
-`src/softphone/Softphone.ts` owns the JsSIP user agent and session and publishes an immutable
-snapshot after every change. `SoftphoneScreen` renders it in the console and on
-`softphone.html`, the page the end-to-end run opens; `src/softphone/page.ts` is the contract
-that run drives it through. [softphone.md](softphone.md) has the whole of it.
+JsSIP is injected through `SipStack`, so tests use a user agent that opens no socket. See
+[softphone.md](softphone.md).
 
 ## Styling
 
-Hand-written CSS, no framework. The palette is in `src/styles/tokens.css` and follows
-macha-client's structure — near-black ground, three layered surfaces, a three-step text ramp,
-an accent ramp that lives at the bottom of its hue — with a blue-steel accent instead of
-macha's crimson.
-
-The accent marks *where you are*: the active nav item, the focused control, the primary
-action. It never means "good". Green, amber and red are reserved for state a reader must not
-have to interpret, and nothing else may use them.
-
-Dark only. `color-scheme: dark` is set, so form controls and scrollbars follow.
+Hand-written CSS, dark only. The accent colour marks position: the active item, the focused
+control, the primary action. Green, amber and red are reserved for state, and nothing else
+may use them.

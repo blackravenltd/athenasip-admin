@@ -1,13 +1,7 @@
 import { useEffect, useState } from 'react';
 import { errorMessage } from '../api/errors';
 
-/**
- * A spinner, but only once waiting is worth mentioning.
- *
- * Against a local server most requests finish inside 50ms, and a spinner shown
- * for 50ms is a flash rather than information. The delay means a fast page
- * never flickers and a slow one still explains itself.
- */
+/** A spinner that appears only after `delayMs`, so a fast request never flashes one. */
 export function Loading({ delayMs = 180 }: { delayMs?: number } = {}) {
   const [visible, setVisible] = useState(false);
 
@@ -24,12 +18,12 @@ export function Loading({ delayMs = 180 }: { delayMs?: number } = {}) {
   );
 }
 
-/** A failure, said in one line, addressed to somebody trying to fix it. */
+/** A failure, in one line. */
 export function ErrorMessage({ error }: { error: unknown }) {
   return <p className="error-message" role="alert">{errorMessage(error)}</p>;
 }
 
-/** Nothing here yet, said as a state rather than as an empty page. */
+/** The message for a list or panel with nothing in it. */
 export function Empty({ children }: { children: React.ReactNode }) {
   return <p className="empty-message">{children}</p>;
 }

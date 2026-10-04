@@ -1,10 +1,7 @@
 import type { ClientConfig } from '../api/types';
 import type { CallState, RegistrationState, VideoLine } from './Softphone';
 
-/**
- * The softphone's states and negotiation in words, shared by the harness
- * view and the Phone section so the two never describe one thing two ways.
- */
+/** The softphone's states and negotiation in words, shared by the harness view and the Phone section. */
 
 const CALL_LABELS: Record<CallState, string> = {
   idle: 'Idle',
@@ -31,20 +28,17 @@ export function describeRegistration(state: RegistrationState): string {
   return REGISTRATION_LABELS[state];
 }
 
-/** Whether a call is in progress, in the sense of "there is something to hang up". */
+/** Whether there is a call to hang up. */
 export function callInProgress(state: CallState): boolean {
   return state === 'calling' || state === 'ringing' || state === 'incoming' || state === 'connected';
 }
 
 /**
- * Where to signal, from what the node advertises, for a page served over
- * https or not.
+ * The signalling WebSocket to use, from what the node advertises.
  *
- * An https page must use the secure WebSocket: a browser blocks `ws://` from
- * it as mixed content. A plain http page uses the plain one, because the
- * secure one works only once the browser trusts the node's certificate, and
- * a page reached over http is usually one that has not been asked to. Nothing
- * when the node offers nothing fit, so the caller keeps its guess.
+ * An https page must use `wss:`, since browsers block `ws:` as mixed content.
+ * An http page uses `ws:`, since `wss:` works only once the browser trusts the
+ * node's certificate. Undefined when the node offers nothing suitable.
  */
 export function signallingUri(config: ClientConfig, https: boolean): string | undefined {
   if (https) return config.websocket_uri;
@@ -53,9 +47,8 @@ export function signallingUri(config: ClientConfig, https: boolean): string | un
 }
 
 /**
- * One end's video m-line, in words. Port 9, the discard port, is what a
- * bundled section carries when its address comes from ICE and the bundle's
- * transport, so it is named as bundled rather than shown as a port.
+ * One end's video m-line in words. A bundled section at port 9, the discard
+ * port, takes its address from the bundle's transport, so no port is shown.
  */
 export function describeVideoLine(line: VideoLine | undefined): string {
   if (!line) return 'none';

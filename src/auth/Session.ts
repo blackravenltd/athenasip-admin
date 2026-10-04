@@ -4,25 +4,19 @@ export interface SessionState {
   token?: string;
   /** Who the token is and what it may do, as `GET /session` last said. */
   info?: SessionInfo;
-  /** Unix seconds, when the node said. */
+  /** Unix seconds. */
   expiresAt?: number;
   /** Why the last session ended, when it did not end by the person logging out. */
   ended?: string;
 }
 
 /**
- * Who this console is acting as: a bearer token, and who the node says that
- * token is.
+ * The signed-in user: a bearer token, and who the node says that token is.
  *
- * Held in memory and nowhere else. A token in `localStorage` is a token in
- * every future session of that browser, readable by anything that runs on the
- * origin, so a reload means signing in again. That is the price, and it is
- * the right one for a console that can delete a realm.
- *
- * It lives outside React so that the API can read the token per request, end
- * the session on a 401 and refresh its roles on a 403, without a component in
- * between. It ends itself at the expiry the node gave, rather than waiting for
- * the next request to be refused.
+ * Held in memory only, never in browser storage, so a reload means signing in
+ * again. It lives outside React so the API layer can read the token per
+ * request, end the session on a 401 and refresh its roles on a 403. It signs
+ * itself out at the expiry the node gave.
  */
 export class Session {
   private current: SessionState = {};
@@ -61,13 +55,13 @@ export class Session {
     this.set({ token, info, expiresAt });
   }
 
-  /** What the node now says this session may do. A role taken away mid-session arrives here. */
+  /** Replaces who the node says this session is, so a role change mid-session takes effect. */
   update(info: SessionInfo): void {
     if (!this.current.token) return;
     this.set({ ...this.current, info });
   }
 
-  /** `reason` is shown on the sign-in screen, so a session that ended on its own says why. */
+  /** `reason` is shown on the sign-in screen. */
   signOut(reason?: string): void {
     if (!this.current.token) return;
     this.clearExpiry();

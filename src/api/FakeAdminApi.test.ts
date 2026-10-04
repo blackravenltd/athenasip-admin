@@ -203,7 +203,7 @@ describe('FakeAdminApi', () => {
       await expect(api.changePassword('ops', { password: 'new', old_password: 'wrong' })).rejects.toMatchObject({ status: 403, code: 'wrong_password' });
       await expect(api.changePassword('helpdesk', { password: 'x' })).rejects.toMatchObject({ status: 403 });
       await expect(api.changePassword('ops', { password: 'new', old_password: 'ops' })).resolves.toBeUndefined();
-      // The change ends every session the user held, the one that asked included.
+      // The change ends every session the user holds, the one that asked included.
       await expect(api.session()).rejects.toMatchObject({ status: 401 });
       await expect(securedNode().api.login('ops', 'new')).rejects.toMatchObject({ status: 401 });
     });

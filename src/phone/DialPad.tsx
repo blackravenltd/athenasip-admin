@@ -5,7 +5,7 @@ const KEYS: ReadonlyArray<{ key: string; letters: string }> = [
   { key: '*', letters: '' }, { key: '0', letters: '+' }, { key: '#', letters: '' },
 ];
 
-/** The twelve keys of a phone. What a key does (dial or send a tone) is the caller's. */
+/** The twelve keys of a phone. The caller decides what a key does: dial or send a tone. */
 export function DialPad({ onKey, label }: { onKey: (key: string) => void; label: string }) {
   return (
     <div className="dial-pad" role="group" aria-label={label}>

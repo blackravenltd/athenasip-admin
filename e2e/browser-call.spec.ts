@@ -6,18 +6,12 @@ import type { MediaStats, SoftphoneState, Transition } from '../src/softphone/So
 import type { SoftphoneReadout } from '../src/softphone/page';
 
 /**
- * A browser calls a browser through AthenaSIP and rtpengine.
+ * A browser calls a browser through AthenaSIP and rtpengine, with no phone.
+ * The server's harness asserts on rtpengine's counters; this asserts on the
+ * browsers' own.
  *
- * This is the first "To the first call" item in the server's Milestone 3:
- * two browsers through rtpengine exercise everything on the node's side of a
- * browser calling an AthenaPhone, and run with no device and no phone at all.
- * The node's harness asserts on rtpengine's counters afterwards; this asserts
- * on the browsers' own, so the engine and the endpoints are two witnesses to
- * the same media.
- *
- * Nothing here sleeps for a state. Every wait is a predicate over the page's
- * readout, and the only fixed pause is the two seconds media is given to flow
- * before its counters are read.
+ * Every wait is a predicate over the page's readout, except the fixed pause
+ * that lets media flow before its counters are read.
  */
 
 declare global {
@@ -43,7 +37,7 @@ const fixture = fixtureFromEnvironment();
 // A phone target selects the phone run instead (`phone-call.spec.ts`).
 test.skip(!!fixture.target, 'ATHENA_INTEROP_TARGET is set, so this is the phone run');
 
-/** In the relay phase, what `/client/config` says, fetched here so the page never holds a session. */
+/** In the relay phase, the `ice_servers` from `/client/config`, fetched here so the page holds no session. */
 let iceServers: unknown[] | undefined;
 
 test.beforeAll(async () => {
@@ -77,7 +71,7 @@ test.beforeAll(async () => {
     const response = await fetch(`${fixture.apiUrl}/client/config`, { headers: authorization });
     expect(response.ok, `GET /client/config answered ${response.status}`).toBe(true);
     const config = await response.json() as { ice_servers?: Array<{ urls: string; credential?: string }> };
-    // The session was only for this; leaving it open would outlive the run on the node.
+    // Log out, so the session does not outlive the run.
     await fetch(`${fixture.apiUrl}/auth/logout`, { method: 'POST', headers: authorization }).catch(() => undefined);
     iceServers = config.ice_servers ?? [];
     expect(iceServers.some((server) => /^turns?:/.test((server as { urls: string }).urls) && (server as { credential?: string }).credential), 'the node offers no TURN server with a credential').toBe(true);
@@ -125,7 +119,7 @@ interface End {
   page: Page;
 }
 
-/** A registered softphone in a context of its own, so the two share no socket and no media stream. */
+/** A registered softphone in its own context, so the two share no socket or media stream. */
 async function open(browser: Parameters<Parameters<typeof test>[2]>[0]['browser'], user: string, options: { target?: string; answer?: boolean }): Promise<End> {
   const context = await browser.newContext();
   const page = await context.newPage();
@@ -158,14 +152,11 @@ async function ended(page: Page): Promise<void> {
 }
 
 /**
- * The media assertion. Packets went out of each browser and came into the
- * other, what came in carried sound rather than silence, DTLS completed, and
- * where the engine advertises an address other than loopback, that address
- * is where each browser was sending: the engine anchored the call, rather
- * than declining it and letting the two ends reach each other directly. In
- * the relay phase the local end of the pair is a port in the TURN server's
- * relay range, which is how a relayed pair is known: the browser's own label
- * for it is not trusted, since Chrome reports it `prflx` once checks run.
+ * Asserts media: packets both ways, sound rather than silence, DTLS complete.
+ * When the engine advertises a non-loopback address, each browser must be
+ * sending there, which shows the engine anchored the call. In the relay phase
+ * the pair's local port must be in the TURN relay range; the candidate type
+ * is not used, since Chrome reports a relayed pair as `prflx` once checks run.
  */
 async function mediaFlowed(caller: Page, callee: Page): Promise<void> {
   await caller.waitForTimeout(2000);
@@ -176,7 +167,7 @@ async function mediaFlowed(caller: Page, callee: Page): Promise<void> {
     expect(stats!.packetsSent, `${name} sent nothing`).toBeGreaterThan(0);
     expect(stats!.packetsReceived, `${name} received nothing`).toBeGreaterThan(0);
     // Energy, not the instantaneous level: the fake device beeps, and an
-    // instant can land in the gap between beeps.
+    // instant can land between beeps.
     expect(stats!.totalAudioEnergy ?? 0, `${name} received only silence`).toBeGreaterThan(0);
     expect(stats!.candidatePair, `${name} has no selected candidate pair`).toBeDefined();
     if (!fixture.advertise.startsWith('127.')) {
@@ -197,7 +188,7 @@ function readStats(page: Page): Promise<MediaStats | undefined> {
   return page.evaluate(() => window.__athenaSoftphone!.stats());
 }
 
-/** What happened, written down: both descriptions, the state history and the counters from each end. */
+/** Writes both descriptions, the state history and each end's counters to the results directory. */
 async function writeRecord(title: string, caller: End, callee: End): Promise<void> {
   const end = async (side: End): Promise<EndRecord> => ({
     user: side.user,

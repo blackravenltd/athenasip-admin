@@ -19,20 +19,13 @@ interface Connection {
   target: string;
 }
 
-/**
- * The WebSocket port a node is assumed to serve SIP on, when nothing says.
- * 8088 is what the deployed node and the interop fixture use, and what most
- * SIP servers serve WebSocket on.
- */
+/** The WebSocket port a node is assumed to serve SIP on, when nothing says. */
 const DEFAULT_WS_PORT = 8088;
 
 /**
- * Where the defaults come from.
- *
- * The page's own query string first, because that is how a harness opens it;
- * then the environment, if it says anything; then the page's own host. What
- * is typed here stays in this component. Nothing is persisted: a credential
- * in `localStorage` is a credential in every future session of this browser.
+ * Connection defaults: the query string first, which is how a harness opens
+ * the page, then the environment, then the page's host. Nothing is persisted,
+ * so no credential is left in the browser.
  */
 export function defaultConnection(options: PageOptions): Connection {
   const socket = options.socket
@@ -51,26 +44,17 @@ export function defaultConnection(options: PageOptions): Connection {
 const NO_OPTIONS: PageOptions = { register: false, answer: false };
 
 /**
- * A WebRTC endpoint, for proving the server carries a call.
+ * A diagnostic WebRTC endpoint. It registers over WebSocket, places or
+ * answers one call, and shows what was negotiated and whether media moved, so
+ * a connected but silent call is visible.
  *
- * This is a diagnostic, not a product: it registers against this AthenaSIP
- * node over the WebSocket transport, places or answers one call, and shows
- * what was negotiated and whether anything moved, so that "connected but
- * silent" is distinguishable from "connected". Silence is the failure mode a
- * relay misconfiguration actually produces, and a status line saying
- * "Connected" does not catch it.
- *
- * It is also the browser end of AthenaSIP's end-to-end run. The same
- * component is served on its own page for that, opened with a query string
- * and read through the window-level readout; see `docs/softphone.md`.
+ * It is also served on its own page as the browser end of AthenaSIP's
+ * end-to-end run; see `docs/softphone.md`.
  */
 export function SoftphoneScreen({ options = NO_OPTIONS, stack = jssipStack, api }: {
   options?: PageOptions;
   stack?: SipStack;
-  /**
-   * The console's node, which says where to signal and what to use for ICE.
-   * The harness page has none, and keeps its query string and no ICE servers.
-   */
+  /** The console's node, which says where to signal and what to use for ICE. Absent on the harness page. */
   api?: AdminApi;
 }) {
   const [connection, setConnection] = useState<Connection>(() => defaultConnection(options));
@@ -111,8 +95,8 @@ export function SoftphoneScreen({ options = NO_OPTIONS, stack = jssipStack, api 
 
   /**
    * TURN credentials are minted per request and expire, so they are fetched as
-   * the call is placed or answered, never held from earlier. Without the node's
-   * answer the call still goes ahead with none, as the harness page's does.
+   * the call is placed or answered. If the node does not answer, the call goes
+   * ahead without them.
    */
   const withIceServers = (place: (ice?: IceOptions) => void) => {
     if (!api) {

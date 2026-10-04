@@ -4,18 +4,18 @@ import type { SessionInfo } from '../api/types';
 import { useSubmit } from '../hooks/useSubmit';
 import { ROLE_TEXT, describeWho } from '../auth/roles';
 
-/** When a session ends, in the reader's own clock. */
+/** When a session ends, in the browser's local time. */
 export function describeSessionEnd(expiresAt: number | undefined): string {
   if (expiresAt === undefined) return 'When you log out.';
   return new Date(expiresAt * 1000).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 }
 
-/** Who you are signed in as, what you may do, when the session ends, and your own password. */
+/** The signed-in user: roles, session expiry and password change. */
 export function MeScreen({ api, info, expiresAt, onPasswordChanged }: {
   api: AdminApi;
   info: SessionInfo;
   expiresAt?: number;
-  /** The node ends every session a user holds when their password changes, this one included. */
+  /** A password change ends every session the user holds, this one included. */
   onPasswordChanged: () => void;
 }) {
   const [oldPassword, setOldPassword] = useState('');

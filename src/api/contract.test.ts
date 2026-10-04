@@ -4,11 +4,8 @@ import { HttpAdminApi } from './HttpAdminApi';
 
 /**
  * Every request `HttpAdminApi` makes is one the server's OpenAPI document
- * describes.
- *
- * The document lives in the server's checkout, beside this one. When it is
- * not there, as in a clone of this repository alone, the test says so and
- * skips rather than failing for a reason that has nothing to do with the code.
+ * describes. The document lives in the server's checkout, beside this one;
+ * without that checkout the suite skips.
  */
 const DOCUMENT = new URL('../../../athenasip/docs/api/openapi.yaml', import.meta.url);
 const present = existsSync(DOCUMENT);
@@ -32,9 +29,8 @@ function operations(yaml: string): Map<string, Set<string>> {
 }
 
 /**
- * Requests this client makes that were proposed to the server and are not in
- * its document yet. Each one is a promise to take it out of here the day the
- * document has it, which the last test checks.
+ * Requests this client makes that the server's document does not describe
+ * yet, as `METHOD /path`. The last test fails once the document has one.
  */
 const PENDING = new Set<string>([]);
 

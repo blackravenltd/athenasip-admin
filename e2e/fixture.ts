@@ -1,31 +1,27 @@
 /**
- * Where the fixture is and who is provisioned on it.
- *
- * The names are the ones `test/interop/up.sh` in the server's checkout
- * already exports, so a wrapper there passes its own environment through and
- * sets nothing new. Every default is the fixture's own default.
+ * Where the fixture is and who is provisioned on it, from the environment
+ * `test/interop/up.sh` in the server's checkout exports. Defaults are the
+ * fixture's own.
  */
 export interface Fixture {
   /** Where the softphone page is opened from. Loopback, so the origin is a secure context. */
   pageUrl: string;
-  /** The API at the same listener, used only to check the node is serving. */
+  /** The node's API, on loopback. */
   apiUrl: string;
   socket: string;
   /** The address the node advertises. */
   publicAddress: string;
-  /** Where rtpengine says its media is: the public address, unless the fixture moved it. */
+  /** The address rtpengine advertises for media: the public address unless overridden. */
   advertise: string;
   /**
-   * Present when the engine advertises an address other than the node's, which
-   * only the TURN server can reach: the relay phase. Its range is what a relayed
-   * pair's local port falls inside, a fact about the fixture rather than the
-   * browser's label for the candidate.
+   * Set when the engine advertises an address other than the node's, which
+   * only the TURN server can reach: the relay phase. A relayed pair's local
+   * port falls inside this range.
    */
   relay?: { min: number; max: number };
   /**
-   * A user of the node, for signing in to read `GET /client/config` from the
-   * Node side; the page never holds the session. The password is generated per
-   * run by `up.sh`, so there is no default, and only the relay phase needs it.
+   * A console user, for reading `GET /client/config`; only the relay phase
+   * needs it. `up.sh` generates the password per run, so there is no default.
    */
   apiUser?: { username: string; password: string };
   realm: string;
@@ -34,9 +30,8 @@ export interface Fixture {
   password: string;
   resultsDir: string;
   /**
-   * A phone to call, not another page: `ATHENA_INTEROP_TARGET`, a SIP URI. Set,
-   * it selects the phone run (`phone-call.spec.ts`) and the browser-to-browser
-   * run stands aside.
+   * A phone to call, as a SIP URI: `ATHENA_INTEROP_TARGET`. When set,
+   * `phone-call.spec.ts` runs and the browser-to-browser spec is skipped.
    */
   target?: string;
   /** Accept the node's certificate unverified, for a snakeoil CA: `ATHENA_INTEROP_IGNORE_TLS=1`. */
@@ -45,7 +40,7 @@ export interface Fixture {
   answerSeconds: number;
   /** How long media runs before its counters are read, `ATHENA_INTEROP_MEDIA_SECONDS`, 5 by default. */
   mediaSeconds: number;
-  /** Video frames the browser must have decoded from the phone by then, `ATHENA_INTEROP_MIN_FRAMES`, 30 by default. */
+  /** Video frames the browser must decode from the phone in that time, `ATHENA_INTEROP_MIN_FRAMES`, 30 by default. */
   minFrames: number;
 }
 
@@ -98,7 +93,7 @@ export function sipUri(fixture: Fixture, user: string): string {
   return `sip:${user}@${fixture.realm}`;
 }
 
-/** The softphone page, opened already knowing what to do. */
+/** The softphone page's URL, with the query string `pageOptions` reads. */
 export function softphoneUrl(fixture: Fixture, user: string, options: { target?: string; answer?: boolean; ice?: unknown[]; video?: boolean }): string {
   const url = new URL('/softphone.html', `${fixture.pageUrl}/`);
   url.searchParams.set('ws', fixture.socket);

@@ -1,15 +1,10 @@
 /**
- * What a failed admin API call looks like to a screen.
+ * A failed admin API call. The server answers every failure with
+ * `{"error": {"code": "...", "message": "..."}}`: a stable code to branch on
+ * and a message for a person. Only `HttpAdminApi` builds one from a response.
  *
- * The server answers every failure with one envelope,
- * `{"error": {"code": "...", "message": "..."}}`: a code a client branches on,
- * which does not change wording between releases, and a message for a person.
- * There is exactly one place that turns a response into this, and it is
- * `HttpAdminApi`.
- *
- * `status` is kept because the caller sometimes needs to distinguish: a 401 is
- * the session's problem and belongs to the shell, a `conflict` on a create is
- * this form's problem and belongs beside the field that caused it.
+ * `status` tells a 401, which is the session's problem and the shell's to
+ * handle, from a failure that belongs to the screen, such as a `conflict`.
  */
 export class ApiError extends Error {
   readonly status: number;
@@ -25,26 +20,26 @@ export class ApiError extends Error {
     this.retryAfter = retryAfter;
   }
 
-  /** The token is missing or unknown: the session has ended, whatever the screen was doing. */
+  /** The token is missing or unknown: the session has ended. */
   get isUnauthorized(): boolean {
     return this.status === 401;
   }
 
-  /** A known token without the role this needs. The session is fine; this screen is not for it. */
+  /** A known token without the role the route needs. The session stands. */
   get isForbidden(): boolean {
     return this.status === 403;
   }
 
-  /** The node is rate limiting. Never a sign-out: the session is fine, it is asking too often. */
+  /** The node is rate limiting. Never a sign-out: the session stands. */
   get isRateLimited(): boolean {
     return this.status === 429 || this.code === 'rate_limited';
   }
 }
 
-/** How long to hold off after a 429 that named no Retry-After. */
+/** Seconds to hold off after a 429 that named no `Retry-After`. */
 export const DEFAULT_RETRY_AFTER_S = 10;
 
-/** Seconds to wait before asking again, when a failure is the node rate limiting; undefined otherwise. */
+/** Seconds to wait before asking again when the node is rate limiting; undefined for any other failure. */
 export function retryAfter(cause: unknown): number | undefined {
   if (!(cause instanceof ApiError) || !cause.isRateLimited) return undefined;
   return cause.retryAfter ?? DEFAULT_RETRY_AFTER_S;
@@ -67,17 +62,12 @@ export type ApiErrorCode =
   | 'wrong_password';
 
 /**
- * The message to show for any thrown value.
- *
- * Anything can reach a catch block: an `ApiError`, a `TypeError` from fetch
- * when the server is simply not there, an abort, a string somebody threw. A
- * screen should not have to know which, and must never render
- * "[object Object]" at somebody who is trying to work out why their SIP
- * server is unreachable.
+ * The message to show for any thrown value: an `ApiError`, a `TypeError` from
+ * fetch, an abort, a thrown string. Never "[object Object]".
  */
 export function errorMessage(cause: unknown): string {
   if (cause instanceof ApiError && cause.isRateLimited) {
-    // Every route is rate limited, and the node's own wording would not say how long.
+    // The node's own message does not say how long to wait.
     return cause.retryAfter
       ? `The node is limiting requests. Try again in ${cause.retryAfter} second${cause.retryAfter === 1 ? '' : 's'}.`
       : 'The node is limiting requests. Wait a little and try again.';
@@ -94,18 +84,14 @@ export function errorMessage(cause: unknown): string {
     : String(cause);
 }
 
-/**
- * Whether a failure is the caller cancelling, rather than something going
- * wrong. Every request in this client is abortable, so this case is ordinary
- * and must never surface as an error.
- */
+/** Whether a failure is the caller cancelling, which must never surface as an error. */
 export function isAbort(cause: unknown): boolean {
   return cause instanceof DOMException && cause.name === 'AbortError';
 }
 
 /**
- * Whether a failure is the server refusing a create because the thing already exists.
- * A 409 `would_lock_out` is a different refusal, about the caller rather than the name.
+ * Whether the server refused a create because the thing already exists.
+ * A 409 `would_lock_out` is not one: it is about the caller, not the name.
  */
 export function isConflict(cause: unknown): boolean {
   return cause instanceof ApiError && (cause.code === 'conflict' || (cause.status === 409 && cause.code !== 'would_lock_out'));

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { fixtureFromEnvironment, softphoneUrl } from '../../e2e/fixture';
 
-/** The end-to-end spec's reading of `generated/fixture.env`: which phase it is in, and what the page is told. */
+/** How the end-to-end spec reads `generated/fixture.env`: which phase it is in, and what the page is told. */
 describe('fixtureFromEnvironment', () => {
   it('is the direct phase when the engine advertises the node’s own address, or nothing is said', () => {
     expect(fixtureFromEnvironment({}).relay).toBeUndefined();

@@ -2,42 +2,46 @@
 
 ## Requirements
 
-Node 20 or newer.
+Node 20 or newer, to build. Nothing at run time: the result is static files.
 
-## Building
+## Build
 
 ```
 npm install
 VITE_ATHENASIP_LIVE=true npm run build
 ```
 
-Without `VITE_ATHENASIP_LIVE=true` the bundle talks to an in-memory fake rather than the node
-that serves it. `npm run build` typechecks both TypeScript projects and then produces a production bundle in
-`build/`. The bundle is served by AthenaSIP itself: copy `build/` to the path named by
-`http.files.path` in the server's `config.yaml`, and the server's static middleware serves it
-from the same listener that answers `/api/v1`.
+The bundle lands in `build/`. Without `VITE_ATHENASIP_LIVE=true` it talks to the in-memory
+fake, which is wrong for a deployment.
 
-To serve it standalone instead:
+## Deploy
 
-```
-npm install -g serve
-serve -s build
-```
+AthenaSIP serves the bundle from the listener that answers `/api/v1`. Point the server's
+`config.yaml` at a directory and copy `build/` into it:
 
-A standalone deployment is cross-origin to the API, which the client does not currently
-configure for. Serving it from the SIP server is the supported arrangement.
-
-## Development
-
-```
-npm run dev
+```yaml
+http:
+  address: 0.0.0.0
+  port: 8080
+  api:
+    enable: true
+  files:
+    enable: true
+    path: "../admin/"
 ```
 
-The dev server runs against an in-memory fake of the admin API by default. To run against a
-real node:
+The node needs no restart when the files change. Serving the bundle from anywhere else makes
+the API cross-origin, which is not supported.
+
+## HTTPS
+
+Browsers give a microphone or camera only to a secure context. For the phone to work, serve
+the console over https (or reach it through `localhost`) and enable the node's `wss`
+listener. The browser must trust the node's certificate for both.
+
+## The first user
 
 ```
-VITE_ATHENASIP_LIVE=true npm run dev
+athenasip --add-user NAME            # on the node's host
+athenasip --reset-password NAME      # for a lost password
 ```
-
-`/api` is proxied to `http://127.0.0.1:8080`; set `ATHENASIP_API` to point elsewhere.
