@@ -8,20 +8,29 @@ Work happens on `develop`; `main` carries the last release, and `0.3.0` is the c
 Move items to `COMPLETE.md` as they land, with a one-line note on what shipped. Line numbers
 refer to the current tree; update them as files move.
 
-## Resume here (2026-10-03)
+## Resume here (2026-10-04)
 
 Everything needed to pick this up after a clear, in the order it matters.
 
-**The tree.** On `develop`, clean. Today's commits run from `a4649f9` (sign-in) to `5df4ffd`,
-over `8a09898`; the first six were split by file, so only `9d971ce` onwards typechecks (the API
-layer changed under every screen at once). Not pushed. Commit only when asked, never with Claude
-attribution (the user's global rule).
+**The tree.** On `develop`, clean. `0.3.0` is released: tagged from `main` and pushed. Everything
+after the tag (the Phone, the phone-call spec, the docs and comments tidy) is committed on
+`develop` and not pushed. Of the commits from `a4649f9` to `bf22f20`, split by file, none
+typechecks alone. Commit only when asked, never with Claude attribution (the user's global
+rule). On a loaded machine the screen tests time out; that is the load, not the tests.
 
-**Deployed** (Tom approved in this session, 2026-10-03 evening): corvus-fi-1 serves
-`assets/index-DtvXnfQ-.js` on 8080 and 8443, built from `735aa79`, and the server session has been told.
+**Deployed** (Tom approved in this session): corvus-fi-1 serves `assets/index-DtvXnfQ-.js` on
+8080 and 8443, built from `735aa79`. Later commits change only docs and comments.
 
-**Waiting on Tom:** sign in on corvus-fi-1 and click through every screen as users with
-different roles.
+**Waiting on Tom:**
+
+1. Try the Phone on corvus-fi-1 (the checklist is under "The phone" below). The browser must
+   register as a subscriber other than the one it calls: the A85 is `athenaphone`, and nothing
+   live is registered as 1001.
+2. Whether the Phone should unregister its line when the tab closes, so a closed browser does
+   not leave a registration that answers 480 until it expires.
+3. Whether to run the browser-to-phone spec against macnessa (it rings the A85 there); the
+   server session has the command.
+4. Sign in on corvus-fi-1 and click through every screen as users with different roles.
 
 **After a deploy:** check `curl -s http://10.35.1.20:8080/ | grep -o 'assets/index-[^"]*'`
 matches `build/assets/index-*.js`, tell the server session, and ask Tom to sign in and click
