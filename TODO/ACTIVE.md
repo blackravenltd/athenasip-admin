@@ -7,22 +7,26 @@ node serves. Move items to `COMPLETE.md` as they land.
 ## Resume here
 
 **The tree.** Work on `develop`; `main` is the last release, tags are bare `x.y.z`. `0.3.0` is
-released and pushed. Everything after it is on `develop`, committed and not pushed. Commit or
+released and pushed. Everything after it is on `develop`, pushed. Commit or
 push only when Tom asks, never with Claude attribution (his global rule). Run tests with
 `npx vitest run --maxWorkers=4`; on a loaded machine screen tests time out, which is the load.
 
-**Deployed.** corvus-fi-1 serves `assets/index-DtvXnfQ-.js` on 8080 and 8443, built from
-`735aa79`; later commits change only docs and comments.
+**Deployed.** corvus-fi-1 (`root@10.35.1.20`) and corvus-gbni-1 (macnessa.athenasip.org,
+`root@10.44.1.50`, 8443 on the site network only) serve `assets/index-D1mNvEs7.js` on 8080 and
+8443, built from `2feecaa`, which needs the server's `/subscriber/{realm}/config` (server
+develop 17d9d60 or later). Same deploy command and path on both.
 
 **Waiting on Tom:**
 
-1. Try the Phone on corvus-fi-1 (checklist under "The phone"). The browser must register as a
-   subscriber other than the one it calls: the A85 is `athenaphone`.
+1. Try the Phone on corvus-fi-1 or macnessa once the server deploy lands (checklist under "The
+   phone"), including no browser login box on the Digest challenge. The browser must register
+   as a subscriber other than the one it calls: the A85 is `athenaphone`.
 2. Whether the Phone unregisters its line when the tab closes, so a closed browser leaves no
    registration that answers 480 until it expires.
 3. Whether to run `e2e/phone-call.spec.ts` against macnessa; it rings the A85 there. The
    server session has the command.
-4. Whether to push `develop`.
+4. When the Phone registers with the realm's `registration.expires` and `outbound.flows`.
+5. When the console moves from polling to `GET /events`.
 
 **The server session**, "AthenaSIP Server" (ListAgents, then SendMessage). It owns
 `../athenasip`, the nodes and every fixture: nothing here edits them or starts or stops their
@@ -68,8 +72,11 @@ The server's `docs/api/openapi.yaml` and `docs/authentication.md` are the refere
   `qualify_interval` (0, or 5 to 86400), `rewrite_contact`. Deleting a realm deletes its
   subscribers and their registrations.
 - **Subscribers:** `/realms/{realm}/subscribers`, `behaviour: {media_profile}`.
-- **Status** (`view-cluster-status`): `/nodes`, `/registrations`, `/client/config` (ICE minted
-  per request), `/calls`, `/calls/{call}`, `/call-records`, `/media`, `/media/reoffers`,
+- **Subscriber routes:** `/subscriber/{realm}/config` (ICE minted per request, and the realm's
+  registration, outbound and push policy), `/subscriber/{realm}/registrations`,
+  `PUT /subscriber/{realm}/password`. Signed with HTTP Digest using the subscriber's SIP
+  credentials (HTTP realm = SIP realm); a Bearer token is refused there.
+- **Status** (`view-cluster-status`): `/nodes`, `/registrations`, `/calls`, `/calls/{call}`, `/call-records`, `/media`, `/media/reoffers`,
   `/qualify`. Call counters are cumulative; a direction the engine does not count is absent.
 
 ## Rules
@@ -107,6 +114,12 @@ Not reopened without asking Tom.
       silence warning. Everything past registration has only met fakes.
 - [ ] Unregister on tab close (waiting on Tom, above).
 - [ ] Failover across `websocket_uris` when a socket fails.
+- [ ] Register with the realm's `registration.expires` and keep `outbound.flows` flows, from
+      `/subscriber/{realm}/config`. `push` waits for push support.
+- [ ] Try the Digest-signed config in Chrome, Firefox and Safari against a node that has it:
+      no browser login box on the 401 (`credentials: 'omit'`), MD5 over http, SHA-256 over https.
+- [ ] Use `/subscriber/{realm}/registrations` and `PUT /subscriber/{realm}/password`, if the
+      phone should show its own bindings or change its password.
 - [ ] Later: blind transfer (`refer`), a second line or call waiting.
 
 ## The end-to-end runs
@@ -125,8 +138,12 @@ Not reopened without asking Tom.
 
 ## Live view
 
-- [ ] Agree pushed events with the server (server-sent events or a WebSocket), then push calls,
-      registrations and counts instead of polling.
+- [ ] Replace polling of `/nodes` and `/calls` with `GET /events` (on server develop): a
+      `text/event-stream` with one event per message on `nodes/#`, `subscribers/#` and
+      `calls/#` (event name is the topic, data the message JSON), keep-alives every 15 s,
+      `retry: 5000`. Needs `view-cluster-status` and the Bearer header, so fetch with a
+      streaming reader, not `EventSource`. 503 `too_many_streams` past 32 per node: fall back
+      to polling.
 - [ ] Finished calls from `/call-records` on the Calls screen.
 - [ ] The cluster entry from `/nodes` on Overview.
 - [ ] Hang up a call from the Calls screen, once the node can send BYEs.
