@@ -17,6 +17,7 @@ import type {
   QualifiedClient,
   Registration,
   SessionInfo,
+  SubscriberLine,
   UpdateSubscriber,
   UpdateAdminUser,
   UpdateRealm,
@@ -26,7 +27,7 @@ import type {
  * Everything this client can ask an AthenaSIP node to do, per the server's
  * `docs/api/openapi.yaml` (version 1, under `/api/v1`) and
  * `docs/authentication.md`. A session token from a login is the bearer on
- * everything but health and the login itself.
+ * everything but health, the login itself, and a subscriber's own routes.
  *
  * `HttpAdminApi` speaks to a real node and is the only file that knows HTTP.
  * `FakeAdminApi` holds the same records in memory and enforces the same
@@ -50,8 +51,12 @@ export interface AdminApi {
   /** Open. Resolves on a degraded node too; the status says which. */
   health(signal?: AbortSignal): Promise<Health>;
   nodes(signal?: AbortSignal): Promise<ClusterNode[]>;
-  /** Minted per request: fetch it when a call is placed, never cache it at sign-in. */
-  clientConfig(signal?: AbortSignal): Promise<ClientConfig>;
+  /**
+   * Signed with the subscriber's own SIP credentials, not the session: a 401
+   * is a wrong password for the line and ends no session. The TURN credential
+   * is minted per request, so fetch it as a call is placed, never cache it.
+   */
+  subscriberConfig(line: SubscriberLine, signal?: AbortSignal): Promise<ClientConfig>;
 
   listRealms(signal?: AbortSignal): Promise<Realm[]>;
   createRealm(realm: CreateRealm, signal?: AbortSignal): Promise<Realm>;

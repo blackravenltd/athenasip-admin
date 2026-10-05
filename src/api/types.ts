@@ -99,7 +99,7 @@ export interface NodeTransport {
 }
 
 /**
- * One entry of `GET /client/config`'s `ice_servers`, shaped as `RTCIceServer`.
+ * One entry of `GET /subscriber/{realm}/config`'s `ice_servers`, shaped as `RTCIceServer`.
  * A `turn:` entry carries a credential minted per request under the coturn
  * shared-secret scheme, or none when the node has no secret configured.
  */
@@ -112,13 +112,34 @@ export interface IceServer {
   expires_at?: number;
 }
 
-/** `GET /client/config`: what a browser needs to place a call. */
+/** A subscriber's own credentials, which sign the routes under `/subscriber/{realm}/`. Held in memory only. */
+export interface SubscriberLine {
+  realm: string;
+  user: string;
+  password: string;
+}
+
+/** What a realm expects of a client, in `GET /subscriber/{realm}/config`. */
+export interface RealmClientPolicy {
+  name: string;
+  /** Seconds granted when a client asks for none, and the shortest taken (0 for no minimum). */
+  registration: { expires?: number; minimum?: number };
+  /** How many flows to keep, each to a different node (RFC 5626). */
+  outbound: { flows?: number };
+  /** The push services the node runs (RFC 8599); empty for none. */
+  push: Array<{ service: string; vapid?: string; minimum_expires: number }>;
+}
+
+/** `GET /subscriber/{realm}/config`: what a subscriber's browser needs to register and place a call. */
 export interface ClientConfig {
   /** The secure WebSocket to signal over; absent when the node has no `wss` listener. */
   websocket_uri?: string;
+  /** Every node's secure WebSocket, this node first, to fail over to. */
+  websocket_uris?: string[];
   /** The same list `/nodes` gives. */
   transports: NodeTransport[];
   ice_servers: IceServer[];
+  realm?: RealmClientPolicy;
 }
 
 /**

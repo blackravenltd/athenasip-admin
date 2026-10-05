@@ -58,7 +58,7 @@ describe.skipIf(!present)('HttpAdminApi against the server OpenAPI document', ()
     await api.session('t');
     await api.health();
     await api.nodes();
-    await api.clientConfig();
+    await api.subscriberConfig({ realm: 'r', user: 'u', password: 'p' });
     await api.listRealms();
     await api.createRealm({ name: 'r' });
     await api.updateRealm('r', { behaviour: { media_anchor: false } });

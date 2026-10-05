@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { AdminApi } from '../api/AdminApi';
-import { errorMessage, isAbort } from '../api/errors';
+import { errorMessage } from '../api/errors';
 import { VolumeMeter } from '../components/VolumeMeter';
 import { usableIceServers } from '../softphone/iceServers';
 import { CallReadout } from '../softphone/CallReadout';
@@ -8,7 +8,7 @@ import type { IceOptions, SipStack } from '../softphone/Softphone';
 import { jssipStack } from '../softphone/jssip';
 import type { PageOptions } from '../softphone/page';
 import { useSoftphone } from '../softphone/useSoftphone';
-import { callInProgress, describeCallState, describeRegistration, signallingUri } from '../softphone/words';
+import { callInProgress, describeCallState, describeRegistration, lineOf, signallingUri } from '../softphone/words';
 
 export { callInProgress, describeCallState, describeRegistration, describeVideoLine, signallingUri } from '../softphone/words';
 
@@ -71,27 +71,35 @@ export function SoftphoneScreen({ options = NO_OPTIONS, stack = jssipStack, api 
   // Undefined where the browser does not say, as in a test; only a plain no stops the phone.
   const insecure = window.isSecureContext === false;
 
-  // Where to signal, from the node, unless the query string or the environment said.
-  // Only replaces the guessed default, never something already typed.
-  useEffect(() => {
-    if (!api || options.socket || import.meta.env.VITE_SIP_WS_URL) return;
-    const guessed = defaultConnection(options).socket;
-    const controller = new AbortController();
+  /**
+   * Where to signal, from the node, unless the query string or the
+   * environment said, or something was typed over the guess. The node's
+   * configuration is signed with the typed SIP credentials, so it is asked
+   * as the phone registers.
+   */
+  const register = () => {
+    const { socket, uri, password } = connection;
+    const line = lineOf(uri, password);
+    const guessed = !options.socket && !import.meta.env.VITE_SIP_WS_URL && socket === defaultConnection(options).socket;
+    if (!api || !guessed || !line) {
+      phone.register({ socket, uri, password });
+      return;
+    }
+    setConfigNotice(undefined);
     const https = window.location.protocol === 'https:';
-    api.clientConfig(controller.signal).then((config) => {
-      const uri = signallingUri(config, https);
-      if (uri) {
-        setConnection((current) => (current.socket === guessed ? { ...current, socket: uri } : current));
-      } else if (https) {
-        setConfigNotice('This node has no secure WebSocket listener, so a page served over https cannot reach it.');
-      }
-    }).catch((cause: unknown) => {
-      if (!isAbort(cause)) setConfigNotice(`Could not read the node's client configuration: ${errorMessage(cause)}`);
+    api.subscriberConfig(line).then((config) => {
+      const found = signallingUri(config, https);
+      if (!found && https) setConfigNotice('This node has no secure WebSocket listener, so a page served over https cannot reach it.');
+      return found;
+    }, (cause: unknown) => {
+      setConfigNotice(`Could not read the node's client configuration: ${errorMessage(cause)}`);
+      return undefined;
+    }).then((found) => {
+      const chosen = found ?? socket;
+      setConnection((current) => ({ ...current, socket: chosen }));
+      phone.register({ socket: chosen, uri, password });
     });
-    return () => controller.abort();
-    // The options are the page's, fixed for its life.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [api]);
+  };
 
   /**
    * TURN credentials are minted per request and expire, so they are fetched as
@@ -105,7 +113,8 @@ export function SoftphoneScreen({ options = NO_OPTIONS, stack = jssipStack, api 
       place();
       return;
     }
-    api.clientConfig().then(
+    const line = lineOf(connection.uri, connection.password);
+    (line ? api.subscriberConfig(line) : Promise.reject(new Error('the SIP URI is not sip:user@realm'))).then(
       (config) => usableIceServers(config.ice_servers),
       (cause: unknown) => {
         setConfigNotice(`No ICE servers from the node, calling without: ${errorMessage(cause)}`);
@@ -213,7 +222,7 @@ export function SoftphoneScreen({ options = NO_OPTIONS, stack = jssipStack, api 
               className="primary-button"
               type="button"
               data-testid="softphone-register"
-              onClick={() => phone.register({ socket: connection.socket, uri: connection.uri, password: connection.password })}
+              onClick={register}
               disabled={insecure || busy || !connection.socket || !connection.uri}
             >
               {busy ? 'Registering...' : 'Register'}

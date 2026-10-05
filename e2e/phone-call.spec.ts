@@ -100,7 +100,7 @@ function readStats(page: Page): Promise<MediaStats | undefined> {
 
 interface Record_ {
   test: string;
-  fixture: Omit<Fixture, 'password' | 'apiUser'>;
+  fixture: Omit<Fixture, 'password'>;
   user: string;
   state: SoftphoneState;
   history: readonly Transition[];
@@ -110,7 +110,7 @@ interface Record_ {
 
 /** Written before the assertions, so a failed call leaves its descriptions and counters behind. */
 async function writeRecord(title: string, page: Page, user: string, stats: MediaStats | undefined, video: VideoNegotiation): Promise<void> {
-  const { password: _password, apiUser: _apiUser, ...visible } = fixture;
+  const { password: _password, ...visible } = fixture;
   const record: Record_ = {
     test: title,
     fixture: visible,

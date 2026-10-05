@@ -19,11 +19,6 @@ export interface Fixture {
    * port falls inside this range.
    */
   relay?: { min: number; max: number };
-  /**
-   * A console user, for reading `GET /client/config`; only the relay phase
-   * needs it. `up.sh` generates the password per run, so there is no default.
-   */
-  apiUser?: { username: string; password: string };
   realm: string;
   /** Two for a browser calling a browser; the first alone when a browser calls a phone. */
   subscribers: string[];
@@ -74,9 +69,6 @@ export function fixtureFromEnvironment(env: NodeJS.ProcessEnv = process.env): Fi
     publicAddress,
     advertise,
     relay,
-    apiUser: env.ATHENA_INTEROP_API_USER && env.ATHENA_INTEROP_API_PASSWORD
-      ? { username: env.ATHENA_INTEROP_API_USER, password: env.ATHENA_INTEROP_API_PASSWORD }
-      : undefined,
     realm: env.ATHENA_INTEROP_REALM ?? publicAddress,
     subscribers,
     password: env.ATHENA_INTEROP_PASSWORD ?? 'athenaphone',

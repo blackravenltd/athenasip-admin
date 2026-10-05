@@ -16,7 +16,7 @@ export interface PageOptions {
   /** Answer an incoming call as soon as it arrives. */
   answer: boolean;
   /**
-   * ICE servers, as `GET /client/config` gives them. The harness fetches
+   * ICE servers, as `GET /subscriber/{realm}/config` gives them. The harness fetches
    * them, so the page needs no token.
    */
   ice?: IceServer[];

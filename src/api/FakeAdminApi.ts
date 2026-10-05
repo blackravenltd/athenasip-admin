@@ -25,6 +25,7 @@ import type {
   Registration,
   Role,
   SessionInfo,
+  SubscriberLine,
   UpdateSubscriber,
   UpdateAdminUser,
   UpdateRealm,
@@ -378,12 +379,23 @@ export class FakeAdminApi implements AdminApi {
     return this.settle(undefined, () => ({ status: 'ok', node: 'sip-0001', version: '0.7.0', datastore: 'memory 0.0.1' }), signal);
   }
 
-  /** No `websocket_uri`, as this node has no `wss` listener. STUN only: no TURN credential is minted. */
-  clientConfig(signal?: AbortSignal): Promise<ClientConfig> {
-    return this.settle(STATUS, () => ({
-      transports: FAKE_TRANSPORTS,
-      ice_servers: [{ urls: 'stun:203.0.113.5:3478' }],
-    }), signal);
+  /**
+   * No `websocket_uri`, as this node has no `wss` listener. STUN only: no
+   * TURN credential is minted. Subscriber passwords are not kept, so any
+   * non-empty one signs; an unknown subscriber is a 401, as on the node.
+   */
+  subscriberConfig(line: SubscriberLine, signal?: AbortSignal): Promise<ClientConfig> {
+    return this.settle(undefined, () => {
+      this.find(line.realm);
+      if (!line.password || !this.subscribers.some((candidate) => candidate.realm === line.realm && candidate.user === line.user)) {
+        throw new ApiError('wrong SIP username or password for this realm', 401, 'unauthorized');
+      }
+      return {
+        transports: FAKE_TRANSPORTS,
+        ice_servers: [{ urls: 'stun:203.0.113.5:3478' }],
+        realm: { name: line.realm, registration: { expires: 300, minimum: 0 }, outbound: { flows: 1 }, push: [] },
+      };
+    }, signal);
   }
 
   nodes(signal?: AbortSignal): Promise<ClusterNode[]> {

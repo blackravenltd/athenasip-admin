@@ -1,20 +1,13 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import type { AdminApi } from '../api/AdminApi';
-import { errorMessage, isAbort } from '../api/errors';
 import { VolumeMeter } from '../components/VolumeMeter';
 import { CallReadout } from '../softphone/CallReadout';
-import { callInProgress, describeCallState, signallingUri } from '../softphone/words';
+import { callInProgress, describeCallState } from '../softphone/words';
 import { DialPad } from './DialPad';
 import { canChooseSpeaker, useDevices, type Devices } from './devices';
 import { callTimer, dialTarget, userOf } from './dial';
 import { notificationPermission } from './ringing';
 import { loadSettings, saveSettings, type PhoneSettings } from './settings';
 import type { PhoneHandle } from './usePhone';
-
-/** The fallback SIP WebSocket: this host, port 8088. */
-function guessedSocket(): string {
-  return `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.hostname}:8088`;
-}
 
 /**
  * The phone's screen. The phone registers as a subscriber, separately from
@@ -23,21 +16,17 @@ function guessedSocket(): string {
  *
  * `aside` is rendered beside the dialler: history and the directory.
  */
-export function PhoneScreen({ api, handle, readsConfig = true, settings, onSettings, aside }: {
-  api: AdminApi;
+export function PhoneScreen({ handle, settings, onSettings, aside }: {
   handle: PhoneHandle;
-  /** Whether the console user may read `/client/config`, which needs View cluster status. */
-  readsConfig?: boolean;
   settings: PhoneSettings;
   onSettings: (settings: PhoneSettings) => void;
   aside?: ReactNode;
 }) {
-  const { phone, state, stats, localStream, remoteStream, iceNotice, silent } = handle;
+  const { phone, state, stats, localStream, remoteStream, iceNotice, asking, lineNotice, silent } = handle;
   const { devices, named, ask, error: deviceError } = useDevices();
   const [uri, setUri] = useState(settings.uri ?? '');
   const [password, setPassword] = useState('');
   const [socket, setSocket] = useState(settings.socket ?? '');
-  const [socketNotice, setSocketNotice] = useState<string>();
   const [target, setTarget] = useState('');
   const [tones, setTones] = useState('');
   const [notifications, setNotifications] = useState(notificationPermission);
@@ -45,34 +34,13 @@ export function PhoneScreen({ api, handle, readsConfig = true, settings, onSetti
   const remoteVideo = useRef<HTMLVideoElement>(null);
 
   const registered = state.registration === 'registered';
-  const registering = state.registration === 'connecting';
+  const registering = asking || state.registration === 'connecting';
   const inCall = callInProgress(state.call);
   const connected = state.call === 'connected';
   const insecure = window.isSecureContext === false;
   const dialled = dialTarget(target, uri);
   const remoteHasVideo = !!remoteStream?.getVideoTracks?.().length;
   const localHasVideo = !!localStream?.getVideoTracks?.().length;
-
-  // Ask the node for the WebSocket unless one is remembered.
-  useEffect(() => {
-    if (socket) return;
-    if (!readsConfig) {
-      setSocket(guessedSocket());
-      return;
-    }
-    const controller = new AbortController();
-    const https = window.location.protocol === 'https:';
-    api.clientConfig(controller.signal).then((config) => {
-      setSocket((current) => current || signallingUri(config, https) || guessedSocket());
-    }).catch((cause: unknown) => {
-      if (isAbort(cause)) return;
-      setSocket((current) => current || guessedSocket());
-      setSocketNotice(`Could not ask the node where to connect, so this is a guess: ${errorMessage(cause)}`);
-    });
-    return () => controller.abort();
-    // Asked once per `api`, not again when `socket` changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [api]);
 
   useEffect(() => {
     if (remoteVideo.current) remoteVideo.current.srcObject = remoteHasVideo ? remoteStream ?? null : null;
@@ -85,8 +53,8 @@ export function PhoneScreen({ api, handle, readsConfig = true, settings, onSetti
   }, [inCall]);
 
   const register = () => {
-    onSettings({ ...settings, uri, socket });
-    phone.register({ socket, uri, password });
+    onSettings({ ...settings, uri, socket: socket.trim() || undefined });
+    handle.register({ socket: socket.trim(), uri, password });
   };
 
   const media = (video: boolean) => ({ video, microphone: settings.microphone, camera: settings.camera });
@@ -131,17 +99,9 @@ export function PhoneScreen({ api, handle, readsConfig = true, settings, onSetti
             </p>
           </div>
           {registered && (
-            <button className="secondary-button" type="button" onClick={() => phone.unregister()}>Sign out of the line</button>
+            <button className="secondary-button" type="button" onClick={handle.unregister}>Sign out of the line</button>
           )}
         </div>
-
-        {!readsConfig && (
-          <p className="field-hint" data-testid="phone-no-config">
-            Without the View cluster status role this console cannot ask the node for its WebSocket or
-            its TURN server, so the connection below is a guess and calls get no relay: they work where
-            the two ends can reach each other directly.
-          </p>
-        )}
 
         {insecure && (
           <p className="error-message" role="alert">
@@ -167,23 +127,18 @@ export function PhoneScreen({ api, handle, readsConfig = true, settings, onSetti
               <summary>Connection</summary>
               <label className="field">
                 <span>WebSocket</span>
-                <input value={socket} onChange={(event) => setSocket(event.target.value)} />
+                <input value={socket} onChange={(event) => setSocket(event.target.value)} placeholder="Ask the node" />
               </label>
-              {socketNotice && <p className="field-hint">{socketNotice}</p>}
-              {!readsConfig && (
-                <p className="field-hint">
-                  This is a guess: where the node listens comes from its client configuration, which
-                  needs the View cluster status role.
-                </p>
-              )}
+              <p className="field-hint">Leave empty to ask the node, with the address and password above.</p>
             </details>
             <div className="dialog-actions">
-              <button className="primary-button" type="submit" disabled={insecure || registering || !socket || !uri}>
+              <button className="primary-button" type="submit" disabled={insecure || registering || !uri}>
                 {registering ? 'Registering...' : 'Register'}
               </button>
             </div>
           </form>
         )}
+        {!registered && lineNotice && <p className="error-message" role="alert">{lineNotice}</p>}
         {!registered && state.registration === 'failed' && state.notice && (
           <p className="error-message" role="alert">{state.notice}</p>
         )}

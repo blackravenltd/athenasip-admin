@@ -23,13 +23,6 @@ describe('fixtureFromEnvironment', () => {
     expect(JSON.parse(url.searchParams.get('ice')!)).toEqual([{ urls: 'turn:127.0.0.1:3478' }]);
   });
 
-  it('reads the API user up.sh generated, and has none when it is not given both halves', () => {
-    expect(fixtureFromEnvironment({ ATHENA_INTEROP_API_USER: 'interop', ATHENA_INTEROP_API_PASSWORD: 's3cret' }).apiUser)
-      .toEqual({ username: 'interop', password: 's3cret' });
-    expect(fixtureFromEnvironment({ ATHENA_INTEROP_API_USER: 'interop' }).apiUser).toBeUndefined();
-    expect(fixtureFromEnvironment({}).apiUser).toBeUndefined();
-  });
-
   it('refuses a relay phase with no relay range, rather than asserting against nothing', () => {
     expect(() => fixtureFromEnvironment({ ATHENA_INTEROP_RTPENGINE_ADVERTISE: '172.32.0.30' })).toThrow(/relay range/);
   });

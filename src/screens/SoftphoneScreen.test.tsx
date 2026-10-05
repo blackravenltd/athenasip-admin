@@ -6,7 +6,7 @@ import type { UA, UAConfiguration } from 'jssip/lib/UA';
 import { READOUT_KEY } from '../softphone/page';
 import type { SipStack } from '../softphone/Softphone';
 import type { AdminApi } from '../api/AdminApi';
-import type { ClientConfig } from '../api/types';
+import type { ClientConfig, SubscriberLine } from '../api/types';
 import { SoftphoneScreen, callInProgress, defaultConnection, describeCallState, describeVideoLine, signallingUri } from './SoftphoneScreen';
 
 class FakeAgent extends EventEmitter {
@@ -55,9 +55,9 @@ afterEach(() => {
 });
 
 /** Only what the softphone asks of the node. */
-function node(config: ClientConfig): AdminApi & { asked: number } {
-  const api = { asked: 0, clientConfig: async () => { api.asked += 1; return config; } };
-  return api as unknown as AdminApi & { asked: number };
+function node(config: ClientConfig): AdminApi & { asked: string[] } {
+  const api = { asked: [] as string[], subscriberConfig: async (line: SubscriberLine) => { api.asked.push(`${line.user}@${line.realm} ${line.password}`); return config; } };
+  return api as unknown as AdminApi & { asked: string[] };
 }
 
 describe('signallingUri', () => {
@@ -92,7 +92,7 @@ describe('describeVideoLine', () => {
 });
 
 describe('SoftphoneScreen', () => {
-  it("signals where the node says, and calls with the node's ICE servers fetched at the moment of calling", async () => {
+  it("signals where the node says, and calls with the node's ICE servers fetched at the moment of calling, signed with the line", async () => {
     const sip = stack();
     const api = node({
       websocket_uri: 'wss://node:9443',
@@ -106,18 +106,19 @@ describe('SoftphoneScreen', () => {
         { urls: 'turn:node:3478', username: '4102444800', credential: 'c', expires_at: 4_102_444_800 },
       ],
     });
-    render(<SoftphoneScreen api={api} stack={sip} options={{ uri: 'sip:1001@example.com', target: 'sip:1002@example.com', register: false, answer: false }} />);
+    render(<SoftphoneScreen api={api} stack={sip} options={{ uri: 'sip:1001@example.com', password: 'pw', target: 'sip:1002@example.com', register: false, answer: false }} />);
     const socket = screen.getByTestId('softphone-socket') as HTMLInputElement;
-    // jsdom serves the page over http, so the plain WebSocket.
-    await vi.waitFor(() => expect(socket.value).toBe('ws://node:8088'));
 
     fireEvent.click(screen.getByRole('button', { name: 'Register' }));
+    await vi.waitFor(() => expect(sip.agents).toHaveLength(1));
+    // jsdom serves the page over http, so the plain WebSocket.
+    expect(socket.value).toBe('ws://node:8088');
     const [agent] = sip.agents;
     act(() => { agent.emit('registered', {}); });
     fireEvent.click(screen.getByRole('button', { name: 'Call' }));
 
     await vi.waitFor(() => expect(agent.calls).toHaveLength(1));
-    expect(api.asked).toBe(2);
+    expect(api.asked).toEqual(['1001@example.com pw', '1001@example.com pw']);
     // The TURN entry the node could mint no credential for is not handed to the browser.
     expect(agent.calls[0].options.pcConfig).toEqual({ iceServers: [
       { urls: 'stun:node:3478' },

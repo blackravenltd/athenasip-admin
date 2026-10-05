@@ -5,7 +5,8 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { UA, UAConfiguration } from 'jssip/lib/UA';
 import type { AdminApi } from '../api/AdminApi';
-import type { CallRecord, ClientConfig, Registration, Role, Subscriber } from '../api/types';
+import { ApiError } from '../api/errors';
+import type { CallRecord, ClientConfig, Registration, Role, Subscriber, SubscriberLine } from '../api/types';
 import type { SipStack } from '../softphone/Softphone';
 import PhoneHost from './PhoneHost';
 import { loadSettings, saveSettings } from './settings';
@@ -55,12 +56,12 @@ const CONFIG: ClientConfig = {
   ice_servers: [{ urls: 'stun:10.35.1.20:3478' }],
 };
 
-/** A node that answers what View cluster status may read, with no call history and nobody registered. */
+/** A node with no call history and nobody registered, whose client configuration any line's credentials open. */
 function node(): AdminApi & { asked: string[] } {
   const asked: string[] = [];
   return {
     asked,
-    clientConfig: async () => { asked.push('clientConfig'); return CONFIG; },
+    subscriberConfig: async (line: SubscriberLine) => { asked.push(`${line.user}@${line.realm} ${line.password}`); return CONFIG; },
     listCallRecords: async () => [],
     listRegistrations: async () => [],
   } as unknown as AdminApi & { asked: string[] };
@@ -111,17 +112,36 @@ function withDevices() {
 }
 
 describe('PhoneHost', () => {
-  it('signs in to a line where the node says, and remembers everything but the password', async () => {
+  it('signs in to a line where the node says, asked with its own credentials, and remembers everything but the password', async () => {
     const sip = stack();
-    show(sip);
-    await vi.waitFor(() => expect((screen.getByLabelText('WebSocket') as HTMLInputElement).value).toBe('ws://10.35.1.20:8088'));
+    const api = node();
+    show(sip, true, api, []);
+    expect((screen.getByLabelText('WebSocket') as HTMLInputElement).value).toBe('');
     fireEvent.change(screen.getByLabelText('SIP address'), { target: { value: 'sip:1001@10.35.1.20' } });
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'secret' } });
     fireEvent.click(screen.getByRole('button', { name: 'Register' }));
 
+    await vi.waitFor(() => expect(sip.agents).toHaveLength(1));
+    expect(api.asked).toEqual(['1001@10.35.1.20 secret']);
     expect(sip.agents[0].configuration).toMatchObject({ uri: 'sip:1001@10.35.1.20', password: 'secret' });
-    expect(loadSettings()).toEqual({ uri: 'sip:1001@10.35.1.20', socket: 'ws://10.35.1.20:8088' });
+    expect(loadSettings()).toEqual({ uri: 'sip:1001@10.35.1.20' });
     expect(JSON.stringify(window.localStorage)).not.toContain('secret');
+  });
+
+  it('does not register when the node refuses the line, and says so', async () => {
+    const sip = stack();
+    const api = {
+      subscriberConfig: async () => { throw new ApiError('unauthorized', 401, 'unauthorized'); },
+      listCallRecords: async () => [],
+      listRegistrations: async () => [],
+    } as unknown as AdminApi;
+    show(sip, true, api);
+    fireEvent.change(screen.getByLabelText('SIP address'), { target: { value: 'sip:1001@10.35.1.20' } });
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'wrong' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Register' }));
+
+    expect((await screen.findByRole('alert')).textContent).toBe('The node did not accept that SIP address and password.');
+    expect(sip.agents).toHaveLength(0);
   });
 
   it('dials an extension from the pad in its own realm, with the node ICE servers', async () => {
@@ -204,7 +224,7 @@ describe('PhoneHost', () => {
     const subscribers = ['1001', '1002', 'athenaphone'].map((user) => ({ uri: `sip:${user}@10.35.1.20`, user, realm: '10.35.1.20' })) as Subscriber[];
     const registrations = [{ subscriber: 'sip:athenaphone@10.35.1.20' }] as Registration[];
     const api = {
-      clientConfig: async () => CONFIG,
+      subscriberConfig: async () => CONFIG,
       listCallRecords: async () => records,
       listSubscribers: async (realm: string) => (realm === '10.35.1.20' ? subscribers : []),
       listRegistrations: async () => registrations,
@@ -228,17 +248,15 @@ describe('PhoneHost', () => {
     expect(screen.getByText(/needs the Manage subscribers or View cluster status role/)).toBeTruthy();
   });
 
-  it('without View cluster status, asks the node nothing, calls with no relay, and says so', async () => {
+  it('calls with the node ICE servers for a console user with no roles, asked with the line', async () => {
     const api = node();
     const sip = stack();
     await registered(sip, api, []);
-    expect(screen.getByTestId('phone-no-config').textContent).toContain('calls get no relay');
     fireEvent.change(screen.getByLabelText('Number or address'), { target: { value: '1002' } });
     fireEvent.click(screen.getByRole('button', { name: 'Call' }));
     await vi.waitFor(() => expect(sip.agents[0].calls).toHaveLength(1));
-    expect(sip.agents[0].calls[0].options.pcConfig).toEqual({ iceServers: [] });
-    expect(api.asked).toEqual([]);
-    expect(screen.queryByRole('alert')).toBeNull();
+    expect(sip.agents[0].calls[0].options.pcConfig).toEqual({ iceServers: [{ urls: 'stun:10.35.1.20:3478' }] });
+    expect(api.asked).toEqual(['1001@10.35.1.20 pw']);
   });
 
   it('keeps the call, and its indicator, while another screen is shown', async () => {

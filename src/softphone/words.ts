@@ -1,4 +1,4 @@
-import type { ClientConfig } from '../api/types';
+import type { ClientConfig, SubscriberLine } from '../api/types';
 import type { CallState, RegistrationState, VideoLine } from './Softphone';
 
 /** The softphone's states and negotiation in words, shared by the harness view and the Phone section. */
@@ -31,6 +31,16 @@ export function describeRegistration(state: RegistrationState): string {
 /** Whether there is a call to hang up. */
 export function callInProgress(state: CallState): boolean {
   return state === 'calling' || state === 'ringing' || state === 'incoming' || state === 'connected';
+}
+
+/**
+ * The credentials a SIP address and password sign the subscriber's own routes
+ * with: the realm is the address's host. Undefined for anything that is not
+ * `sip:user@realm`.
+ */
+export function lineOf(uri: string, password: string): SubscriberLine | undefined {
+  const match = /^sips?:([^@;>]+)@([^;>?:]+)/i.exec(uri.trim());
+  return match ? { user: decodeURIComponent(match[1]), realm: match[2].toLowerCase(), password } : undefined;
 }
 
 /**

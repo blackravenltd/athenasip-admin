@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { HttpAdminApi } from './HttpAdminApi';
 import { ApiError } from './errors';
+import { authorization, digestHashes, parseChallenges } from './digest';
 
 /**
  * A fetch that answers once. `null` rather than `''` for a body-less status:
@@ -193,6 +194,62 @@ describe('HttpAdminApi', () => {
       const fetch = route({ '/api/v1/realms': [403, { error: { code: 'forbidden', message: 'no' } }] });
       await expect(new HttpAdminApi({ fetch, onForbidden }).listRealms()).rejects.toMatchObject({ status: 403 });
       expect(onForbidden).toHaveBeenCalledOnce();
+    });
+  });
+
+  describe('a subscriber route', () => {
+    const LINE = { realm: 'sip.example.org', user: '1001', password: 'secret' };
+    const challenge = (nonce: string, stale = false) => new Response(envelope('unauthorized', 'sign this'), {
+      status: 401,
+      headers: { 'WWW-Authenticate': `Digest realm="sip.example.org", qop="auth", algorithm=SHA-256, nonce="${nonce}"${stale ? ', stale=true' : ''}, Digest realm="sip.example.org", qop="auth", algorithm=MD5, nonce="${nonce}"` },
+    });
+
+    /** A node that challenges, then accepts only a correct SHA-256 answer to `nonces`' last entry, going stale on the others. */
+    function signedNode(nonces: string[]) {
+      const sent: RequestInit[] = [];
+      const fetch = vi.fn(async (url: string, init: RequestInit) => {
+        sent.push(init);
+        const given = (init.headers as Record<string, string>).Authorization;
+        if (!given) return challenge(nonces[0]);
+        const nonce = /nonce="([^"]+)"/.exec(given)![1];
+        const cnonce = /cnonce="([^"]+)"/.exec(given)![1];
+        const expected = await authorization(parseChallenges(challenge(nonce).headers.get('WWW-Authenticate')!), {
+          username: LINE.user, password: LINE.password, method: 'GET', uri: new URL(url, 'http://node').pathname, cnonce,
+        }, digestHashes());
+        if (given !== expected) return challenge(nonce);
+        const next = nonces.indexOf(nonce) + 1;
+        if (next < nonces.length) return challenge(nonces[next], true);
+        return new Response(JSON.stringify({ transports: [], ice_servers: [] }), { status: 200 });
+      });
+      return { fetch: fetch as unknown as typeof globalThis.fetch, sent };
+    }
+
+    it('signs with the line, never the session, and keeps the browser from prompting', async () => {
+      const { fetch, sent } = signedNode(['n1']);
+      const onUnauthorized = vi.fn();
+      const api = new HttpAdminApi({ fetch, token: () => 'session-token', onUnauthorized });
+      expect(await api.subscriberConfig(LINE)).toEqual({ transports: [], ice_servers: [] });
+      expect(sent).toHaveLength(2);
+      expect(sent.every((init) => init.credentials === 'omit')).toBe(true);
+      expect(JSON.stringify(sent)).not.toContain('session-token');
+      expect((sent[1].headers as Record<string, string>).Authorization).toMatch(/^Digest username="1001", realm="sip.example.org", nonce="n1", uri="\/api\/v1\/subscriber\/sip.example.org\/config", algorithm=SHA-256/);
+      expect(onUnauthorized).not.toHaveBeenCalled();
+    });
+
+    it('answers a stale nonce once more', async () => {
+      const { fetch, sent } = signedNode(['n1', 'n2']);
+      await new HttpAdminApi({ fetch }).subscriberConfig(LINE);
+      expect(sent).toHaveLength(3);
+    });
+
+    it('rejects a wrong password with the 401, ending no session', async () => {
+      const { fetch, sent } = signedNode(['n1']);
+      const onUnauthorized = vi.fn();
+      const failure = await new HttpAdminApi({ fetch, onUnauthorized }).subscriberConfig({ ...LINE, password: 'wrong' }).catch((cause: unknown) => cause);
+      expect(failure).toBeInstanceOf(ApiError);
+      expect((failure as ApiError).status).toBe(401);
+      expect(sent).toHaveLength(2);
+      expect(onUnauthorized).not.toHaveBeenCalled();
     });
   });
 });

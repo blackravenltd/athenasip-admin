@@ -1,4 +1,5 @@
 import type { AdminApi } from './AdminApi';
+import { authorization, digestHashes, parseChallenges } from './digest';
 import { ApiError } from './errors';
 import type {
   Subscriber,
@@ -19,6 +20,7 @@ import type {
   QualifiedClient,
   Registration,
   SessionInfo,
+  SubscriberLine,
   UpdateSubscriber,
   UpdateAdminUser,
   UpdateRealm,
@@ -109,6 +111,38 @@ export class HttpAdminApi implements AdminApi {
     return JSON.parse(text) as T;
   }
 
+  /**
+   * A subscriber's own route, signed with HTTP Digest rather than the session.
+   * The first request goes unsigned to fetch a nonce; a stale one is answered
+   * once more. No 401 here is the session's, so neither callback hears it.
+   * `credentials: 'omit'` keeps the browser from offering its own login box.
+   */
+  private async signed<T>(method: string, path: string, line: SubscriberLine, signal?: AbortSignal): Promise<T> {
+    const url = `${this.baseUrl}/api/v1${path}`;
+    const target = new URL(url, 'http://node');
+    const send = (signature?: string) => this.http(url, {
+      method,
+      headers: { Accept: 'application/json', ...(signature ? { Authorization: signature } : {}) },
+      credentials: 'omit',
+      signal,
+    });
+    let response = await send();
+    for (let answered = 0; response.status === 401 && answered < 2; answered += 1) {
+      const challenges = parseChallenges(response.headers.get('WWW-Authenticate') ?? '');
+      if (answered > 0 && !challenges.some((challenge) => challenge.stale)) break;
+      const signature = await authorization(
+        challenges,
+        { username: line.user, password: line.password, method, uri: target.pathname + target.search },
+        digestHashes(),
+      );
+      if (!signature) break;
+      response = await send(signature);
+    }
+    if (!response.ok) throw await describeFailure(response);
+    const text = await response.text();
+    return (text ? JSON.parse(text) : undefined) as T;
+  }
+
   login(username: string, password: string, signal?: AbortSignal) {
     return this.request<LoginResult>('POST', '/auth/login', { body: { username, password }, token: '', signal });
   }
@@ -129,7 +163,9 @@ export class HttpAdminApi implements AdminApi {
 
   health(signal?: AbortSignal) { return this.request<Health>('GET', '/health', { signal, accept: [503] }); }
   nodes(signal?: AbortSignal) { return this.request<ClusterNode[]>('GET', '/nodes', { signal }); }
-  clientConfig(signal?: AbortSignal) { return this.request<ClientConfig>('GET', '/client/config', { signal }); }
+  subscriberConfig(line: SubscriberLine, signal?: AbortSignal) {
+    return this.signed<ClientConfig>('GET', `/subscriber/${segment(line.realm)}/config`, line, signal);
+  }
 
   listRealms(signal?: AbortSignal) { return this.request<Realm[]>('GET', '/realms', { signal }); }
   createRealm(realm: CreateRealm, signal?: AbortSignal) {

@@ -2,6 +2,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { fixtureFromEnvironment, sipUri, softphoneUrl, type Fixture } from './fixture';
+import { authorization, digestHashes, parseChallenges } from '../src/api/digest';
 import type { MediaStats, SoftphoneState, Transition } from '../src/softphone/Softphone';
 import type { SoftphoneReadout } from '../src/softphone/page';
 
@@ -20,7 +21,7 @@ declare global {
 
 interface Record_ {
   test: string;
-  fixture: Omit<Fixture, 'password' | 'apiUser'>;
+  fixture: Omit<Fixture, 'password'>;
   caller: EndRecord;
   callee: EndRecord;
 }
@@ -37,7 +38,10 @@ const fixture = fixtureFromEnvironment();
 // A phone target selects the phone run instead (`phone-call.spec.ts`).
 test.skip(!!fixture.target, 'ATHENA_INTEROP_TARGET is set, so this is the phone run');
 
-/** In the relay phase, the `ice_servers` from `/client/config`, fetched here so the page holds no session. */
+/**
+ * In the relay phase, the `ice_servers` from `/subscriber/{realm}/config`, signed with the first
+ * subscriber's SIP credentials and fetched here, so the page holds no API credential.
+ */
 let iceServers: unknown[] | undefined;
 
 test.beforeAll(async () => {
@@ -57,22 +61,17 @@ test.beforeAll(async () => {
     );
   }
   if (fixture.relay) {
-    if (!fixture.apiUser) {
-      throw new Error('The relay phase reads /client/config as a user, and ATHENA_INTEROP_API_USER and ATHENA_INTEROP_API_PASSWORD are not set. up.sh writes both into generated/fixture.env.');
-    }
-    const login = await fetch(`${fixture.apiUrl}/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(fixture.apiUser),
-    });
-    expect(login.ok, `POST /auth/login as ${fixture.apiUser.username} answered ${login.status}`).toBe(true);
-    const { token } = await login.json() as { token: string };
-    const authorization = { Authorization: `Bearer ${token}` };
-    const response = await fetch(`${fixture.apiUrl}/client/config`, { headers: authorization });
-    expect(response.ok, `GET /client/config answered ${response.status}`).toBe(true);
+    const path = `/subscriber/${encodeURIComponent(fixture.realm)}/config`;
+    const url = `${fixture.apiUrl}${path}`;
+    const challenge = await fetch(url);
+    expect(challenge.status, `GET ${path} unsigned answered ${challenge.status}, not a Digest challenge`).toBe(401);
+    const signature = await authorization(parseChallenges(challenge.headers.get('WWW-Authenticate') ?? ''), {
+      username: fixture.subscribers[0], password: fixture.password, method: 'GET', uri: new URL(url).pathname,
+    }, digestHashes());
+    expect(signature, `GET ${path} offered no Digest challenge this client can answer`).toBeDefined();
+    const response = await fetch(url, { headers: { Authorization: signature! } });
+    expect(response.ok, `GET ${path} as ${fixture.subscribers[0]} answered ${response.status}`).toBe(true);
     const config = await response.json() as { ice_servers?: Array<{ urls: string; credential?: string }> };
-    // Log out, so the session does not outlive the run.
-    await fetch(`${fixture.apiUrl}/auth/logout`, { method: 'POST', headers: authorization }).catch(() => undefined);
     iceServers = config.ice_servers ?? [];
     expect(iceServers.some((server) => /^turns?:/.test((server as { urls: string }).urls) && (server as { credential?: string }).credential), 'the node offers no TURN server with a credential').toBe(true);
   }
@@ -196,7 +195,7 @@ async function writeRecord(title: string, caller: End, callee: End): Promise<voi
     history: await side.page.evaluate(() => window.__athenaSoftphone!.history()),
     stats: await readStats(side.page),
   });
-  const { password: _password, apiUser: _apiUser, ...visible } = fixture;
+  const { password: _password, ...visible } = fixture;
   const record: Record_ = { test: title, fixture: visible, caller: await end(caller), callee: await end(callee) };
   await mkdir(fixture.resultsDir, { recursive: true });
   const file = join(fixture.resultsDir, `${title.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.json`);
