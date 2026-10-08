@@ -121,7 +121,7 @@ Each test writes its descriptions, state history and counters to `e2e/results/`.
 | `ATHENA_INTEROP_WS_PORT` | `8088` | The socket is `ws://127.0.0.1:<port>`. |
 | `ATHENA_INTEROP_PUBLIC_ADDRESS` | `127.0.0.1` | The address the node advertises. |
 | `ATHENA_INTEROP_REALM` | the public address | The subscribers' realm. |
-| `ATHENA_INTEROP_SUBSCRIBERS` | `1001,1002` | The two subscribers. |
+| `ATHENA_INTEROP_SUBSCRIBERS` | `1001,1002` | The subscribers. The console uses the first two; the rest are AthenaPhone's. |
 | `ATHENA_INTEROP_PASSWORD` | `athenaphone` | Their password. |
 | `ATHENA_INTEROP_RESULTS` | `e2e/results` | Where records are written. |
 | `ATHENA_INTEROP_PAGE_URL` | `http://127.0.0.1:<api port>` | Where the page is served, if not by the node. |
@@ -172,3 +172,25 @@ ATHENA_INTEROP_REALM=sip.example.org ATHENA_INTEROP_SUBSCRIBERS=1002 \
 ATHENA_INTEROP_TARGET=sip:1003@sip.example.org \
 npx playwright test e2e/phone-call.spec.ts
 ```
+
+### The suite
+
+The server's `test/suite/run.sh` brings the fixture up and calls `npm run test:athenasip` once
+per phase, with `ATHENA_SUITE_PHASE` set to `direct` or `relay` and `ATHENA_SUITE_RESULTS`
+naming that phase's own directory. The script runs the unit and contract tests (in the direct
+phase only), then every Playwright spec, and writes `$ATHENA_SUITE_RESULTS/admin/summary.json`
+(`phase`, `passed`, `failed`, `skipped`, `failures`), with the reports, records and traces
+beside it. It exits 0 only when
+nothing failed, and a test that did not run because an earlier one failed counts as failed.
+It needs a live build (`VITE_ATHENASIP_LIVE=true`) in `build/`, and never builds or starts
+anything itself.
+
+`e2e/node.spec.ts` runs only when the fixture's administrator is given. It checks sign-in and
+roles, and a realm and subscriber round trip through the Digest-signed config (SHA-256 and
+MD5). It then drives the console's own Phone in a browser: a user with no roles signs in,
+registers with the WebSocket left empty, and calls a harness page, while `/events` must report
+the registration and the call. It creates a `suite-*.invalid` realm and `suite-*` users, and
+removes them. It signs in four times per phase, within the node's limit of five a minute per
+address, and waits out a 429.
+
+`phone-call.spec.ts` needs a device, so in the suite it runs only with `ATHENA_SUITE_DEVICE=1`.

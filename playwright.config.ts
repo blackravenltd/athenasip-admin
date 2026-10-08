@@ -1,5 +1,10 @@
 import { defineConfig } from '@playwright/test';
 
+// The suite runner's results directory, one per phase, in place of `e2e/results`.
+const suite = process.env.ATHENA_SUITE_RESULTS && process.env.ATHENA_SUITE_PHASE
+  ? `${process.env.ATHENA_SUITE_RESULTS.replace(/\/+$/, '')}/admin`
+  : undefined;
+
 /**
  * End-to-end specs against a running interop fixture. The server's checkout
  * brings the fixture up (`test/interop/up.sh --rtpengine`); this
@@ -16,7 +21,7 @@ export default defineConfig({
   retries: 0,
   timeout: 60_000,
   reporter: [['list']],
-  outputDir: 'e2e/results/playwright',
+  outputDir: suite ? `${suite}/playwright` : 'e2e/results/playwright',
   use: {
     browserName: 'chromium',
     headless: true,

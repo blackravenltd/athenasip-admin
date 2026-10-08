@@ -23,6 +23,8 @@ declare global {
 
 const fixture = fixtureFromEnvironment();
 
+// In the suite it needs a device present as well as named.
+test.skip(!!fixture.phase && !fixture.device, 'needs a phone: ATHENA_SUITE_DEVICE is not set');
 test.skip(!fixture.target, 'ATHENA_INTEROP_TARGET names no phone to call');
 
 test.use({
@@ -100,7 +102,7 @@ function readStats(page: Page): Promise<MediaStats | undefined> {
 
 interface Record_ {
   test: string;
-  fixture: Omit<Fixture, 'password'>;
+  fixture: Omit<Fixture, 'password' | 'apiUser'>;
   user: string;
   state: SoftphoneState;
   history: readonly Transition[];
@@ -110,7 +112,7 @@ interface Record_ {
 
 /** Written before the assertions, so a failed call leaves its descriptions and counters behind. */
 async function writeRecord(title: string, page: Page, user: string, stats: MediaStats | undefined, video: VideoNegotiation): Promise<void> {
-  const { password: _password, ...visible } = fixture;
+  const { password: _password, apiUser: _apiUser, ...visible } = fixture;
   const record: Record_ = {
     test: title,
     fixture: visible,

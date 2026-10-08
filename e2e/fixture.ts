@@ -19,8 +19,21 @@ export interface Fixture {
    * port falls inside this range.
    */
   relay?: { min: number; max: number };
+  /**
+   * The administrator the fixture makes, `ATHENA_INTEROP_API_USER` and
+   * `_API_PASSWORD`, for the specs that drive the API. `up.sh` generates the
+   * password per run, so there is no default.
+   */
+  apiUser?: { username: string; password: string };
+  /**
+   * Set when the suite runner (`npm run test:athenasip`) calls: the phase it
+   * brought the fixture up for, from `ATHENA_SUITE_PHASE`.
+   */
+  phase?: 'direct' | 'relay';
+  /** A person or a device is present, so specs that need one run: `ATHENA_SUITE_DEVICE=1`. */
+  device: boolean;
   realm: string;
-  /** Two for a browser calling a browser; the first alone when a browser calls a phone. */
+  /** The first two for a browser calling a browser; the first alone when a browser calls a phone. Others are AthenaPhone's. */
   subscribers: string[];
   password: string;
   resultsDir: string;
@@ -62,6 +75,12 @@ export function fixtureFromEnvironment(env: NodeJS.ProcessEnv = process.env): Fi
     }
     relay = { min, max };
   }
+  const given = env.ATHENA_SUITE_PHASE || undefined;
+  if (given !== undefined && given !== 'direct' && given !== 'relay') throw new Error(`ATHENA_SUITE_PHASE is ${given}, not direct or relay`);
+  const phase = given as Fixture['phase'];
+  if (phase === 'relay' && !relay) throw new Error('ATHENA_SUITE_PHASE is relay, but the engine advertises the public address, so nothing needs TURN');
+  if (phase === 'direct' && relay) throw new Error(`ATHENA_SUITE_PHASE is direct, but the engine advertises ${advertise}, which only TURN can reach`);
+  const suiteResults = env.ATHENA_SUITE_RESULTS && phase ? `${env.ATHENA_SUITE_RESULTS.replace(/\/+$/, '')}/admin` : undefined;
   return {
     pageUrl: (env.ATHENA_INTEROP_PAGE_URL ?? `http://127.0.0.1:${apiPort}`).replace(/\/+$/, ''),
     apiUrl: `http://127.0.0.1:${apiPort}/api/v1`,
@@ -69,10 +88,15 @@ export function fixtureFromEnvironment(env: NodeJS.ProcessEnv = process.env): Fi
     publicAddress,
     advertise,
     relay,
+    apiUser: env.ATHENA_INTEROP_API_USER && env.ATHENA_INTEROP_API_PASSWORD
+      ? { username: env.ATHENA_INTEROP_API_USER, password: env.ATHENA_INTEROP_API_PASSWORD }
+      : undefined,
+    phase,
+    device: env.ATHENA_SUITE_DEVICE === '1' || env.ATHENA_SUITE_DEVICE === 'true',
     realm: env.ATHENA_INTEROP_REALM ?? publicAddress,
     subscribers,
     password: env.ATHENA_INTEROP_PASSWORD ?? 'athenaphone',
-    resultsDir: env.ATHENA_INTEROP_RESULTS ?? 'e2e/results',
+    resultsDir: suiteResults ?? env.ATHENA_INTEROP_RESULTS ?? 'e2e/results',
     target: env.ATHENA_INTEROP_TARGET || undefined,
     ignoreTls: env.ATHENA_INTEROP_IGNORE_TLS === '1' || env.ATHENA_INTEROP_IGNORE_TLS === 'true',
     answerSeconds: seconds(env.ATHENA_INTEROP_ANSWER_SECONDS, 45, 'ATHENA_INTEROP_ANSWER_SECONDS'),

@@ -33,5 +33,8 @@ export default defineConfig({
     setupFiles: './src/test/setup.ts',
     // The end-to-end specs are Playwright's (`npm run test:e2e`).
     exclude: ['node_modules/**', 'e2e/**'],
+    // A file's first screen test pays for jsdom and its imports, up to 5 s on an idle machine
+    // and more under load, as when the suite runs beside the fixture.
+    testTimeout: 20_000,
   },
 });

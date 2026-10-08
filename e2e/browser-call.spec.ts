@@ -21,7 +21,7 @@ declare global {
 
 interface Record_ {
   test: string;
-  fixture: Omit<Fixture, 'password'>;
+  fixture: Omit<Fixture, 'password' | 'apiUser'>;
   caller: EndRecord;
   callee: EndRecord;
 }
@@ -35,8 +35,8 @@ interface EndRecord {
 
 const fixture = fixtureFromEnvironment();
 
-// A phone target selects the phone run instead (`phone-call.spec.ts`).
-test.skip(!!fixture.target, 'ATHENA_INTEROP_TARGET is set, so this is the phone run');
+// Outside the suite, a phone target selects the phone run instead (`phone-call.spec.ts`).
+test.skip(!!fixture.target && !fixture.phase, 'ATHENA_INTEROP_TARGET is set, so this is the phone run');
 
 /**
  * In the relay phase, the `ice_servers` from `/subscriber/{realm}/config`, signed with the first
@@ -45,8 +45,8 @@ test.skip(!!fixture.target, 'ATHENA_INTEROP_TARGET is set, so this is the phone 
 let iceServers: unknown[] | undefined;
 
 test.beforeAll(async () => {
-  if (fixture.subscribers.length !== 2) {
-    throw new Error(`ATHENA_INTEROP_SUBSCRIBERS names ${fixture.subscribers.length} subscriber(s); a browser calling a browser needs exactly two`);
+  if (fixture.subscribers.length < 2) {
+    throw new Error(`ATHENA_INTEROP_SUBSCRIBERS names ${fixture.subscribers.length} subscriber(s); a browser calling a browser needs two`);
   }
   let health: Response | undefined;
   try {
@@ -75,6 +75,12 @@ test.beforeAll(async () => {
     iceServers = config.ice_servers ?? [];
     expect(iceServers.some((server) => /^turns?:/.test((server as { urls: string }).urls) && (server as { credential?: string }).credential), 'the node offers no TURN server with a credential').toBe(true);
   }
+});
+
+/** Every page a test opened, left after it whatever the outcome. */
+const opened: Page[] = [];
+test.afterEach(async () => {
+  for (const page of opened.splice(0)) await leave(page);
 });
 
 test('the first subscriber calls the second, and the caller hangs up', async ({ browser }, info) => {
@@ -118,10 +124,21 @@ interface End {
   page: Page;
 }
 
+/** Unregisters a harness page, so it answers nothing in a later test, and closes its context. */
+async function leave(page: Page): Promise<void> {
+  const unregister = page.getByTestId('softphone-unregister');
+  if (await unregister.isVisible().catch(() => false)) {
+    await unregister.click();
+    await page.waitForFunction(() => window.__athenaSoftphone?.state().registration !== 'registered', undefined, { timeout: 5000 }).catch(() => undefined);
+  }
+  await page.context().close();
+}
+
 /** A registered softphone in its own context, so the two share no socket or media stream. */
 async function open(browser: Parameters<Parameters<typeof test>[2]>[0]['browser'], user: string, options: { target?: string; answer?: boolean }): Promise<End> {
   const context = await browser.newContext();
   const page = await context.newPage();
+  opened.push(page);
   page.on('pageerror', (error) => { throw error; });
   await page.goto(softphoneUrl(fixture, user, { ...options, ice: iceServers }));
   await page.waitForFunction(() => {
@@ -195,7 +212,7 @@ async function writeRecord(title: string, caller: End, callee: End): Promise<voi
     history: await side.page.evaluate(() => window.__athenaSoftphone!.history()),
     stats: await readStats(side.page),
   });
-  const { password: _password, ...visible } = fixture;
+  const { password: _password, apiUser: _apiUser, ...visible } = fixture;
   const record: Record_ = { test: title, fixture: visible, caller: await end(caller), callee: await end(callee) };
   await mkdir(fixture.resultsDir, { recursive: true });
   const file = join(fixture.resultsDir, `${title.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.json`);

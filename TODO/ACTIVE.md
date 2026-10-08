@@ -9,7 +9,8 @@ node serves. Move items to `COMPLETE.md` as they land.
 **The tree.** Work on `develop`; `main` is the last release, tags are bare `x.y.z`. `0.3.0` is
 released and pushed. Everything after it is on `develop`, pushed. Commit or
 push only when Tom asks, never with Claude attribution (his global rule). Run tests with
-`npx vitest run --maxWorkers=4`; on a loaded machine screen tests time out, which is the load.
+`npx vitest run --maxWorkers=4`; the test timeout is 20 s because a file's first screen test
+can take 5 s.
 
 **Deployed.** corvus-fi-1 (`root@10.35.1.20`) and corvus-gbni-1 (macnessa.athenasip.org,
 `root@10.44.1.50`, 8443 on the site network only) serve `assets/index-D1mNvEs7.js` on 8080 and
@@ -146,7 +147,10 @@ Not reopened without asking Tom.
       to polling.
 - [ ] Finished calls from `/call-records` on the Calls screen.
 - [ ] The cluster entry from `/nodes` on Overview.
-- [ ] Hang up a call from the Calls screen, once the node can send BYEs.
+- [ ] Hang up a call from the Calls screen with `DELETE /calls/{call}` (server ed9141f), shown
+      only with `manage-cluster`. 202 means BYEs sent and the call leaves `/calls` as the ends
+      answer; 404 no such live call; 409 `not_answered` for a ringing call, which only its
+      caller can CANCEL. The Call-ID is percent-encoded, as for GET.
 - [ ] Match legs to participants, once the node fills `participant`.
 - [ ] The media engine's settings, once the server exposes them.
 
