@@ -57,4 +57,17 @@ describe('UsersScreen', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect((await api.listUsers()).find((user) => user.username === 'ops')?.disabled).toBe(true);
   });
+
+  it('keeps Manage trunks when another role is ticked', async () => {
+    const { api } = await signedInAs('admin');
+    await api.updateUser('ops', { roles: ['view-cluster-status', 'manage-trunks'] });
+    render(<UsersScreen api={api} username="admin" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit ops' }));
+    expect(within(dialogue()).getByLabelText('Manage trunks')).toHaveProperty('checked', true);
+    fireEvent.click(within(dialogue()).getByLabelText('Manage realms'));
+    fireEvent.click(within(dialogue()).getByRole('button', { name: 'Save user' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect((await api.listUsers()).find((user) => user.username === 'ops')?.roles)
+      .toEqual(['view-cluster-status', 'manage-realms', 'manage-trunks']);
+  });
 });

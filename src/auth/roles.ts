@@ -26,7 +26,11 @@ export const ROLE_TEXT: Record<Role, { label: string; detail: string }> = {
   },
   'manage-cluster': {
     label: 'Manage cluster',
-    detail: 'Change node membership and node configuration. Nothing in this console uses it yet.',
+    detail: 'End live calls and reload the routing scripts. Nothing in this console uses it yet.',
+  },
+  'manage-trunks': {
+    label: 'Manage trunks',
+    detail: 'Create, change and remove trunks and set their passwords, which the node keeps as given. Give it to as few users as possible. Nothing in this console uses it yet.',
   },
 };
 

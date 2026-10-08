@@ -18,7 +18,8 @@ export type Role =
   | 'manage-admin-users'
   | 'manage-realms'
   | 'manage-realm-subscribers'
-  | 'manage-cluster';
+  | 'manage-cluster'
+  | 'manage-trunks';
 
 export const ROLES: readonly Role[] = [
   'view-cluster-status',
@@ -26,6 +27,7 @@ export const ROLES: readonly Role[] = [
   'manage-realm-subscribers',
   'manage-admin-users',
   'manage-cluster',
+  'manage-trunks',
 ];
 
 /** `GET /session`: who the presented session token is, and what it may do. */

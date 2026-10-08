@@ -35,10 +35,31 @@ user has none.
 | Manage realms | Create, change and remove realms and their behaviour. |
 | Manage subscribers | Create, change and remove a realm's subscribers. |
 | Manage users | Create, change and remove users and their roles. |
-| Manage cluster | Node membership and configuration. No screen uses it yet. |
+| Manage cluster | End live calls and reload the routing scripts. No screen uses it yet. |
+| Manage trunks | Create, change and remove trunks and set their passwords. No screen uses it yet. |
+
+A trunk's password is kept as given, not hashed, so give Manage trunks to as few users as
+possible.
 
 The console hides what a user's roles do not allow; the node's 403 is what enforces it. The
 model is the server's, in its `docs/authentication.md`.
+
+## What the console does not manage
+
+The node can do more than the console shows. Until it does, use the admin API
+(`docs/api/openapi.yaml` in the server) or the server's own tools:
+
+| On the node | How | Role |
+| --- | --- | --- |
+| Routing and authorisation scripts (`lua://`) | The server's [scripting guide](https://github.com/blackravenltd/athenasip/blob/main/docs/scripting.md) | none, on the host |
+| Reloading the scripts | `POST /api/v1/policy/reload`, or `SIGHUP` on each node | Manage cluster |
+| Trunks | `/api/v1/trunks` | Manage trunks |
+| Attributes on a realm, subscriber or trunk | `attributes` on create or update | as for the record |
+| Ending a live call | `DELETE /api/v1/calls/{call}` | Manage cluster |
+| The event stream | `GET /api/v1/events` | View cluster status |
+
+The console never sends `attributes`, and the node replaces them only when they are given,
+so changing a realm or subscriber here leaves what a script reads alone.
 
 ## Rate limits
 
