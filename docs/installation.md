@@ -4,6 +4,10 @@
 
 Node 20 or newer, to build. Nothing at run time: the result is static files.
 
+An [AthenaSIP](https://github.com/blackravenltd/athenasip) node at 0.9.0 or later to serve
+it. The phone reads its connection from `/api/v1/subscriber/{realm}/config`, which earlier
+nodes do not have.
+
 ## Build
 
 ```
@@ -30,8 +34,12 @@ http:
     path: "../admin/"
 ```
 
-The node needs no restart when the files change. Serving the bundle from anywhere else makes
-the API cross-origin, which is not supported.
+The node needs no restart when the files change, and by default answers a client-side route
+such as `/phone` with `index.html` (`http.files.spa`). Serving the bundle from anywhere else
+makes the API cross-origin, which is not supported.
+
+The server's Docker setup serves a build of this repository with `docker/up.sh --console`,
+from `../athenasip-admin/build` or `ATHENA_CONSOLE_DIR`.
 
 ## HTTPS
 
