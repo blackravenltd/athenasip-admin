@@ -2,7 +2,7 @@
 
 What exists and works, by release. The commit history has the detail.
 
-## Unreleased (on `develop`)
+## 0.4.0 (2026-10-08)
 
 - **The Phone.** A top-level browser phone for any signed-in user, held by the shell so a call
   outlives a change of screen: dial pad and tones, audio and video, answer, decline, mute,
@@ -11,6 +11,12 @@ What exists and works, by release. The commit history has the detail.
   nothing its user's roles do not allow.
 - **The phone run.** `e2e/phone-call.spec.ts` calls a real phone with video and asserts the
   media. The harness page takes `video=1`, and the readout gains `video()`.
+- **Signed with the line.** The Phone and the softphone read `/subscriber/{realm}/config` with
+  HTTP Digest using the line's own SIP credentials (SHA-256, MD5 over plain http), so the
+  console user needs no role for it. Follows the node's removal of `/client/config`.
+- **The suite.** `npm run test:athenasip` for the server's `test/suite/run.sh`, and
+  `e2e/node.spec.ts`: sign-in and roles, provisioning through the Digest config, and the
+  console's Phone registering and calling against a live node with `/events` watched.
 - **Password recovery** named on the sign-in page: `athenasip --reset-password`.
 - **Docs and comments** rewritten short and current.
 

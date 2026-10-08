@@ -6,8 +6,8 @@ node serves. Move items to `COMPLETE.md` as they land.
 
 ## Resume here
 
-**The tree.** Work on `develop`; `main` is the last release, tags are bare `x.y.z`. `0.3.0` is
-released and pushed. Everything after it is on `develop`, pushed. Commit or
+**The tree.** Work on `develop`; `main` is the last release, tags are bare `x.y.z`. `0.4.0` is
+released and pushed. Commit or
 push only when Tom asks, never with Claude attribution (his global rule). Run tests with
 `npx vitest run --maxWorkers=4`; the test timeout is 20 s because a file's first screen test
 can take 5 s.
