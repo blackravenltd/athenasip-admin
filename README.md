@@ -2,12 +2,17 @@
 
 # AthenaSIP Admin
 
-*v0.4.0*
+*v0.4.1*
 
 **Project Status: ALPHA - DO NOT USE**
 
 The administration console for [AthenaSIP](https://github.com/blackravenltd/athenasip), with
 a browser phone. It is a static React bundle that the SIP server serves beside its admin API.
+
+It needs an AthenaSIP node at 0.9.0 or later. Routing scripts, trunks and the attributes
+scripts read are not managed here yet: use the server's admin API and its
+[scripting guide](https://github.com/blackravenltd/athenasip/blob/main/docs/scripting.md). See
+[what the console does not manage](docs/configuration.md#what-the-console-does-not-manage).
 
 ## Features
 
@@ -31,6 +36,7 @@ npm test          # unit tests (Vitest)
 npm run typecheck # tsc, both projects
 npm run build     # typecheck, then a bundle in build/
 npm run test:e2e  # browsers call through a running node; see docs/softphone.md
+npm run test:athenasip  # everything unattended, as the server's suite runs it
 ```
 
 ## Documentation

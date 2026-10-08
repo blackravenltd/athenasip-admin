@@ -2,6 +2,14 @@
 
 What exists and works, by release. The commit history has the detail.
 
+## 0.4.1 (2026-10-08)
+
+- **The sixth role.** The console knows `manage-trunks` (node 0.10.0), so editing a user who
+  holds it no longer drops it on save. Manage cluster now says what it permits.
+- **Docs for node 0.10.0.** Which node the console needs (0.9.0 or later), and what the node
+  does that the console does not manage yet: routing scripts and their reload, trunks,
+  attributes, ending calls and the event stream.
+
 ## 0.4.0 (2026-10-08)
 
 - **The Phone.** A top-level browser phone for any signed-in user, held by the shell so a call

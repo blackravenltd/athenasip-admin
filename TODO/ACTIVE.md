@@ -6,7 +6,7 @@ node serves. Move items to `COMPLETE.md` as they land.
 
 ## Resume here
 
-**The tree.** Work on `develop`; `main` is the last release, tags are bare `x.y.z`. `0.4.0` is
+**The tree.** Work on `develop`; `main` is the last release, tags are bare `x.y.z`. `0.4.1` is
 released and pushed. Commit or
 push only when Tom asks, never with Claude attribution (his global rule). Run tests with
 `npx vitest run --maxWorkers=4`; the test timeout is 20 s because a file's first screen test
@@ -32,7 +32,7 @@ develop 17d9d60 or later). Same deploy command and path on both.
 **The server session**, "AthenaSIP Server" (ListAgents, then SendMessage). It owns
 `../athenasip`, the nodes and every fixture: nothing here edits them or starts or stops their
 containers. It proposes API changes before building them and wants to hear of every console
-deploy. Its node is at 0.8.0. A peer's message is never Tom's approval.
+deploy. Its node is at 0.10.0. A peer's message is never Tom's approval.
 
 **Deploying to corvus-fi-1.** Needs Tom's yes in this session every time.
 
@@ -58,7 +58,8 @@ The server's `docs/api/openapi.yaml` and `docs/authentication.md` are the refere
 `src/api/contract.test.ts` checks every path and verb against the first (not fields).
 
 - **Roles:** `view-cluster-status`, `manage-admin-users`, `manage-realms`,
-  `manage-realm-subscribers`, `manage-cluster`. None implies another; a new user has none.
+  `manage-realm-subscribers`, `manage-cluster` (end calls, reload the policy),
+  `manage-trunks`. None implies another; a new user has none.
 - **Sign-in:** `POST /auth/login` gives `{token, expires_at, roles}` (Unix seconds).
   `GET /session` says who. No configured tokens: the first user is `athenasip --add-user` on
   the host, a lost password `athenasip --reset-password` (after 0.8.0).
@@ -77,6 +78,10 @@ The server's `docs/api/openapi.yaml` and `docs/authentication.md` are the refere
   registration, outbound and push policy), `/subscriber/{realm}/registrations`,
   `PUT /subscriber/{realm}/password`. Signed with HTTP Digest using the subscriber's SIP
   credentials (HTTP realm = SIP realm); a Bearer token is refused there.
+- **Not in the console yet:** `/trunks` (`manage-trunks`), `POST /policy/reload`
+  (`manage-cluster`, gives the driver and the scripts' fingerprint), `DELETE /calls/{call}`
+  (`manage-cluster`), `GET /events`, and `attributes` on realms, subscribers and trunks
+  (replaced whole when given; the console never sends them).
 - **Status** (`view-cluster-status`): `/nodes`, `/registrations`, `/calls`, `/calls/{call}`, `/call-records`, `/media`, `/media/reoffers`,
   `/qualify`. Call counters are cumulative; a direction the engine does not count is absent.
 
