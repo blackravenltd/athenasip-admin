@@ -2,11 +2,8 @@ import type { BehaviourEffective, MediaProfile, Realm, RealmSettings } from '../
 import { QUALIFY_MAX, QUALIFY_MIN } from '../api/types';
 
 /**
- * What each media profile does, for somebody without a telecoms background.
- *
- * The server profiles a leg from its own session description once it has
- * seen one. The profile decides only for a leg this node has never heard
- * describe itself, which is the first offer it sends towards an endpoint.
+ * Each media profile in plain words. A profile decides only the first offer
+ * to a leg the node has not yet heard describe itself.
  */
 export const MEDIA_PROFILE_TEXT: Record<MediaProfile, { label: string; detail: string }> = {
   mirror: {
@@ -32,9 +29,8 @@ export const MEDIA_PROFILE_TEXT: Record<MediaProfile, { label: string; detail: s
 };
 
 /**
- * A realm's settings as a form holds them: text for the numbers, because an
- * input holds text, and null for a media setting the realm inherits from the
- * server's own `behaviour:` section.
+ * A realm's settings as form state: numbers as text, and null for a setting
+ * inherited from the server's `behaviour:` section.
  */
 export interface PolicyForm {
   registration_timeout: string;
@@ -47,7 +43,7 @@ export interface PolicyForm {
   rewrite_contact: boolean | null;
 }
 
-/** A new realm inherits its media settings, so a change to the server's later reaches it. */
+/** A new realm inherits its media settings from the server. */
 export const DEFAULT_POLICY: PolicyForm = {
   registration_timeout: '5000',
   registration_minimum: '0',
@@ -71,16 +67,14 @@ export function policyForm(realm: Realm): PolicyForm {
 }
 
 /**
- * The server's own value for each setting, which every realm carries as
- * `behaviour_default`. A new realm has none of its own to read, so it takes
- * any listed realm's; with no realm at all, the dialogue says "server default"
- * without a value rather than guessing.
+ * The server's value for each setting, which every realm carries as
+ * `behaviour_default`. Empty when there is no realm to read it from.
  */
 export function serverDefaults(realm?: Pick<Realm, 'behaviour_default'>): Partial<BehaviourEffective> {
   return realm ? { ...realm.behaviour_default } : {};
 }
 
-/** One media setting of a realm in words, and whether it is the server's rather than the realm's own. */
+/** A realm's media settings in words, and whether each is inherited from the server. */
 export function describeBehaviour(realm: Realm): {
   relayed: boolean;
   anchor: { label: string; inherited: boolean };
@@ -95,12 +89,8 @@ export function describeBehaviour(realm: Realm): {
 }
 
 /**
- * The form as the API wants it, or the reason it cannot be sent.
- *
- * The server takes any whole number for each of these and does not check
- * them against each other. A realm whose shortest registration is longer than
- * its longest refuses every phone, so that is caught here, where it can be
- * said beside the field, rather than discovered when nothing can register.
+ * The form as the API wants it, or the reason it cannot be sent. The server
+ * does not check the numbers against each other, so that is done here.
  */
 export function policySettings(form: PolicyForm): { settings: RealmSettings } | { problem: string } {
   const seconds = (text: string, what: string): number | string => {
@@ -132,7 +122,7 @@ export function policySettings(form: PolicyForm): { settings: RealmSettings } | 
       registration_timeout: timeout,
       registration_minimum: minimum,
       nonce_expiry: nonce,
-      // Null as well as a value: null is how a setting goes back to the server's.
+      // Null makes a setting inherit the server's.
       behaviour: { media_anchor: form.media_anchor, media_profile: form.media_profile, qualify_interval: qualify, rewrite_contact: form.rewrite_contact },
     },
   };

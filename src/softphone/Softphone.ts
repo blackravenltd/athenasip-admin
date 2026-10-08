@@ -1,23 +1,13 @@
 /**
- * A WebRTC endpoint over SIP, with nothing of React in it.
+ * A WebRTC endpoint over SIP, free of React: registers one subscriber over a
+ * WebSocket, places or answers one call, and publishes an immutable snapshot
+ * of its state after every change.
  *
- * This is the whole of what the softphone does: register one subscriber against
- * one node over a WebSocket, place or answer one call, and say exactly what
- * happened while doing it. It owns the JsSIP user agent and session, and it
- * publishes an immutable snapshot of its state after every change, so that a
- * screen renders it and a test harness reads it, both through one interface.
- *
- * The record it keeps is deliberately more than a status line. A call that
- * says "Connected" and carries no audio is the failure a relay
- * misconfiguration actually produces, so the snapshot carries the session
- * descriptions each end saw, the ICE and DTLS state, the candidate pair the
- * browser settled on and the packet counters, which together say whether
- * media was negotiated, where it was sent, and whether any came back.
- *
- * JsSIP is injected rather than imported. The controller can then be driven
- * in a test by a user agent that never opens a socket, and the bundle that
- * carries JsSIP is loaded only by the page that needs it.
+ * The snapshot carries the session descriptions and the ICE and DTLS state, so
+ * a call that connects without media can be diagnosed. JsSIP is injected (see
+ * `SipStack`), so tests open no socket and only the softphone bundle loads it.
  */
+import type { DTMF_TRANSPORT } from 'jssip/lib/Constants';
 import type { RTCSession, EndEvent, PeerConnectionEvent, SDPEvent } from 'jssip/lib/RTCSession';
 import type { UA, UAConfiguration, RTCSessionEvent, UnRegisteredEvent } from 'jssip/lib/UA';
 
@@ -25,7 +15,7 @@ export type RegistrationState = 'unregistered' | 'connecting' | 'registered' | '
 export type CallState = 'idle' | 'calling' | 'ringing' | 'incoming' | 'connected' | 'ended' | 'failed';
 export type CallDirection = 'outgoing' | 'incoming';
 
-/** One end of the pair ICE settled on: address, port and how the candidate was found. */
+/** One end of the candidate pair ICE selected. */
 export interface CandidateEnd {
   address: string;
   port: number;
@@ -33,28 +23,33 @@ export interface CandidateEnd {
   protocol: string;
 }
 
-/** What the browser's own statistics say about the media, at one instant. */
+/** A summary of one `getStats()` report. */
 export interface MediaStats {
   packetsSent: number;
   packetsReceived: number;
   bytesSent: number;
   bytesReceived: number;
   packetsLost: number;
-  /** The far end's level as the browser measured it, 0 to 1, when it reports one. */
+  /** The far end's level, 0 to 1, when the browser reports one. */
   audioLevel?: number;
   /**
-   * The far end's accumulated energy, which only grows. An instant's level can
-   * land in a gap between beeps; the energy says the payload was not silence.
+   * The far end's accumulated energy. Unlike `audioLevel`, it cannot miss
+   * sound by sampling a gap.
    */
   totalAudioEnergy?: number;
+  /**
+   * This end's accumulated microphone energy. Standing still on a connected
+   * call means a muted, missing or silent microphone.
+   */
+  sentAudioEnergy?: number;
   codec?: string;
-  /** The video stream's own counters, kept apart so the audio figures above stay audio's. */
+  /** Video counters, kept apart from the audio figures above. */
   video?: VideoStats;
   dtlsState?: string;
   candidatePair?: { local: CandidateEnd; remote: CandidateEnd; state: string };
 }
 
-/** What the browser counted for video, when a call carries any. */
+/** Present when a call carries video. */
 export interface VideoStats {
   packetsSent: number;
   packetsReceived: number;
@@ -62,11 +57,11 @@ export interface VideoStats {
   codec?: string;
 }
 
-/** One description's video m-line: its port, 0 for declined, and its direction attribute. */
+/** A description's video m-line. Port 0 means declined. */
 export interface VideoLine {
   port: number;
   direction: 'sendrecv' | 'sendonly' | 'recvonly' | 'inactive';
-  /** In the session's BUNDLE group, so it shares a transport and its own port may be a placeholder. */
+  /** In the BUNDLE group: it shares a transport, so its port may be a placeholder. */
   bundled: boolean;
 }
 
@@ -76,7 +71,7 @@ export interface SoftphoneState {
   direction?: CallDirection;
   /** The far end's identity, as the request named it. */
   remoteIdentity?: string;
-  /** Why the call or the registration ended the way it did, in JsSIP's words. */
+  /** Why the call or the registration ended, in JsSIP's words. */
   cause?: string;
   localSdp?: string;
   remoteSdp?: string;
@@ -84,9 +79,26 @@ export interface SoftphoneState {
   iceGatheringState?: RTCIceGatheringState;
   iceConnectionState?: RTCIceConnectionState;
   connectionState?: RTCPeerConnectionState;
-  /** A message for the person at the keyboard, when something needs saying. */
+  /** When the call was answered, by the controller's clock. */
+  connectedAt?: number;
+  muted?: boolean;
+  /** This end put the call on hold. */
+  held?: boolean;
+  /** The far end put the call on hold. */
+  heldByFarEnd?: boolean;
+  /** A message for the person at the keyboard. */
   notice?: string;
 }
+
+/** What a call sends. Devices are `deviceId`s; omitted means the default. */
+export interface CallMedia {
+  video?: boolean;
+  microphone?: string;
+  camera?: string;
+}
+
+/** The dial pad keys: RFC 4733 events 0 to 15. */
+export const DTMF_TONES = '0123456789*#ABCD';
 
 export interface SoftphoneConfig {
   socket: string;
@@ -94,7 +106,7 @@ export interface SoftphoneConfig {
   password: string;
 }
 
-/** A moment in the state's history, for a harness to write down afterwards. */
+/** One entry in the state history. */
 export interface Transition {
   at: number;
   registration: RegistrationState;
@@ -104,10 +116,7 @@ export interface Transition {
   cause?: string;
 }
 
-/**
- * The corner of JsSIP this controller uses, so a test can provide one that
- * never touches the network.
- */
+/** The part of JsSIP the controller uses; tests supply a fake. */
 export interface SipStack {
   createUserAgent(configuration: UAConfiguration): UA;
   createSocket(url: string): UAConfiguration['sockets'];
@@ -117,15 +126,11 @@ export type Listener = (state: SoftphoneState) => void;
 
 const INITIAL: SoftphoneState = { registration: 'unregistered', call: 'idle' };
 
-/**
- * With no ICE servers the media engine is the only remote candidate, and it
- * advertises an address the browser can reach. That is the harness page's
- * case; the console passes what the node's `/client/config` names.
- */
+/** With no ICE servers, the media engine's advertised address is the only remote candidate. */
 const peerConfiguration = (iceServers: RTCIceServer[], relayOnly: boolean): RTCConfiguration =>
   (relayOnly ? { iceServers, iceTransportPolicy: 'relay' } : { iceServers });
 
-/** What ICE may use for one call. `relayOnly` is how TURN is proven when a direct path would win. */
+/** What ICE may use for one call. `relayOnly` forces media through TURN. */
 export interface IceOptions {
   servers: RTCIceServer[];
   relayOnly?: boolean;
@@ -133,7 +138,12 @@ export interface IceOptions {
 
 const NO_ICE: IceOptions = { servers: [] };
 
-const media = (video: boolean): MediaStreamConstraints => ({ audio: true, video });
+function constraints({ video, microphone, camera }: CallMedia): MediaStreamConstraints {
+  return {
+    audio: microphone ? { deviceId: { exact: microphone } } : true,
+    video: video ? (camera ? { deviceId: { exact: camera } } : true) : false,
+  };
+}
 
 export class Softphone {
   private current: SoftphoneState = INITIAL;
@@ -154,12 +164,12 @@ export class Softphone {
     return this.current;
   }
 
-  /** The far end's audio and video, once there is any. */
+  /** The far end's audio and video, once any arrives. */
   get remoteStream(): MediaStream | undefined {
     return this.remote;
   }
 
-  /** What this end is sending, once the call has its tracks: the camera's picture, for one. */
+  /** The tracks this end sends, once the local description is set. */
   get localStream(): MediaStream | undefined {
     return this.local;
   }
@@ -207,8 +217,7 @@ export class Softphone {
         this.update({ registration: 'failed', cause, notice: `Registration failed: ${cause}` });
       });
       agent.on('disconnected', () => {
-        // A socket that drops takes the registration with it, whatever the
-        // registrar still believes: nothing can reach this page any more.
+        // A dropped socket ends the registration, whatever the registrar still holds.
         if (this.current.registration !== 'failed') this.update({ registration: 'unregistered' });
       });
       agent.on('newRTCSession', (event: RTCSessionEvent) => this.adopt(event));
@@ -224,37 +233,65 @@ export class Softphone {
     this.reset({ registration: 'unregistered' });
   }
 
-  /** What a call or an answer uses when it is not told otherwise: the harness page's `ice` and `relay`. */
+  /** The default ICE options for calls and answers that pass none. */
   useIce(ice: IceOptions): void {
     this.ice = ice;
   }
 
-  /** Video is asked for, never assumed: the harness page's calls are audio only. */
-  call(target: string, ice: IceOptions = this.ice, video = false): void {
+  /** Audio only unless `media.video` is set. */
+  call(target: string, ice: IceOptions = this.ice, media: CallMedia = {}): void {
     if (!this.agent || this.session) return;
     this.update({ notice: undefined, cause: undefined });
     try {
       this.agent.call(target, {
-        mediaConstraints: media(video),
+        mediaConstraints: constraints(media),
         pcConfig: peerConfiguration(ice.servers, ice.relayOnly ?? false),
-        rtcOfferConstraints: { offerToReceiveAudio: true, offerToReceiveVideo: video },
+        rtcOfferConstraints: { offerToReceiveAudio: true, offerToReceiveVideo: media.video ?? false },
       });
     } catch (cause) {
       this.update({ call: 'failed', notice: `Could not call: ${String(cause)}` });
     }
   }
 
-  /** Without video, the browser answers an offered video line receive-only: it shows the far end's camera and sends none. */
-  answer(ice: IceOptions = this.ice, video = false): void {
+  /** Without `media.video`, an offered video line is answered receive-only. */
+  answer(ice: IceOptions = this.ice, media: CallMedia = {}): void {
     if (!this.session || this.current.call !== 'incoming') return;
-    this.session.answer({ mediaConstraints: media(video), pcConfig: peerConfiguration(ice.servers, ice.relayOnly ?? false) });
+    this.session.answer({ mediaConstraints: constraints(media), pcConfig: peerConfiguration(ice.servers, ice.relayOnly ?? false) });
+  }
+
+  /** Stops or restarts sending the microphone, without renegotiating. */
+  mute(on: boolean): void {
+    if (!this.session || this.current.call !== 'connected') return;
+    if (on) this.session.mute({ audio: true });
+    else this.session.unmute({ audio: true });
+    this.update({ muted: on });
+  }
+
+  /** Holds or resumes the call with a re-INVITE. */
+  hold(on: boolean): void {
+    if (!this.session || this.current.call !== 'connected') return;
+    const accepted = on ? this.session.hold() : this.session.unhold();
+    if (accepted) this.update({ held: on });
+  }
+
+  /** Sends one dial pad key in the media as an RFC 4733 telephone event, not as SIP INFO. */
+  sendDtmf(tone: string): void {
+    if (!this.session || this.current.call !== 'connected') return;
+    if (tone.length !== 1 || !DTMF_TONES.includes(tone.toUpperCase())) return;
+    this.session.sendDTMF(tone.toUpperCase(), { transportType: 'RFC2833' as DTMF_TRANSPORT });
   }
 
   hangUp(): void {
     this.session?.terminate();
   }
 
-  /** The browser's own report of the media, or nothing when there is no connection to ask. */
+  /** Refuses a ringing incoming call with 603 Decline. */
+  decline(): void {
+    if (!this.session || this.current.call !== 'incoming') return;
+    this.session.terminate({ status_code: 603, reason_phrase: 'Decline' });
+  }
+
+  /** The browser's media statistics, or nothing when there is no connection. */
   async stats(): Promise<MediaStats | undefined> {
     if (!this.peer) return undefined;
     return summarise(await this.peer.getStats());
@@ -267,8 +304,7 @@ export class Softphone {
   }
 
   private adopt({ session, originator }: RTCSessionEvent): void {
-    // One call at a time. A second arriving while one is up is refused with
-    // 486 rather than silently replacing it.
+    // One call at a time: a second is refused with 486.
     if (this.session && this.session !== session) {
       session.terminate({ status_code: 486 });
       return;
@@ -287,26 +323,31 @@ export class Softphone {
       iceGatheringState: undefined,
       iceConnectionState: undefined,
       connectionState: undefined,
+      muted: false,
+      held: false,
+      heldByFarEnd: false,
+      connectedAt: undefined,
     });
 
-    // JsSIP creates an outgoing call's connection, and announces it, before it
-    // announces the session, so by the time the session reaches here its
-    // 'peerconnection' event has already been and gone. Take the connection
-    // it already has; the event covers an incoming call, whose connection is
+    // JsSIP announces an outgoing call's connection before the session, so
+    // its 'peerconnection' event has already fired: take the connection
+    // directly. The event covers an incoming call, whose connection is
     // created on answer.
     if (session.connection) this.observe(session.connection);
     session.on('peerconnection', (event: PeerConnectionEvent) => this.observe(event.peerconnection));
     session.on('sdp', (event: SDPEvent) => {
-      // By the local description the tracks are on the connection, so this is
-      // when there is something of our own to show.
+      // The tracks are on the connection once the local description is set.
       if (event.originator === 'local') this.local = senderStream(this.peer ?? session.connection);
       this.update(event.originator === 'local' ? { localSdp: event.sdp } : { remoteSdp: event.sdp });
     });
     session.on('progress', () => {
       if (this.current.direction === 'outgoing') this.update({ call: 'ringing' });
     });
-    session.on('accepted', () => this.update({ call: 'connected' }));
-    session.on('confirmed', () => this.update({ call: 'connected' }));
+    session.on('hold', (event: { originator: string }) => this.update(event.originator === 'remote' ? { heldByFarEnd: true } : { held: true }));
+    session.on('unhold', (event: { originator: string }) => this.update(event.originator === 'remote' ? { heldByFarEnd: false } : { held: false }));
+    const connected = () => this.update({ call: 'connected', connectedAt: this.current.connectedAt ?? this.clock() });
+    session.on('accepted', connected);
+    session.on('confirmed', connected);
     session.on('ended', (event: EndEvent) => this.finish('ended', event.cause));
     session.on('failed', (event: EndEvent) => this.finish('failed', event.cause));
   }
@@ -326,12 +367,11 @@ export class Softphone {
     peer.addEventListener('connectionstatechange', snapshot);
     peer.addEventListener('track', (event: RTCTrackEvent) => {
       // Audio and video arrive as two events. With no stream named, the second
-      // joins the first rather than replacing it.
+      // track joins the first.
       if (event.streams[0]) this.remote = event.streams[0];
       else if (this.remote) this.remote.addTrack(event.track);
       else this.remote = new MediaStream([event.track]);
-      // The stream is not part of the snapshot, so the snapshot has to be
-      // re-emitted for a screen to attach it.
+      // The stream is not in the snapshot, so re-emit for a screen to attach it.
       this.emit();
     });
     snapshot();
@@ -378,7 +418,7 @@ export class Softphone {
       connectionState: this.current.connectionState,
       cause: this.current.cause,
     };
-    // Only a change of state is worth a row; an SDP arriving is not.
+    // Record only a change of state, not an SDP arriving.
     if (last && last.registration === next.registration && last.call === next.call
       && last.iceConnectionState === next.iceConnectionState && last.connectionState === next.connectionState
       && last.cause === next.cause) return;
@@ -400,10 +440,8 @@ export function describe(state: SoftphoneState): string {
 
 /**
  * The parts of a `getStats()` report that say whether media moved and where.
- *
- * The report is a flat map of records that reference each other by id, so
- * the pair is resolved by hand: the transport names the selected pair, the
- * pair names its two candidates, and the inbound stream names its codec.
+ * Records reference each other by id: the transport names the selected pair,
+ * the pair its two candidates, and the inbound stream its codec.
  */
 export function summarise(report: RTCStatsReport): MediaStats {
   const records = new Map<string, Record<string, unknown>>();
@@ -440,6 +478,11 @@ export function summarise(report: RTCStatsReport): MediaStats {
         if (codec && typeof codec.mimeType === 'string') stats.codec = codec.mimeType;
         break;
       }
+      case 'media-source':
+        if (record.kind === 'audio' && typeof record.totalAudioEnergy === 'number') {
+          stats.sentAudioEnergy = (stats.sentAudioEnergy ?? 0) + record.totalAudioEnergy;
+        }
+        break;
       case 'transport':
         if (typeof record.dtlsState === 'string') stats.dtlsState = record.dtlsState;
         if (typeof record.selectedCandidatePairId === 'string') selectedPairId = record.selectedCandidatePairId;
@@ -447,8 +490,7 @@ export function summarise(report: RTCStatsReport): MediaStats {
     }
   }
 
-  // Firefox reports no transport record; the nominated, succeeded pair is
-  // the same answer found the long way round.
+  // Firefox reports no transport record; fall back to the nominated, succeeded pair.
   const pair = (selectedPairId && records.get(selectedPairId))
     ?? [...records.values()].find((record) => record.type === 'candidate-pair' && record.state === 'succeeded' && record.nominated === true);
   if (pair) {
@@ -474,19 +516,17 @@ function number(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0;
 }
 
-/** The tracks a connection is sending, as one stream to show; nothing when it sends no video. */
+/** The tracks a connection is sending, as one stream. */
 function senderStream(peer: RTCPeerConnection | undefined): MediaStream | undefined {
   if (!peer || typeof MediaStream === 'undefined') return undefined;
   const tracks = peer.getSenders().map((sender) => sender.track).filter((track): track is MediaStreamTrack => !!track);
-  return tracks.some((track) => track.kind === 'video') ? new MediaStream(tracks) : undefined;
+  return tracks.length ? new MediaStream(tracks) : undefined;
 }
 
 /**
- * A description's video m-line, or nothing when it has none.
- *
- * Port 0 is a decline, whatever the attributes say (RFC 3264). The direction
- * defaults to sendrecv when the section names none, as it does at session
- * level too.
+ * A description's video m-line, or nothing when it has none. Port 0 is a
+ * decline whatever the attributes say (RFC 3264); the direction defaults to
+ * sendrecv.
  */
 export function videoLine(sdp: string | undefined): VideoLine | undefined {
   if (!sdp) return undefined;

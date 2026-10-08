@@ -1,25 +1,17 @@
 /**
- * The records the admin API deals in, as `docs/api/openapi.yaml` in the
- * server's checkout describes them.
+ * The admin API's records, as the server's `docs/api/openapi.yaml` describes
+ * them. Field names are the wire names, snake_case.
  *
- * The field names are the wire names, snake_case, so a response needs no
- * translation layer to become one of these. Where the document says nothing
- * the server's own handlers were read (`src/api/provisioning_api.cpp`), and
- * what they settled is noted against the field.
- *
- * Ids are 64-bit on the server and a JavaScript number holds 53 bits, so an
- * id arrives rounded. Nothing in this client keys on one: a realm is keyed by
- * its name and a subscriber by its user, which is how the API addresses them.
+ * Ids are 64-bit on the server and arrive rounded in a JavaScript number, so
+ * never key on one: a realm is keyed by its name, a subscriber by its user.
  */
 
 export type SipTransport = 'udp' | 'tcp' | 'tls' | 'ws' | 'wss';
 
 /**
- * What an admin user may do, from the server's `docs/authentication.md`.
- *
- * There is no superuser and nothing implies anything else: a user holds the
- * roles given and no others, possibly none. A role is a permission, not a
- * rank, so somebody who reads status and manages realms is given both.
+ * What a user may do, from the server's `docs/authentication.md`. Roles are
+ * independent permissions, not ranks: a user holds exactly those given,
+ * possibly none.
  */
 export type Role =
   | 'view-cluster-status'
@@ -36,10 +28,7 @@ export const ROLES: readonly Role[] = [
   'manage-cluster',
 ];
 
-/**
- * `GET /session`: who the presented session token is, and what it may do.
- * Every bearer is a user who logged in; the node has no configured tokens.
- */
+/** `GET /session`: who the presented session token is, and what it may do. */
 export interface SessionInfo {
   /** Compared case-insensitively on the node, stored as given. */
   username: string;
@@ -49,7 +38,7 @@ export interface SessionInfo {
   expires_at?: number;
 }
 
-/** `POST /auth/login`. The token is opaque, presented as a bearer, and never retrievable again. */
+/** `POST /auth/login`. The token is opaque, sent as a bearer, and not retrievable again. */
 export interface LoginResult {
   token: string;
   /** Unix seconds. */
@@ -57,7 +46,7 @@ export interface LoginResult {
   roles: Role[];
 }
 
-/** A person or system that administers the node. Not a realm subscriber, and never made from one. */
+/** A console user: a person or system that administers the node. Not a realm subscriber. */
 export interface AdminUser {
   username: string;
   display_name: string;
@@ -93,7 +82,7 @@ export interface ChangePassword {
 
 /** `GET /health`. Open, with no token. */
 export interface Health {
-  /** `degraded` when the datastore is not connected, which the server answers with a 503. */
+  /** `degraded` when the datastore is not connected; the server answers that with a 503. */
   status: 'ok' | 'degraded';
   node: string;
   version: string;
@@ -110,7 +99,7 @@ export interface NodeTransport {
 }
 
 /**
- * One entry of `GET /client/config`'s `ice_servers`, shaped as `RTCIceServer`.
+ * One entry of `GET /subscriber/{realm}/config`'s `ice_servers`, shaped as `RTCIceServer`.
  * A `turn:` entry carries a credential minted per request under the coturn
  * shared-secret scheme, or none when the node has no secret configured.
  */
@@ -119,17 +108,38 @@ export interface IceServer {
   /** The credential's own expiry, optionally with a name after a colon. Not an identity. */
   username?: string;
   credential?: string;
-  /** Unix seconds. The credential stops working by itself. */
+  /** Unix seconds, when the credential stops working. */
   expires_at?: number;
 }
 
-/** `GET /client/config`: what a browser needs to place a call and cannot be told by hand. */
+/** A subscriber's own credentials, which sign the routes under `/subscriber/{realm}/`. Held in memory only. */
+export interface SubscriberLine {
+  realm: string;
+  user: string;
+  password: string;
+}
+
+/** What a realm expects of a client, in `GET /subscriber/{realm}/config`. */
+export interface RealmClientPolicy {
+  name: string;
+  /** Seconds granted when a client asks for none, and the shortest taken (0 for no minimum). */
+  registration: { expires?: number; minimum?: number };
+  /** How many flows to keep, each to a different node (RFC 5626). */
+  outbound: { flows?: number };
+  /** The push services the node runs (RFC 8599); empty for none. */
+  push: Array<{ service: string; vapid?: string; minimum_expires: number }>;
+}
+
+/** `GET /subscriber/{realm}/config`: what a subscriber's browser needs to register and place a call. */
 export interface ClientConfig {
   /** The secure WebSocket to signal over; absent when the node has no `wss` listener. */
   websocket_uri?: string;
+  /** Every node's secure WebSocket, this node first, to fail over to. */
+  websocket_uris?: string[];
   /** The same list `/nodes` gives. */
   transports: NodeTransport[];
   ice_servers: IceServer[];
+  realm?: RealmClientPolicy;
 }
 
 /**
@@ -155,9 +165,9 @@ export type MediaProfile = 'mirror' | 'transport' | 'rtp' | 'webrtc' | 'srtp';
 export const MEDIA_PROFILES: readonly MediaProfile[] = ['mirror', 'transport', 'rtp', 'webrtc', 'srtp'];
 
 /**
- * What a realm does differently from the server's own `behaviour:` section.
- * A setting that is null inherits the server's; null in an update puts it
- * back to inheriting, and a setting left out of an update is left alone.
+ * A realm's overrides of the server's `behaviour:` section. Null inherits the
+ * server's; in an update, null goes back to inheriting and a setting left out
+ * is left alone.
  */
 export interface Behaviour {
   /** Whether this node puts itself in the media path when a media engine is configured. */
@@ -166,8 +176,8 @@ export interface Behaviour {
   /** Seconds between OPTIONS to each registered client; 0 for never, otherwise 5 to 86400. */
   qualify_interval?: number | null;
   /**
-   * Rewrite the Contact of each message forwarded to the address and port it
-   * came from, as Asterisk's `rewrite_contact`. WebSocket clients never are.
+   * Rewrite the Contact of each forwarded message to the address and port it
+   * came from, as Asterisk's `rewrite_contact`. Never applied to WebSocket clients.
    */
   rewrite_contact?: boolean | null;
 }
@@ -187,7 +197,7 @@ export const QUALIFY_MAX = 86400;
 /** A SIP domain this server is responsible for. Addressed by `name`. */
 export interface Realm {
   name: string;
-  /** Rounded; see the note at the top of this file. */
+  /** Rounded; see the top of this file. */
   id: number;
   /** How long a Digest nonce stays good, in seconds. 3600 when not given. */
   nonce_expiry: number;
@@ -198,7 +208,7 @@ export interface Realm {
   /** As the realm set it: every setting present, null where it inherits. */
   behaviour: Required<Behaviour>;
   behaviour_effective: BehaviourEffective;
-  /** The server's own `behaviour:` section on the node that answered: what a null setting inherits. */
+  /** The `behaviour:` section of the node that answered: what a null setting inherits. */
   behaviour_default: BehaviourEffective;
 }
 
@@ -209,7 +219,7 @@ export interface RealmSettings {
   behaviour?: Behaviour;
 }
 
-/** `nonce_secret` is left to the server, which generates one, and never returned. */
+/** The server generates `nonce_secret` and never returns it. */
 export interface CreateRealm extends RealmSettings {
   name: string;
 }
@@ -229,10 +239,9 @@ export interface Subscriber {
 }
 
 /**
- * The one behaviour setting that is about an endpoint rather than a realm,
- * as Asterisk's `webrtc=yes` is: what the first description towards this
- * subscriber's endpoint is. Above the realm's, below what the endpoint has itself
- * said. Null takes the realm's, and null in an update goes back to it.
+ * The one behaviour setting that belongs to an endpoint: the media profile
+ * first offered to it. Overrides the realm's and yields to what the endpoint
+ * has itself said. Null takes the realm's; null in an update goes back to it.
  */
 export interface SubscriberBehaviour {
   media_profile?: MediaProfile | null;
@@ -251,15 +260,15 @@ export interface UpdateSubscriber {
   behaviour?: SubscriberBehaviour;
 }
 
-/** A live binding. Read only: a binding is written by a REGISTER and by nothing else. */
+/** A live binding. Read only: only a REGISTER writes one. */
 export interface Registration {
   /** The subscriber's URI. */
   subscriber: string;
   subscriber_id: number;
   contact: string;
-  /** Unix time in seconds, as the server's `std::time_t`. */
+  /** Unix seconds. */
   registered_at: number;
-  /** Unix time in seconds. */
+  /** Unix seconds. */
   expires_at: number;
   /** The contact is on a private address, so replies go back down the flow. */
   nat: boolean;
@@ -290,16 +299,16 @@ export interface CallParticipant {
 }
 
 /**
- * One end of one stream, as the media engine sees it, cumulative since the
- * call began. `_in` is what arrived from that end, `_out` what the engine sent
- * it. A direction the engine does not report is absent, never zero:
- * rtpengine usually reports only the `_in` pair.
+ * One end of one stream as the media engine sees it, cumulative over the
+ * call. `_in` arrived from that end, `_out` was sent to it. A direction the
+ * engine does not report is absent, never zero: rtpengine usually reports
+ * only the `_in` pair.
  */
 export interface CallLeg {
   /**
-   * An index into the call's participants. Always null today: a relay knows
-   * an end by the address its packets come from, which behind a NAT is not
-   * one any participant described.
+   * An index into the call's participants. Always null: a relay knows an end
+   * only by its packets' source address, which behind a NAT no participant
+   * described.
    */
   participant: number | null;
   packets_in?: number;
@@ -310,9 +319,30 @@ export interface CallLeg {
 
 export interface CallMedia {
   engine: string;
-  /** How long all of the call's media has been silent, in seconds, when the engine can say. */
+  /** Seconds all of the call's media has been silent; null when the engine cannot say. */
   idle_seconds: number | null;
   legs: CallLeg[];
+}
+
+/**
+ * `GET /call-records`: one call that has ended, newest first, kept for the
+ * node's `calls.history_retention` (thirty days by default). A call refused
+ * before anything rang has none.
+ */
+export interface CallRecord {
+  /** The Call-ID. */
+  id: string;
+  created_at: string | null;
+  /** Null for a call nobody answered. */
+  answered_at: string | null;
+  ended_at: string | null;
+  /** Seconds from the answer to the end; 0 for a call nobody answered. */
+  duration: number;
+  caller: string | null;
+  callee: string | null;
+  /** The nodes that carried it, the caller's first. */
+  nodes: string[];
+  media_engine: string | null;
 }
 
 /** `GET /calls`: one live call. An ended call is gone from the list. */
@@ -338,9 +368,9 @@ export interface MediaEngine {
 }
 
 /**
- * `GET /media/reoffers`: a subscriber whose endpoint answered an offer with 488,
- * and was offered the other profile once. The node suggests and the operator
- * decides; nothing sets the subscriber's profile.
+ * `GET /media/reoffers`: a subscriber whose endpoint answered an offer with 488
+ * and was offered the other profile once. The node only suggests; it never
+ * sets the subscriber's profile.
  */
 export interface MediaReoffer {
   /** The subscriber's address of record, as the call's Request-URI named it. */
@@ -355,7 +385,7 @@ export interface MediaReoffer {
   suggested_media_profile: 'rtp' | 'webrtc' | null;
 }
 
-/** `GET /qualify`: a registered client this node is probing with OPTIONS, down the flow it registered on. */
+/** `GET /qualify`: a registered client this node probes with OPTIONS, down the flow it registered on. */
 export interface QualifiedClient {
   subscriber: string;
   contact: string;

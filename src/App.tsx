@@ -1,4 +1,4 @@
-import { Suspense, lazy, type ReactNode } from 'react';
+import { Suspense, lazy, useState, type ReactNode } from 'react';
 import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import type { AdminApi } from './api/AdminApi';
 import type { Role } from './api/types';
@@ -27,19 +27,13 @@ import { NotFoundScreen } from './screens/NotFoundScreen';
 import { Loading } from './components/Status';
 import { pageOptions } from './softphone/page';
 
-/**
- * The softphone is the only screen that is loaded on demand.
- *
- * It pulls in JsSIP, which is most of this bundle on its own, and it is a
- * diagnostic that most sessions never open.
- */
+/** Loaded on demand: it pulls in JsSIP, which is most of the bundle. */
 const SoftphoneScreen = lazy(async () => ({ default: (await import('./screens/SoftphoneScreen')).SoftphoneScreen }));
 
-/**
- * A screen this login's roles do not allow says so, rather than rendering a
- * 403 on every panel. Reached by a link from before a role was taken away,
- * or by typing the address.
- */
+/** Loaded on demand for the same reason. */
+const PhoneHost = lazy(() => import('./phone/PhoneHost'));
+
+/** Renders `children` if any of `roles` is held, and otherwise says which role is needed. */
 function Require({ roles, held, children }: { roles: readonly Role[]; held: readonly Role[]; children: ReactNode }) {
   if (can(held, ...roles)) return <>{children}</>;
   const names = roles.map((role) => ROLE_TEXT[role].label).join(' or ');
@@ -54,13 +48,11 @@ function Require({ roles, held, children }: { roles: readonly Role[]; held: read
 }
 
 /**
- * The application shell: a brand, the section bar, the section's own bar when
- * it has one, and whichever screen the route names, or the sign-in screen in
- * its place while there is no session.
+ * The application shell: top bar, section bar, and the routed screen, or the
+ * sign-in screen while there is no session.
  *
- * Every screen takes its `AdminApi` as a prop rather than reaching for a
- * module singleton. That is what lets a test render one screen against a
- * `FakeAdminApi` it controls.
+ * Screens take their `AdminApi` as a prop, so a test can render one against a
+ * `FakeAdminApi`.
  */
 export default function App({ api, session, loginHint }: { api: AdminApi; session: Session; loginHint?: string }) {
   const location = useLocation();
@@ -69,13 +61,17 @@ export default function App({ api, session, loginHint }: { api: AdminApi; sessio
   const signedIn = Boolean(token && info);
   const section = signedIn ? sectionNavFor(location.pathname, roles) : undefined;
   const guard = (needed: readonly Role[], element: ReactNode) => <Require roles={needed} held={roles}>{element}</Require>;
-  // The SIP section root goes to the first screen in it this login may use.
+  // The SIP section root redirects to the first screen in it the user may use.
   const sipHome = can(roles, 'manage-realms') ? routes.realms : can(roles, 'manage-realm-subscribers') ? routes.subscribers : routes.registrations;
+  // Once opened, the phone stays mounted until sign-out, so a call outlives a change of screen.
+  const onPhone = location.pathname === routes.phone;
+  const [phoneOpened, setPhoneOpened] = useState(false);
+  if (signedIn && onPhone && !phoneOpened) setPhoneOpened(true);
+  if (!signedIn && phoneOpened) setPhoneOpened(false);
+  const [callSlot, setCallSlot] = useState<HTMLElement | null>(null);
 
   const logOut = () => {
-    // End the session on the node as well as here. If the node cannot be
-    // reached the token is still forgotten here, which is the half that matters
-    // to whoever sits at this browser next.
+    // The token is forgotten here even if the node cannot be reached.
     void api.logout().catch(() => undefined).finally(() => session.signOut());
   };
 
@@ -90,6 +86,7 @@ export default function App({ api, session, loginHint }: { api: AdminApi; sessio
         </Link>
         {signedIn && roles.length > 0 ? <SectionNav ariaLabel="Sections" items={visible(topNav, roles)} className="" /> : <span />}
         <div className="topbar-trailing">
+          <span className="topbar-call-slot" ref={setCallSlot} />
           {signedIn && info && (
             <>
               <SessionExpiry expiresAt={expiresAt} />
@@ -109,10 +106,9 @@ export default function App({ api, session, loginHint }: { api: AdminApi; sessio
       <main>
         <div className="admin-screen">
           {!signedIn || !info ? (
-            // In place of the screen that was asked for, so signing in lands
-            // there and the address bar never changes.
+            // Rendered in place of the requested screen, so signing in lands there.
             <LoginScreen api={api} session={session} ended={ended} hint={loginHint} />
-          ) : roles.length === 0 && location.pathname !== routes.me ? (
+          ) : roles.length === 0 && location.pathname !== routes.me && !onPhone ? (
             <NoPermissionsScreen info={info} />
           ) : (
             <Routes>
@@ -124,6 +120,9 @@ export default function App({ api, session, loginHint }: { api: AdminApi; sessio
               <Route path={routes.registrations} element={guard(['view-cluster-status'], <RegistrationsScreen api={api} />)} />
 
               <Route path={routes.calls} element={guard(['view-cluster-status'], <CallsScreen api={api} />)} />
+
+              {/* Drawn by PhoneHost, below. */}
+              <Route path={routes.phone} element={null} />
 
               <Route path={routes.media} element={guard(['manage-realms', 'view-cluster-status'], <MediaScreen api={api} />)} />
 
@@ -141,9 +140,13 @@ export default function App({ api, session, loginHint }: { api: AdminApi; sessio
                 element={<Suspense fallback={<Loading />}><SoftphoneScreen api={api} options={pageOptions(location.search)} /></Suspense>}
               />
 
-              {/* An unknown path says so, rather than rendering the front page. */}
               <Route path="*" element={<NotFoundScreen />} />
             </Routes>
+          )}
+          {signedIn && phoneOpened && (
+            <Suspense fallback={onPhone ? <Loading /> : null}>
+              <PhoneHost api={api} roles={roles} visible={onPhone} indicator={callSlot} />
+            </Suspense>
           )}
         </div>
       </main>

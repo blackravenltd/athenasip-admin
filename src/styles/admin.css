@@ -1,10 +1,8 @@
 /*
- * Admin surfaces: the panel a screen lives in, and the record list that is
- * this client's one way of showing managed things.
+ * Admin surfaces: the panel a screen lives in, and the record list.
  *
  * A row states what a record is and opens a dialogue to change it. Nothing in
- * a row is an input, so a list never holds half-saved state and a reader can
- * scan one without reading it.
+ * a row is an input.
  */
 .admin-screen { width: min(1180px, 100%); margin: 0 auto; }
 .admin-screen > h1 { margin-bottom: .8rem; }
@@ -22,7 +20,7 @@
 .panel-heading p { max-width: 76ch; margin: 0; color: var(--text-dim); }
 .panel-actions { display: flex; gap: .6rem; flex-wrap: wrap; margin-top: 1rem; }
 
-/* A worked example set in the copy of a screen, as Realms uses. */
+/* A worked example within a screen's copy. */
 .example {
   display: block;
   margin: .6rem 0 1rem;
@@ -87,11 +85,7 @@
   white-space: nowrap;
 }
 
-/*
- * State, said in colour so it does not have to be read. These are the only
- * three places colour carries meaning; everything else is the accent, which
- * means "here", not "good".
- */
+/* State colours. The only places colour carries meaning; the accent means "here", not "good". */
 .state-dot { display: inline-block; width: .55rem; height: .55rem; border-radius: 50%; flex: 0 0 auto; }
 .state-ok { background: var(--ok); }
 .state-warn { background: var(--warn); }
@@ -104,7 +98,7 @@
 .pagination { display: flex; align-items: center; justify-content: center; gap: .75rem; margin-top: .9rem; }
 .pagination span { min-width: 8rem; color: var(--text-dim); text-align: center; font-variant-numeric: tabular-nums; }
 
-/* Key/value readouts, as Home and Security use. */
+/* Key/value readouts. */
 .readout { display: grid; grid-template-columns: minmax(9rem, auto) 1fr; gap: .45rem 1.2rem; margin: 0; }
 .readout dt { color: var(--text-faint); font-size: .82rem; text-transform: uppercase; letter-spacing: .06em; }
 .readout dd { margin: 0; overflow-wrap: anywhere; }
@@ -150,3 +144,34 @@
 .softphone-video video { width: 100%; border-radius: .5rem; background: #000; aspect-ratio: 4 / 3; object-fit: contain; }
 .softphone-video figcaption { margin-top: .3rem; color: var(--text-faint); font-size: .82rem; }
 @media (max-width: 800px) { .softphone-video { grid-template-columns: 1fr; } }
+.topbar-call-slot:empty { display: none; }
+.topbar-call { display: inline-flex; align-items: center; gap: .45rem; padding: .3rem .7rem; border-radius: 999px; border: 1px solid var(--border); color: var(--text); font-size: .8rem; text-decoration: none; white-space: nowrap; }
+.topbar-call-incoming { border-color: var(--warn); }
+.phone-line-form { display: grid; gap: .8rem; max-width: 32rem; }
+.phone-connection summary { cursor: pointer; color: var(--text-dim); font-size: .85rem; }
+.phone-connection .field { margin-top: .6rem; }
+.phone-layout { display: grid; grid-template-columns: minmax(18rem, 26rem) 1fr; gap: 1rem; align-items: start; }
+.phone-dialler { display: grid; gap: 1rem; }
+.phone-call { display: grid; gap: .2rem; }
+.phone-call-who { font-size: 1.4rem; font-weight: 600; }
+.phone-call-state { color: var(--text-dim); }
+.phone-call-uri { font-size: .75rem; color: var(--text-faint); overflow-wrap: anywhere; }
+.phone-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+.phone-tones { margin: 0; font-family: ui-monospace, monospace; letter-spacing: .15em; color: var(--text-dim); overflow-wrap: anywhere; }
+.dial-pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: .5rem; }
+.dial-key { display: grid; justify-items: center; gap: .1rem; padding: .6rem 0; border-radius: .6rem; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); cursor: pointer; font: inherit; }
+.dial-key:hover, .dial-key:focus-visible { background: var(--surface-3); }
+.dial-digit { font-size: 1.3rem; line-height: 1; }
+.dial-letters { font-size: .6rem; letter-spacing: .12em; color: var(--text-faint); min-height: .7rem; }
+@media (max-width: 800px) { .phone-layout { grid-template-columns: 1fr; } }
+.link-button { padding: 0; border: 0; background: none; color: var(--focus); font: inherit; text-decoration: underline; cursor: pointer; }
+.phone-meters { display: grid; gap: .6rem; }
+.state-idle { background: var(--text-faint); }
+.phone-aside { display: grid; gap: 1rem; align-content: start; }
+.phone-aside h2 { margin: 0 0 .6rem; font-size: 1rem; }
+.phone-list { list-style: none; margin: 0; padding: 0; display: grid; }
+.phone-list-row { display: flex; align-items: center; justify-content: space-between; gap: .8rem; padding: .5rem 0; border-top: 1px solid var(--border-soft); }
+.phone-list-row:first-child { border-top: 0; }
+.phone-list-main { display: grid; gap: .1rem; min-width: 0; }
+.phone-list-name { display: inline-flex; align-items: center; gap: .45rem; font-weight: 600; }
+.phone-list-detail { color: var(--text-dim); font-size: .82rem; overflow-wrap: anywhere; }

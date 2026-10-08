@@ -1,8 +1,10 @@
 import type { AdminApi } from './AdminApi';
+import { authorization, digestHashes, parseChallenges } from './digest';
 import { ApiError } from './errors';
 import type {
   Subscriber,
   Call,
+  CallRecord,
   AdminUser,
   ChangePassword,
   ClientConfig,
@@ -18,6 +20,7 @@ import type {
   QualifiedClient,
   Registration,
   SessionInfo,
+  SubscriberLine,
   UpdateSubscriber,
   UpdateAdminUser,
   UpdateRealm,
@@ -26,24 +29,21 @@ import { ROLES, type Role } from './types';
 
 export interface HttpAdminApiOptions {
   /**
-   * Where `/api/v1` lives. Empty by default, which means same-origin: the
-   * deployment the server itself produces, where one process serves this
-   * bundle and the API. A dev server proxies `/api` instead of setting this,
-   * so development is same-origin too.
+   * Where `/api/v1` lives. Empty by default, meaning same-origin: the server
+   * serves this bundle and the API, and a dev server proxies `/api`.
    */
   baseUrl?: string;
-  /** Read on every request rather than captured, so a new token is picked up. */
+  /** Read on every request, so a new token is picked up. */
   token?: () => string | undefined;
   /**
-   * Called with every 401, before the request rejects. A 401 means the
-   * token is gone or was never good, which is the session's problem rather
-   * than the screen's, so the shell hears about it whichever screen asked.
+   * Called with every 401 on the session's own requests, before the request
+   * rejects, so the shell can end the session whichever screen asked.
    */
   onUnauthorized?: (error: ApiError) => void;
   /**
-   * Called with every 403. A role can be taken away mid-session, and the
-   * node re-checks on every request, so a 403 is the moment to re-read what
-   * this session may do.
+   * Called with every 403 on the session's own requests, except a
+   * `wrong_password`. The node re-checks roles on every request, so a 403 is
+   * the moment to re-read what the session may do.
    */
   onForbidden?: (error: ApiError) => void;
   fetch?: typeof globalThis.fetch;
@@ -54,8 +54,7 @@ interface RequestOptions {
   signal?: AbortSignal;
   /**
    * A token to send instead of the session's, or `''` for none. Either way
-   * the request is not the session's, so its 401 and 403 do not end or
-   * re-read the session.
+   * the request is not the session's: its 401 and 403 reach neither callback.
    */
   token?: string;
   /** Statuses that are an answer rather than a failure, as a 503 from health is. */
@@ -63,12 +62,8 @@ interface RequestOptions {
 }
 
 /**
- * The only file that knows this client talks HTTP.
- *
- * Everything above it holds an `AdminApi` and never sees a URL, a verb or a
- * status code. That is what makes `FakeAdminApi` a real substitute rather than
- * a test-shaped approximation, and it is what keeps the day the server's wire
- * format changes to a one-file day.
+ * The only file that knows this client talks HTTP. Everything above it holds
+ * an `AdminApi` and never sees a URL, a verb or a status code.
  */
 export class HttpAdminApi implements AdminApi {
   private readonly baseUrl: string;
@@ -78,8 +73,7 @@ export class HttpAdminApi implements AdminApi {
   private readonly http: typeof globalThis.fetch;
 
   constructor(options: HttpAdminApiOptions = {}) {
-    // A trailing slash here and a leading slash below is the classic way to
-    // produce `//api/v1`, which some proxies treat as a different path.
+    // A trailing slash would produce `//api/v1`, which some proxies treat as a different path.
     this.baseUrl = (options.baseUrl ?? '').replace(/\/+$/, '');
     this.token = options.token ?? (() => undefined);
     this.onUnauthorized = options.onUnauthorized ?? (() => undefined);
@@ -110,13 +104,43 @@ export class HttpAdminApi implements AdminApi {
       }
       throw failure;
     }
-    // 204, and any other body-less success. `json()` on an empty body throws a
-    // SyntaxError that would otherwise be reported as if the server had
-    // answered badly.
+    // 204, and any other body-less success: parsing an empty body would throw.
     if (response.status === 204) return undefined as T;
     const text = await response.text();
     if (!text) return undefined as T;
     return JSON.parse(text) as T;
+  }
+
+  /**
+   * A subscriber's own route, signed with HTTP Digest rather than the session.
+   * The first request goes unsigned to fetch a nonce; a stale one is answered
+   * once more. No 401 here is the session's, so neither callback hears it.
+   * `credentials: 'omit'` keeps the browser from offering its own login box.
+   */
+  private async signed<T>(method: string, path: string, line: SubscriberLine, signal?: AbortSignal): Promise<T> {
+    const url = `${this.baseUrl}/api/v1${path}`;
+    const target = new URL(url, 'http://node');
+    const send = (signature?: string) => this.http(url, {
+      method,
+      headers: { Accept: 'application/json', ...(signature ? { Authorization: signature } : {}) },
+      credentials: 'omit',
+      signal,
+    });
+    let response = await send();
+    for (let answered = 0; response.status === 401 && answered < 2; answered += 1) {
+      const challenges = parseChallenges(response.headers.get('WWW-Authenticate') ?? '');
+      if (answered > 0 && !challenges.some((challenge) => challenge.stale)) break;
+      const signature = await authorization(
+        challenges,
+        { username: line.user, password: line.password, method, uri: target.pathname + target.search },
+        digestHashes(),
+      );
+      if (!signature) break;
+      response = await send(signature);
+    }
+    if (!response.ok) throw await describeFailure(response);
+    const text = await response.text();
+    return (text ? JSON.parse(text) : undefined) as T;
   }
 
   login(username: string, password: string, signal?: AbortSignal) {
@@ -139,7 +163,9 @@ export class HttpAdminApi implements AdminApi {
 
   health(signal?: AbortSignal) { return this.request<Health>('GET', '/health', { signal, accept: [503] }); }
   nodes(signal?: AbortSignal) { return this.request<ClusterNode[]>('GET', '/nodes', { signal }); }
-  clientConfig(signal?: AbortSignal) { return this.request<ClientConfig>('GET', '/client/config', { signal }); }
+  subscriberConfig(line: SubscriberLine, signal?: AbortSignal) {
+    return this.signed<ClientConfig>('GET', `/subscriber/${segment(line.realm)}/config`, line, signal);
+  }
 
   listRealms(signal?: AbortSignal) { return this.request<Realm[]>('GET', '/realms', { signal }); }
   createRealm(realm: CreateRealm, signal?: AbortSignal) {
@@ -171,6 +197,9 @@ export class HttpAdminApi implements AdminApi {
   }
 
   listCalls(signal?: AbortSignal) { return this.request<Call[]>('GET', '/calls', { signal }); }
+  listCallRecords(limit?: number, signal?: AbortSignal) {
+    return this.request<CallRecord[]>('GET', limit ? `/call-records?limit=${limit}` : '/call-records', { signal });
+  }
   /** A Call-ID can hold `@` and `/`; encoded, it is still one segment. */
   getCall(id: string, signal?: AbortSignal) { return this.request<Call>('GET', `/calls/${segment(id)}`, { signal }); }
   mediaEngine(signal?: AbortSignal) { return this.request<MediaEngine>('GET', '/media', { signal }); }
@@ -195,30 +224,24 @@ export class HttpAdminApi implements AdminApi {
   }
 }
 
-/** The roles this client knows, from whatever the node sent. A role it does not know is ignored, not guessed at. */
+/** The roles this client knows, from whatever the node sent. An unknown role is ignored. */
 function knownRoles(value: unknown): Role[] {
   const given = Array.isArray(value) ? value : [];
   return ROLES.filter((role) => given.includes(role));
 }
 
 /**
- * One path segment. The OpenAPI document says a user containing `@` or `/`
- * is one segment, not two, which `encodeURIComponent` gives, and a realm name
- * with a slash in it must not reach another route.
+ * One path segment. Per the OpenAPI document a user containing `@` or `/` is
+ * one segment, and a realm name with a slash must not reach another route.
  */
 function segment(value: string): string {
   return encodeURIComponent(value);
 }
 
 /**
- * Turn a failed response into an `ApiError` without ever throwing while doing so.
- *
- * The envelope is `{"error": {"code", "message"}}`, but a failure is exactly
- * the moment a body is least trustworthy: a proxy in front of the server
- * answers 502 in HTML, a crashed handler sends nothing at all. Reading the
- * body must never replace the real failure with a `SyntaxError` about
- * position 0, which is how a "Service Unavailable" becomes an unreadable bug
- * report.
+ * Turns a failed response into an `ApiError` and never throws doing so. The
+ * body may not be the `{"error": {"code", "message"}}` envelope (a proxy's
+ * HTML 502, an empty body); the status line is then the message.
  */
 async function describeFailure(response: Response): Promise<ApiError> {
   let message = `${response.status} ${response.statusText}`.trim();
@@ -235,7 +258,7 @@ async function describeFailure(response: Response): Promise<ApiError> {
       }
     }
   } catch {
-    // Keep the status line. It is less specific and it is always true.
+    // Not the envelope: keep the status line.
   }
   const retry = Number(response.headers.get('Retry-After'));
   return new ApiError(message, response.status, code, Number.isFinite(retry) && retry > 0 ? retry : undefined);

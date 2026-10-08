@@ -10,7 +10,7 @@ function show(api = new FakeAdminApi()) {
   return api;
 }
 
-/** The open dialogue. There is only ever one. */
+/** The open dialogue; only one is ever open. */
 function dialogue(): HTMLElement {
   return screen.getByRole('dialog');
 }

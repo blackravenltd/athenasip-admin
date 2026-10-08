@@ -69,8 +69,6 @@ function NewSubscriberDialogue({ api, realm, realmProfile, onClose, onSaved }: {
           onChange={(event) => setPassword(event.target.value)}
         />
       </label>
-      {/* Worth stating plainly, because the alternative assumption is the
-          alarming one: this is the only moment the password exists as text. */}
       <p className="field-hint">
         The node derives the digest (HA1) from it and keeps only that. The password itself is not
         stored and cannot be shown again.
@@ -121,7 +119,7 @@ function SubscriberRow({ api, subscriber, realmProfile, onChanged }: {
           className="secondary-button"
           type="button"
           aria-label={`Media for ${subscriber.user}`}
-          // From the subscriber as it is now, which a refresh may have changed since the last opening.
+          // Reset from the subscriber, which a refresh may have changed.
           onClick={() => { setProfile(subscriber.behaviour.media_profile); setDialogue('media'); }}
         >
           Media
@@ -191,15 +189,10 @@ function SubscriberRow({ api, subscriber, realmProfile, onChanged }: {
 }
 
 /**
- * The subscribers of one realm.
+ * The subscribers of one realm, from `/realms/{realm}/subscribers`.
  *
- * A subscriber is something registered on a realm to make and receive calls.
- * The route is `/realms/{realm}/subscribers`.
- *
- * The realm is a query parameter rather than a path segment because this
- * screen is reached two ways, from a realm's row and from the section bar with
- * nothing chosen, and a path parameter has no way to express the second. With
- * nothing chosen it asks, rather than guessing at the first realm.
+ * The realm is a query parameter so the screen can open with none chosen, in
+ * which case it asks for one.
  */
 export function SubscribersScreen({ api }: { api: AdminApi }) {
   const [params, setParams] = useSearchParams();

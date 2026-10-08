@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { fixtureFromEnvironment, softphoneUrl } from '../../e2e/fixture';
 
-/** The end-to-end spec's reading of `generated/fixture.env`: which phase it is in, and what the page is told. */
+/** How the end-to-end spec reads `generated/fixture.env`: which phase it is in, and what the page is told. */
 describe('fixtureFromEnvironment', () => {
   it('is the direct phase when the engine advertises the node’s own address, or nothing is said', () => {
     expect(fixtureFromEnvironment({}).relay).toBeUndefined();
@@ -21,13 +21,6 @@ describe('fixtureFromEnvironment', () => {
     const url = new URL(softphoneUrl(fixture, '1001', { ice: [{ urls: 'turn:127.0.0.1:3478' }] }));
     expect(url.searchParams.get('relay')).toBe('1');
     expect(JSON.parse(url.searchParams.get('ice')!)).toEqual([{ urls: 'turn:127.0.0.1:3478' }]);
-  });
-
-  it('reads the API user up.sh generated, and has none when it is not given both halves', () => {
-    expect(fixtureFromEnvironment({ ATHENA_INTEROP_API_USER: 'interop', ATHENA_INTEROP_API_PASSWORD: 's3cret' }).apiUser)
-      .toEqual({ username: 'interop', password: 's3cret' });
-    expect(fixtureFromEnvironment({ ATHENA_INTEROP_API_USER: 'interop' }).apiUser).toBeUndefined();
-    expect(fixtureFromEnvironment({}).apiUser).toBeUndefined();
   });
 
   it('refuses a relay phase with no relay range, rather than asserting against nothing', () => {

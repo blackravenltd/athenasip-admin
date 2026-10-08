@@ -3,7 +3,7 @@ import { render } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { VolumeMeter } from './VolumeMeter';
 
-/** Enough of Web Audio to count how often a meter starts, and what it reads from. */
+/** Enough of Web Audio to count how often a meter starts and what it reads from. */
 function stubAudio() {
   const contexts: Array<{ sources: unknown[]; closed: boolean }> = [];
   class FakeAudioContext {

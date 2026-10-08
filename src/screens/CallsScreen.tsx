@@ -27,7 +27,7 @@ export function callParties(call: Call): { from: string; to: string } {
   };
 }
 
-/** How long a call has been talking, or ringing when it has not been answered. `now` is a parameter so this is testable without a clock. */
+/** How long a call has been talking, or ringing when it has not been answered. */
 export function callDuration(call: Call, now: number): string {
   const since = call.answered_at ?? call.created_at;
   if (!since) return '-';
@@ -53,8 +53,7 @@ export function flow(previous: number | undefined, current: number | undefined, 
 
 /**
  * Whether a connected call looks like one-way audio: one direction still
- * while another, in the same call, moved. All of it still is a quiet call,
- * which `idle_seconds` says better; one of it still is the fault.
+ * while another moved. Every direction still is a quiet call, not a fault.
  */
 export function oneWay(call: Call, previous: Call | undefined): boolean {
   if (call.state !== 'Connected' || !call.media || !previous?.media) return false;
@@ -132,12 +131,11 @@ function CallRow({ call, previous, now }: { call: Call; previous?: Call; now: nu
 }
 
 /**
- * The calls this node is carrying now, read again every two seconds.
+ * The calls this node is carrying, polled every `POLL_MS`.
  *
- * The node gives cumulative counters, so whether audio is flowing is a
- * comparison between two readings, made here: the previous list is kept and
- * each direction of each leg is checked against it. The legs are not matched
- * to participants because the node cannot yet say which is whose.
+ * The node's counters are cumulative, so flow is the difference between two
+ * readings. Legs are not matched to participants: the API does not say which
+ * is whose.
  */
 export function CallsScreen({ api }: { api: AdminApi }) {
   const result = useRefreshableAsync((signal) => api.listCalls(signal), [api]);

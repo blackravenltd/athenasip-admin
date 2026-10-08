@@ -76,6 +76,8 @@ describe('CallsScreen', () => {
   afterEach(() => { vi.useRealTimers(); });
 
   it('lists the live calls, relayed or not', async () => {
+    // Only the poll is held, so a slow first render cannot take a second reading.
+    vi.useFakeTimers({ toFake: ['setInterval'] });
     render(<CallsScreen api={new FakeAdminApi()} />);
     const relayed = await screen.findByRole('group', { name: 'a84b4c76e66710@192.168.1.24' });
     expect(relayed.textContent).toContain('sip:tom@sip.athenasip.org to sip:tomweb@sip.athenasip.org');

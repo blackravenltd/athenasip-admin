@@ -48,6 +48,16 @@ describe('FakeAdminApi', () => {
     expect((await api.listRealms()).find((realm) => realm.name === 'sip.athenasip.org')).toEqual(before);
   });
 
+  it('lists ended calls newest first, an unanswered one with no answer time, and refuses a limit out of range', async () => {
+    const api = new FakeAdminApi();
+    const records = await api.listCallRecords();
+    expect(records.map((record) => record.id)).toEqual(['r1@192.168.1.24', 'r2@203.0.113.40', 'r3@192.168.1.24']);
+    expect(records[1]).toMatchObject({ duration: 0, answered_at: null });
+    expect(Date.parse(records[0].ended_at!) - Date.parse(records[0].answered_at!)).toBe(184_000);
+    await expect(api.listCallRecords(1)).resolves.toHaveLength(1);
+    await expect(api.listCallRecords(0)).rejects.toMatchObject({ status: 400 });
+  });
+
   it('deletes a realm with its subscribers and their registrations, as the server does', async () => {
     const api = new FakeAdminApi();
     await api.deleteRealm('blackraven.co.nz');
@@ -193,7 +203,7 @@ describe('FakeAdminApi', () => {
       await expect(api.changePassword('ops', { password: 'new', old_password: 'wrong' })).rejects.toMatchObject({ status: 403, code: 'wrong_password' });
       await expect(api.changePassword('helpdesk', { password: 'x' })).rejects.toMatchObject({ status: 403 });
       await expect(api.changePassword('ops', { password: 'new', old_password: 'ops' })).resolves.toBeUndefined();
-      // The change ends every session the user held, the one that asked included.
+      // The change ends every session the user holds, the one that asked included.
       await expect(api.session()).rejects.toMatchObject({ status: 401 });
       await expect(securedNode().api.login('ops', 'new')).rejects.toMatchObject({ status: 401 });
     });

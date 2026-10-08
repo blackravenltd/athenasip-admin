@@ -2,13 +2,9 @@ import { Link } from 'react-router-dom';
 import { routes } from '../app/routes';
 
 /**
- * Tools for proving the server works, as distinct from configuring it.
- *
- * The softphone lives here rather than under SIP because it is not
- * provisioning: it is a WebRTC endpoint that registers against this server and
- * places a call, to demonstrate that the WebSocket transport and the RTP relay
- * carry one. Putting it in the provisioning navigation made the console look
- * like a phone.
+ * Tools for proving the server works, as distinct from configuring it. The
+ * softphone is one: it registers over WebSocket and places a call through the
+ * RTP relay.
  */
 export function DiagnosticsScreen() {
   return (

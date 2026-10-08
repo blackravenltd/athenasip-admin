@@ -14,15 +14,12 @@ export function healthState(health: Health): { label: string; tone: 'ok' | 'down
     : { label: 'Degraded: the datastore is not connected', tone: 'down' };
 }
 
-/** A 403 is this login's roles, not a fault, so it is said quietly rather than in red. */
+/** A 403 means the user lacks the role, which is not a fault. */
 function notForThisLogin(error: Error | undefined): boolean {
   return error instanceof ApiError && error.isForbidden;
 }
 
-/**
- * A node's state as a tone and a word. A stale report is not trusted whatever
- * it says, because it is old: a node that went quiet said `ok` last too.
- */
+/** A node's state as a tone and a word. A stale report is not trusted, whatever status it carries. */
 export function nodeState(node: ClusterNode): { label: string; tone: 'ok' | 'warn' | 'down' } {
   if (node.stale) return { label: 'No recent report', tone: 'warn' };
   switch (node.status) {
@@ -34,7 +31,7 @@ export function nodeState(node: ClusterNode): { label: string; tone: 'ok' | 'war
   }
 }
 
-/** The node that answered, out of the list it gave. Every node marks itself. */
+/** The node that answered; each node marks itself in its own list. */
 export function selfNode(nodes: readonly ClusterNode[]): ClusterNode | undefined {
   return nodes.find((node) => node.self) ?? nodes[0];
 }
@@ -42,10 +39,9 @@ export function selfNode(nodes: readonly ClusterNode[]): ClusterNode | undefined
 /**
  * What this node is and whether it is serving.
  *
- * Health is open and always answers; the node list and the registrations
- * need the Status role, and the realm count Manage users. Each panel stands on
- * its own, so a login without one role still sees everything the others
- * allow, and is told plainly what it cannot see rather than shown a blank.
+ * Health needs no role; the node list and registrations need Status, and the
+ * realm count Manage users. Each panel loads on its own, so a user lacking a
+ * role still sees the rest.
  */
 export function OverviewScreen({ api }: { api: AdminApi }) {
   const health = useRefreshableAsync((signal) => api.health(signal), [api]);

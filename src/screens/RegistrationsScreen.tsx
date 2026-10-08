@@ -5,12 +5,9 @@ import { useRefreshableAsync } from '../hooks/useRefreshableAsync';
 import { Empty, ErrorMessage, Loading } from '../components/Status';
 
 /**
- * How long a binding has left, and whether that is worth noticing.
- *
- * The server's times are Unix seconds. A registration close to expiry is
- * ordinary, because phones refresh at half the interval, so this is amber
- * rather than red, and only past zero is it a problem. `nowSeconds` is a
- * parameter so the behaviour is testable without a clock.
+ * How long a binding has left, in Unix seconds as the server gives them.
+ * Close to expiry is only a warning, because phones refresh at half the
+ * interval.
  */
 export function describeExpiry(expiresAt: number, nowSeconds: number): { label: string; tone: 'ok' | 'warn' | 'down' } {
   const remaining = Math.round(expiresAt - nowSeconds);
@@ -19,15 +16,12 @@ export function describeExpiry(expiresAt: number, nowSeconds: number): { label: 
   return { label: `${Math.round(remaining / 60)}m left`, tone: 'ok' };
 }
 
-/** The transport a contact names, which is where the API says it: in the URI. */
+/** The transport a contact names; the API gives it only in the URI. */
 export function contactTransport(contact: string): string | undefined {
   return /;transport=([a-z]+)/i.exec(contact)?.[1]?.toUpperCase();
 }
 
-/**
- * Whether a probed client is answering. One missed probe is a lost packet;
- * several in a row is a client that has gone, or a flow that has.
- */
+/** Whether a probed client is answering. One missed probe may be a lost packet; three is a client gone. */
 export function describeProbe(client: QualifiedClient, now: number): { label: string; tone: 'ok' | 'warn' | 'down' } {
   if (client.unanswered >= 3) return { label: `${client.unanswered} unanswered`, tone: 'down' };
   if (client.unanswered > 0) return { label: `${client.unanswered} unanswered`, tone: 'warn' };

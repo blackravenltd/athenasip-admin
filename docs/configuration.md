@@ -1,70 +1,47 @@
 # AthenaSIP Admin - Configuration
 
-This client has almost nothing to configure, on purpose: in the deployment it is built for,
-AthenaSIP serves the bundle and the API from one process, so the API is same-origin and there
-is no address to supply.
+There is almost nothing to configure: the node serves the bundle and the API from one
+listener, so the API is same-origin and has no address to supply.
 
-## Build-time
+## Build-time variables
 
-Vite environment variables, read at build time and compiled in. All optional.
+Read by Vite and compiled in. All optional. No credential is ever one of them.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `VITE_ATHENASIP_LIVE` | unset | `true` talks to a real node. Anything else uses the in-memory fake, which is wrong for a deployment. |
-| `VITE_SIP_WS_URL` | what `/client/config` names, else port 8088 on this page's host | The softphone's WebSocket URL. |
-| `VITE_SIP_URI` | empty | A SIP URI to prefill on the softphone. |
-| `VITE_SIP_TARGET` | empty | A call target to prefill on the softphone. |
+| `VITE_ATHENASIP_LIVE` | unset | `true` talks to a real node; anything else uses the in-memory fake. |
+| `VITE_SIP_WS_URL` | from the node | The diagnostic softphone's WebSocket URL. |
+| `VITE_SIP_URI` | empty | A SIP URI to prefill on the diagnostic softphone. |
+| `VITE_SIP_TARGET` | empty | A call target to prefill on the diagnostic softphone. |
 
-No credential is ever a build-time variable. The softphone's password is typed into the page,
-or arrives in its query string for the end-to-end run, and is held in memory and gone on
-reload. The query string and the end-to-end run's own environment are in
-[softphone.md](softphone.md).
-
-## Signing in and roles
-
-The console signs in as a **user** of the node, with a username and password, and holds the
-session in memory only. A user is somebody or some system that uses the node's API; it is not
-a subscriber, and neither is ever made from the other. What a user can do is its roles, and
-nothing implies anything else: there is no superuser, and a new user has none.
-
-| Role | What it permits |
-| --- | --- |
-| View cluster status | Read the node, its transports and who is registered. Changes nothing. |
-| Manage realms | Create, change and remove realms, with their registration and media policy. |
-| Manage subscribers | Create, change and remove the subscribers in a realm. |
-| Manage users | Create, change and remove users and their roles. It can grant itself the rest. |
-| Manage cluster | Node membership and configuration. Nothing in the console uses it yet. |
-
-A user with no roles can sign in and is told so. A username and password is the only way in:
-the node has no configured API tokens. The first user on a fresh node, and getting back in when
-every password is lost, is `athenasip --add-user NAME` on the node's host. A node that predates
-user logins answers the login with 404, and the console says it cannot sign in to it.
-
-The model is the server's, in `../athenasip/docs/authentication.md`.
-
-Against the in-memory development node each user's password is its username: `admin` has every
-role, `ops` views status, `helpdesk` manages subscribers, `newhire` has none, and `former` is
-disabled.
-
-## Development
+## Development variables
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `ATHENASIP_API` | `http://127.0.0.1:8080` | Where the dev server proxies `/api`. |
 
-## Deployment
+## Signing in and roles
 
-The server's own `config.yaml` decides where the bundle is served from:
+The console signs in as a **user** of the node with a username and password, and holds the
+session in memory: a reload asks again. A user is not a **subscriber**; a subscriber belongs
+to a realm, registers and makes calls.
 
-```yaml
-http:
-  address: 0.0.0.0
-  port: 8080
-  api:
-    enable: true
-  files:
-    enable: true
-    path: "../admin/"
-```
+A user can do what its roles allow. No role implies another, there is no superuser, and a new
+user has none.
 
-Copy `build/` to that path.
+| Role | What it permits |
+| --- | --- |
+| View cluster status | Read nodes, registrations, calls and the media engine. |
+| Manage realms | Create, change and remove realms and their behaviour. |
+| Manage subscribers | Create, change and remove a realm's subscribers. |
+| Manage users | Create, change and remove users and their roles. |
+| Manage cluster | Node membership and configuration. No screen uses it yet. |
+
+The console hides what a user's roles do not allow; the node's 403 is what enforces it. The
+model is the server's, in its `docs/authentication.md`.
+
+## Rate limits
+
+The node limits every route and answers 429 with `Retry-After`. The console says how long to
+wait and never signs out on one. Sign-in is limited most tightly, per address and per
+username, and successful sign-ins count.

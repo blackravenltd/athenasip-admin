@@ -75,16 +75,11 @@ export function RegistrationFields({ form, defaults, busy, onChange }: {
   );
 }
 
-/** "Server default", with the server's value when this realm shows it. */
 function inheritLabel(value: string | undefined): string {
   return value === undefined ? 'Server default' : `Server default (${value})`;
 }
 
-/**
- * The media half of a realm's settings. Each setting is the server's or the
- * realm's own; choosing "Server default" sends null, which puts it back to
- * inheriting.
- */
+/** The media half of a realm's settings. "Server default" sends null, which makes the realm inherit. */
 export function MediaFields({ form, defaults, busy, onChange }: {
   form: PolicyForm;
   /** The server's values, where known. See `serverDefaults`. */
@@ -138,14 +133,10 @@ export function MediaFields({ form, defaults, busy, onChange }: {
   );
 }
 
-/**
- * A subscriber's own media profile, over its realm's: for a phone the realm's
- * profile gets wrong, as Asterisk's `webrtc=yes` is. "Realm default" sends
- * null, which goes back to the realm's.
- */
+/** A subscriber's media profile, overriding its realm's. "Realm default" sends null, which inherits. */
 export function SubscriberMediaField({ value, realmProfile, busy, onChange }: {
   value: MediaProfile | null;
-  /** What the realm's setting comes to, when the realm is known. */
+  /** The realm's effective profile, when the realm is known. */
   realmProfile?: MediaProfile;
   busy: boolean;
   onChange: (value: MediaProfile | null) => void;

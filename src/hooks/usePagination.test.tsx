@@ -3,7 +3,7 @@ import { act, render } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { usePagination, type Pagination } from './usePagination';
 
-/** Drive the hook without a component that has opinions of its own. */
+/** Renders the hook in a bare component and exposes its latest value. */
 function harness<T>(items: readonly T[], pageSize: number) {
   const seen: { current?: Pagination<T> } = {};
   function Probe({ list }: { list: readonly T[] }) {
@@ -24,7 +24,6 @@ describe('usePagination', () => {
   });
 
   it('reports one page, not zero, when there is nothing at all', () => {
-    // "Page 1 of 0" is what a naive ceil() produces, and it reads as a bug.
     const { seen } = harness(rows(0), 10);
     expect(seen.current?.pageCount).toBe(1);
   });
@@ -37,8 +36,6 @@ describe('usePagination', () => {
   });
 
   it('lands on a page that exists when the list shrinks under it', () => {
-    // Deleting the last record on the last page must not leave somebody
-    // looking at an empty page, which reads as having deleted everything.
     const { seen, rerender } = harness(rows(11), 10);
     act(() => seen.current?.next());
     expect(seen.current?.pageIndex).toBe(1);

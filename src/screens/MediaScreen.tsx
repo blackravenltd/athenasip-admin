@@ -46,7 +46,7 @@ function MediaDialogue({ api, realm, onClose, onSaved }: {
   );
 }
 
-/** A subscriber's address of record as the realm and user the API addresses it by, or nothing for one it cannot. */
+/** A subscriber's address of record as the realm and user the API addresses it by, if it parses. */
 export function subscriberOf(uri: string): { realm: string; user: string } | undefined {
   const match = /^sips?:([^@;]+)@([^;:>]+)/.exec(uri);
   return match ? { user: decodeURIComponent(match[1]), realm: match[2] } : undefined;
@@ -62,9 +62,8 @@ export function describeReoffer(reoffer: MediaReoffer): string {
 }
 
 /**
- * One subscriber that needed the other profile. The node only suggests; setting
- * the subscriber's own profile makes the first offer right, and saves its phone
- * a 488 and a second offer on every call.
+ * One subscriber that needed the other profile. Setting the subscriber's own
+ * profile saves its phone a 488 and a second offer on every call.
  */
 function ReofferRow({ api, reoffer }: { api: AdminApi; reoffer: MediaReoffer }) {
   const { busy, error, run } = useSubmit();
@@ -107,7 +106,7 @@ function ReofferRow({ api, reoffer }: { api: AdminApi; reoffer: MediaReoffer }) 
   );
 }
 
-/** One realm's media settings, each marked when it is the server's rather than the realm's own. */
+/** One realm's media settings, each marked when inherited from the server. */
 function MediaRow({ realm, onEdit }: { realm: Realm; onEdit: () => void }) {
   const behaviour = describeBehaviour(realm);
   const tag = (label: string, inherited: boolean) => (inherited ? `${label} (server default)` : label);
@@ -130,12 +129,12 @@ function MediaRow({ realm, onEdit }: { realm: Realm; onEdit: () => void }) {
   );
 }
 
-/** A 403 is this login's roles, not a fault, so it is said quietly rather than in red. */
+/** A 403 means the user lacks the role, which is not a fault. */
 function notForThisLogin(error: Error | undefined): boolean {
   return error instanceof ApiError && error.isForbidden;
 }
 
-/** The engine as a tone and a sentence. No engine is a choice, not a fault: calls then carry their own media. */
+/** The engine as a tone and a sentence. No engine is a valid configuration, not a fault. */
 export function engineState(engine: MediaEngine): { label: string; tone: 'ok' | 'warn' | 'down' } {
   if (!engine.engine) return { label: 'No media engine: every call’s media goes directly between the phones.', tone: 'warn' };
   return engine.connected
@@ -146,11 +145,9 @@ export function engineState(engine: MediaEngine): { label: string; tone: 'ok' | 
 /**
  * The media engine, and how each realm's calls are carried.
  *
- * The node says which engine it has and whether it is reachable, and never its
- * URL, which can carry an address and credentials; the URL and the relay's
- * port range stay in the configuration file. The per-realm policy is what the
- * API lets this screen edit. The two panels need different roles, and each
- * says so on its own when this login lacks its one.
+ * The API never gives the engine's URL, which can carry credentials; that and
+ * the relay's port range are set in the configuration file. The two panels
+ * need different roles.
  */
 export function MediaScreen({ api }: { api: AdminApi }) {
   const engine = useRefreshableAsync((signal) => api.mediaEngine(signal), [api]);

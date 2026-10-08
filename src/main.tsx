@@ -15,9 +15,8 @@ const session = new Session();
 const onUnauthorized = (error: ApiError) => session.signOut(`Signed out: ${error.message}.`);
 
 /**
- * A 403 means a role may have been taken away since sign-in: the node
- * re-checks every request. Re-read what this session may do, once at a time,
- * so the navigation stops offering what it can no longer use.
+ * A 403 may mean a role was taken away since sign-in. Re-read the session's
+ * roles, one request at a time, so the navigation matches them.
  */
 let refreshing = false;
 const onForbidden = () => {
@@ -32,12 +31,10 @@ const onForbidden = () => {
 /**
  * Which node this client talks to.
  *
- * `VITE_ATHENASIP_LIVE=true` is the real thing: same-origin `/api/v1`, which a
- * production build gets from the node that serves it and the dev server gets
- * by proxy. Anything else is the in-memory node, which enforces the same
- * rules, users, roles and tokens included, so signing in and every role are
- * exercised in development too. The delay is deliberate: a loading state
- * nobody ever sees in development is a loading state nobody notices is broken.
+ * `VITE_ATHENASIP_LIVE=true` selects the real node at same-origin `/api/v1`
+ * (proxied by the dev server). Anything else selects the in-memory node, which
+ * enforces the same users, roles and tokens. Its latency is deliberate, so
+ * loading states are seen in development.
  */
 function selectApi(): { api: AdminApi; hint?: string } {
   if (import.meta.env.VITE_ATHENASIP_LIVE === 'true') {

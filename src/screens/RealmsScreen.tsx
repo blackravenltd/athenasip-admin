@@ -16,9 +16,9 @@ const PAGE_SIZE = 10;
 
 function RealmDialogue({ api, realm, defaults, onClose, onSaved }: {
   api: AdminApi;
-  /** Absent when creating. A realm cannot be renamed, so editing shows its name and not a field. */
+  /** Absent when creating. A realm cannot be renamed. */
   realm?: Realm;
-  /** The server's media settings, which every realm reports; see `serverDefaults`. */
+  /** The server's media settings; see `serverDefaults`. */
   defaults: Partial<BehaviourEffective>;
   onClose: () => void;
   onSaved: () => void;
@@ -148,9 +148,7 @@ function RealmRow({ api, realm, onChanged }: { api: AdminApi; realm: Realm; onCh
       </span>
       <div className="record-actions">
         <Link className="secondary-button" to={realmSubscribers(realm.name)} aria-label={`Subscribers in ${realm.name}`}>Subscribers</Link>
-        {/* The visible label is short; the accessible name names the record,
-            because "Edit" repeated down a list tells a screen reader nothing
-            about which realm it would edit. */}
+        {/* The accessible name says which realm, for a screen reader. */}
         <button className="secondary-button" type="button" aria-label={`Edit ${realm.name}`} onClick={() => setDialogue('edit')}>
           Edit
         </button>

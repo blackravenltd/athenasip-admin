@@ -5,12 +5,8 @@ import { ErrorMessage, Loading } from '../components/Status';
 import { selfNode } from './OverviewScreen';
 
 /**
- * Whether this node is actually as secure as it is meant to be.
- *
- * AthenaSIP is TLS-first and plaintext has to be opted into. So the useful
- * question here is not "is TLS configured" but "is anything unencrypted
- * listening", which the node list already answers and nothing else in the
- * console points out.
+ * Whether anything unencrypted is listening. AthenaSIP is TLS-first and
+ * plaintext is opt-in; the node list says which transports are up.
  */
 export function SecurityScreen({ api }: { api: AdminApi }) {
   const result = useRefreshableAsync((signal) => api.nodes(signal), [api]);

@@ -2,22 +2,17 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { fixtureFromEnvironment, sipUri, softphoneUrl, type Fixture } from './fixture';
+import { authorization, digestHashes, parseChallenges } from '../src/api/digest';
 import type { MediaStats, SoftphoneState, Transition } from '../src/softphone/Softphone';
 import type { SoftphoneReadout } from '../src/softphone/page';
 
 /**
- * A browser calls a browser through AthenaSIP and rtpengine.
+ * A browser calls a browser through AthenaSIP and rtpengine, with no phone.
+ * The server's harness asserts on rtpengine's counters; this asserts on the
+ * browsers' own.
  *
- * This is the first "To the first call" item in the server's Milestone 3:
- * two browsers through rtpengine exercise everything on the node's side of a
- * browser calling an AthenaPhone, and run with no device and no phone at all.
- * The node's harness asserts on rtpengine's counters afterwards; this asserts
- * on the browsers' own, so the engine and the endpoints are two witnesses to
- * the same media.
- *
- * Nothing here sleeps for a state. Every wait is a predicate over the page's
- * readout, and the only fixed pause is the two seconds media is given to flow
- * before its counters are read.
+ * Every wait is a predicate over the page's readout, except the fixed pause
+ * that lets media flow before its counters are read.
  */
 
 declare global {
@@ -40,10 +35,19 @@ interface EndRecord {
 
 const fixture = fixtureFromEnvironment();
 
-/** In the relay phase, what `/client/config` says, fetched here so the page never holds a session. */
+// Outside the suite, a phone target selects the phone run instead (`phone-call.spec.ts`).
+test.skip(!!fixture.target && !fixture.phase, 'ATHENA_INTEROP_TARGET is set, so this is the phone run');
+
+/**
+ * In the relay phase, the `ice_servers` from `/subscriber/{realm}/config`, signed with the first
+ * subscriber's SIP credentials and fetched here, so the page holds no API credential.
+ */
 let iceServers: unknown[] | undefined;
 
 test.beforeAll(async () => {
+  if (fixture.subscribers.length < 2) {
+    throw new Error(`ATHENA_INTEROP_SUBSCRIBERS names ${fixture.subscribers.length} subscriber(s); a browser calling a browser needs two`);
+  }
   let health: Response | undefined;
   try {
     health = await fetch(`${fixture.apiUrl}/health`);
@@ -57,25 +61,26 @@ test.beforeAll(async () => {
     );
   }
   if (fixture.relay) {
-    if (!fixture.apiUser) {
-      throw new Error('The relay phase reads /client/config as a user, and ATHENA_INTEROP_API_USER and ATHENA_INTEROP_API_PASSWORD are not set. up.sh writes both into generated/fixture.env.');
-    }
-    const login = await fetch(`${fixture.apiUrl}/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(fixture.apiUser),
-    });
-    expect(login.ok, `POST /auth/login as ${fixture.apiUser.username} answered ${login.status}`).toBe(true);
-    const { token } = await login.json() as { token: string };
-    const authorization = { Authorization: `Bearer ${token}` };
-    const response = await fetch(`${fixture.apiUrl}/client/config`, { headers: authorization });
-    expect(response.ok, `GET /client/config answered ${response.status}`).toBe(true);
+    const path = `/subscriber/${encodeURIComponent(fixture.realm)}/config`;
+    const url = `${fixture.apiUrl}${path}`;
+    const challenge = await fetch(url);
+    expect(challenge.status, `GET ${path} unsigned answered ${challenge.status}, not a Digest challenge`).toBe(401);
+    const signature = await authorization(parseChallenges(challenge.headers.get('WWW-Authenticate') ?? ''), {
+      username: fixture.subscribers[0], password: fixture.password, method: 'GET', uri: new URL(url).pathname,
+    }, digestHashes());
+    expect(signature, `GET ${path} offered no Digest challenge this client can answer`).toBeDefined();
+    const response = await fetch(url, { headers: { Authorization: signature! } });
+    expect(response.ok, `GET ${path} as ${fixture.subscribers[0]} answered ${response.status}`).toBe(true);
     const config = await response.json() as { ice_servers?: Array<{ urls: string; credential?: string }> };
-    // The session was only for this; leaving it open would outlive the run on the node.
-    await fetch(`${fixture.apiUrl}/auth/logout`, { method: 'POST', headers: authorization }).catch(() => undefined);
     iceServers = config.ice_servers ?? [];
     expect(iceServers.some((server) => /^turns?:/.test((server as { urls: string }).urls) && (server as { credential?: string }).credential), 'the node offers no TURN server with a credential').toBe(true);
   }
+});
+
+/** Every page a test opened, left after it whatever the outcome. */
+const opened: Page[] = [];
+test.afterEach(async () => {
+  for (const page of opened.splice(0)) await leave(page);
 });
 
 test('the first subscriber calls the second, and the caller hangs up', async ({ browser }, info) => {
@@ -119,10 +124,21 @@ interface End {
   page: Page;
 }
 
-/** A registered softphone in a context of its own, so the two share no socket and no media stream. */
+/** Unregisters a harness page, so it answers nothing in a later test, and closes its context. */
+async function leave(page: Page): Promise<void> {
+  const unregister = page.getByTestId('softphone-unregister');
+  if (await unregister.isVisible().catch(() => false)) {
+    await unregister.click();
+    await page.waitForFunction(() => window.__athenaSoftphone?.state().registration !== 'registered', undefined, { timeout: 5000 }).catch(() => undefined);
+  }
+  await page.context().close();
+}
+
+/** A registered softphone in its own context, so the two share no socket or media stream. */
 async function open(browser: Parameters<Parameters<typeof test>[2]>[0]['browser'], user: string, options: { target?: string; answer?: boolean }): Promise<End> {
   const context = await browser.newContext();
   const page = await context.newPage();
+  opened.push(page);
   page.on('pageerror', (error) => { throw error; });
   await page.goto(softphoneUrl(fixture, user, { ...options, ice: iceServers }));
   await page.waitForFunction(() => {
@@ -152,14 +168,11 @@ async function ended(page: Page): Promise<void> {
 }
 
 /**
- * The media assertion. Packets went out of each browser and came into the
- * other, what came in carried sound rather than silence, DTLS completed, and
- * where the engine advertises an address other than loopback, that address
- * is where each browser was sending: the engine anchored the call, rather
- * than declining it and letting the two ends reach each other directly. In
- * the relay phase the local end of the pair is a port in the TURN server's
- * relay range, which is how a relayed pair is known: the browser's own label
- * for it is not trusted, since Chrome reports it `prflx` once checks run.
+ * Asserts media: packets both ways, sound rather than silence, DTLS complete.
+ * When the engine advertises a non-loopback address, each browser must be
+ * sending there, which shows the engine anchored the call. In the relay phase
+ * the pair's local port must be in the TURN relay range; the candidate type
+ * is not used, since Chrome reports a relayed pair as `prflx` once checks run.
  */
 async function mediaFlowed(caller: Page, callee: Page): Promise<void> {
   await caller.waitForTimeout(2000);
@@ -170,7 +183,7 @@ async function mediaFlowed(caller: Page, callee: Page): Promise<void> {
     expect(stats!.packetsSent, `${name} sent nothing`).toBeGreaterThan(0);
     expect(stats!.packetsReceived, `${name} received nothing`).toBeGreaterThan(0);
     // Energy, not the instantaneous level: the fake device beeps, and an
-    // instant can land in the gap between beeps.
+    // instant can land between beeps.
     expect(stats!.totalAudioEnergy ?? 0, `${name} received only silence`).toBeGreaterThan(0);
     expect(stats!.candidatePair, `${name} has no selected candidate pair`).toBeDefined();
     if (!fixture.advertise.startsWith('127.')) {
@@ -191,7 +204,7 @@ function readStats(page: Page): Promise<MediaStats | undefined> {
   return page.evaluate(() => window.__athenaSoftphone!.stats());
 }
 
-/** What happened, written down: both descriptions, the state history and the counters from each end. */
+/** Writes both descriptions, the state history and each end's counters to the results directory. */
 async function writeRecord(title: string, caller: End, callee: End): Promise<void> {
   const end = async (side: End): Promise<EndRecord> => ({
     user: side.user,

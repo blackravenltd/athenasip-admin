@@ -5,23 +5,12 @@ export type MeterSource =
   | { kind: 'microphone' };
 
 /**
- * A level bar driven by the Web Audio analyser, for one audio source.
- *
- * One component for both directions, because the only difference between
- * watching the far end and watching the microphone is which node the analyser
- * is connected to, and two near-identical copies of this drifted apart within
- * a week of being written.
- *
- * The animation frame is held and cancelled. The earlier pair of components
- * started a `requestAnimationFrame` loop and never stopped it, so every visit
- * to the page left another one running against a closed `AudioContext`.
+ * A level bar driven by a Web Audio analyser, for the microphone or a stream.
  *
  * The far end is read from its stream, never from the `<audio>` element
- * playing it. An element can be given to `createMediaElementSource` once in
- * its life, so the meter went dead the first time it restarted, while the
- * element went on playing. And the effect restarts only when the stream or
- * the kind changes, not when the caller hands over a new object for the same
- * source, which the softphone does on every render, once a second.
+ * playing it: an element can be given to `createMediaElementSource` only once.
+ * The effect depends on the stream and the kind, not on the `source` object,
+ * because callers pass a new object on every render.
  */
 export function VolumeMeter({ label, source, active }: { label: string; source: MeterSource; active: boolean }) {
   const levelRef = useRef<HTMLDivElement>(null);
@@ -65,8 +54,7 @@ export function VolumeMeter({ label, source, active }: { label: string; source: 
         };
         frame = requestAnimationFrame(tick);
       } catch (cause) {
-        // A refused microphone, or no audio context to be had. Neither is
-        // worth an error banner on a diagnostics page.
+        // A refused microphone or no audio context: logged, not shown.
         console.warn('Volume meter could not start', cause);
       }
     };

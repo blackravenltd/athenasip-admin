@@ -3,6 +3,7 @@ import { ApiError } from './errors';
 import type {
   Subscriber,
   Call,
+  CallRecord,
   AdminUser,
   ChangePassword,
   ClientConfig,
@@ -24,43 +25,40 @@ import type {
   Registration,
   Role,
   SessionInfo,
+  SubscriberLine,
   UpdateSubscriber,
   UpdateAdminUser,
   UpdateRealm,
 } from './types';
 import { MEDIA_PROFILES, QUALIFY_MAX, QUALIFY_MIN, ROLES } from './types';
 
-/**
- * The server's own `behaviour:` section, which a realm inherits a setting from
- * when it has none of its own. These are the shipped defaults.
- */
+/** The server's shipped `behaviour:` defaults, which a realm inherits where it sets nothing. */
 const SERVER_BEHAVIOUR: BehaviourEffective = { media_anchor: true, media_profile: 'mirror', qualify_interval: 0, rewrite_contact: false };
 
-/** A realm as held: its own settings, with what they come to worked out at read time, as the node does. */
+/** A realm as held: its own settings; the effective ones are worked out at read time, as on the node. */
 type StoredRealm = Omit<Realm, 'behaviour_effective' | 'behaviour_default'>;
 
 export interface FakeAdminApiOptions {
-  /** Milliseconds each answer takes. Zero in tests; the running app passes a little. */
+  /** Milliseconds each answer takes. Zero in tests. */
   latencyMs?: number;
   /**
-   * Check credentials and roles on every route, as the node will. Off, which
-   * is what a screen test that is not about auth wants, every request is let
-   * through as if it held every role.
+   * Check credentials and roles on every route, as the node does. When off,
+   * every request passes as if it held every role.
    */
   secured?: boolean;
   /** The session's token, read per call as `HttpAdminApi` reads it. */
   token?: () => string | undefined;
-  /** Called with every 401 and 403 on the session's own requests, as `HttpAdminApi` calls them. */
+  /** Called with every 401 and 403 on the session's own requests, as in `HttpAdminApi`. */
   onUnauthorized?: (error: ApiError) => void;
   onForbidden?: (error: ApiError) => void;
   /** Seconds a login lasts. */
   sessionSeconds?: number;
 }
 
-/** What the roles table in the server's `docs/authentication.md` says each group of routes needs. */
+/** The roles each group of routes needs, from the table in the server's `docs/authentication.md`. */
 const STATUS: readonly Role[] = ['view-cluster-status'];
 const REALMS: readonly Role[] = ['manage-realms'];
-/** Listing and reading a realm: whoever places a subscriber has to find the realm first. */
+/** Listing and reading a realm: managing subscribers needs the realm list too. */
 const REALMS_READ: readonly Role[] = ['manage-realms', 'manage-realm-subscribers'];
 const SUBSCRIBERS: readonly Role[] = ['manage-realm-subscribers'];
 const USERS: readonly Role[] = ['manage-admin-users'];
@@ -68,7 +66,7 @@ const USERS: readonly Role[] = ['manage-admin-users'];
 const ANYONE: readonly Role[] = [];
 
 interface StoredUser extends AdminUser {
-  /** Held as given, because this node exists only in a tab. The real one keeps PBKDF2. */
+  /** Held in the clear. The real node keeps PBKDF2. */
   password: string;
 }
 
@@ -76,9 +74,9 @@ type Stored = Omit<Registration, 'registered_at' | 'expires_at'> & { age_s: numb
 
 /**
  * A live call, held as offsets from when this node was made and turned into
- * instants and counters at read time, so the counters move between polls the
- * way a relay's do. Each leg gives packets per second in each direction it
- * reports; a direction left out is one the engine does not report.
+ * instants and counters at read time, so the counters move between polls.
+ * Each leg gives packets per second in each direction it reports; a direction
+ * left out is one the engine does not report.
  */
 interface StoredCall extends Omit<Call, 'created_at' | 'answered_at' | 'media'> {
   age_s: number;
@@ -90,22 +88,19 @@ interface StoredCall extends Omit<Call, 'created_at' | 'answered_at' | 'media'> 
 const PACKET_BYTES = 172;
 
 /**
- * An AthenaSIP node that only exists in this tab.
- *
- * It is not a mock. It holds the records, applies the writes and enforces the
- * rules the real node enforces, read from its handlers rather than guessed:
- * a duplicate realm or subscriber is a `conflict`, an unknown one `not_found`, a
- * missing field `invalid_request`, a caller without the route's role
- * `forbidden`, and deleting a realm deletes its subscribers and their
- * registrations, as the server's does. Its users, sessions and roles are the server's
- * `docs/authentication.md`, which the node does not enforce until it is built. Mocks that answer yes to everything are how a form
- * ships with no error path at all.
+ * An in-memory AthenaSIP node. It holds the records, applies the writes and
+ * enforces the real node's rules: a duplicate realm or subscriber is a
+ * `conflict`, an unknown one `not_found`, a missing field `invalid_request`,
+ * a caller without the route's role `forbidden`, and deleting a realm deletes
+ * its subscribers and their registrations. Users, sessions and roles follow
+ * the server's `docs/authentication.md`.
  */
 export class FakeAdminApi implements AdminApi {
   private realms: StoredRealm[];
   private subscribers: Subscriber[];
   private registrations: Stored[];
   private calls: StoredCall[];
+  private records: StoredRecord[] = RECORDS;
   private reoffers: Array<Omit<MediaReoffer, 'last_at'> & { age_s: number }> = [{
     subscriber: 'sip:reception@blackraven.co.nz', rejected: 'webrtc', took: 'rtp', count: 2, age_s: 420, suggested_media_profile: 'rtp',
   }];
@@ -134,7 +129,7 @@ export class FakeAdminApi implements AdminApi {
     const user = (username: string, display_name: string, roles: Role[], extra: Partial<StoredUser> = {}): StoredUser => ({
       username, display_name, roles, disabled: false, created_at: now - 86_400 * 30, last_login_at: now - 3600, password: username, ...extra,
     });
-    // Each password is the username, which is fine for a node that only exists in a tab.
+    // Each password is the username.
     this.users = [
       user('admin', 'Administrator', [...ROLES]),
       user('ops', 'Operations', ['view-cluster-status']),
@@ -154,8 +149,8 @@ export class FakeAdminApi implements AdminApi {
       this.subscriber('sip.athenasip.org', 'tomweb', 'webrtc'),
       this.subscriber('blackraven.co.nz', 'reception'),
     ];
-    // Held as offsets from now and turned into instants at read time, or every
-    // binding would have expired a few minutes into a development session.
+    // Held as offsets and turned into instants at read time, so no binding
+    // expires during a development session.
     this.registrations = [
       {
         subscriber: 'sip:tom@sip.athenasip.org',
@@ -180,9 +175,8 @@ export class FakeAdminApi implements AdminApi {
         path: '',
       },
     ];
-    // One answered call through the relay, with the browser's leg hearing
-    // nothing back, which is what one-way audio looks like in the counters;
-    // and one still ringing, which nothing anchors yet.
+    // One answered call through the relay whose browser leg receives nothing,
+    // as one-way audio shows in the counters; and one still ringing, unanchored.
     this.calls = [
       {
         id: 'a84b4c76e66710@192.168.1.24',
@@ -237,7 +231,7 @@ export class FakeAdminApi implements AdminApi {
     return { id: this.nextId++, uri: `sip:${user}@${realm}`, user, realm, behaviour: { media_profile } };
   }
 
-  /** A subscriber's behaviour, checked whole before any of it is kept, because the node's 400 changes nothing. */
+  /** A subscriber's behaviour, checked whole before any of it is kept: the node's 400 changes nothing. */
   private subscriberBehaviour(behaviour: SubscriberBehaviour | undefined): SubscriberBehaviour {
     if (behaviour === undefined) return {};
     for (const key of Object.keys(behaviour)) {
@@ -251,7 +245,7 @@ export class FakeAdminApi implements AdminApi {
   }
 
 
-  /** Runs a route: its role check, with the server's codes and wording, then the work. `undefined` is open. */
+  /** Runs a route: its role check, with the server's codes and wording, then the work. `undefined` roles means open. */
   private async settle<T>(roles: readonly Role[] | undefined, work: (caller: Caller) => T, signal?: AbortSignal): Promise<T> {
     if (this.latencyMs > 0) {
       await new Promise<void>((resolve, reject) => {
@@ -264,8 +258,8 @@ export class FakeAdminApi implements AdminApi {
       throw new DOMException('Aborted', 'AbortError');
     }
     const caller = roles === undefined ? OPEN : this.authorise(roles, this.token(), true);
-    // Structured-clone the way a real response would, so a screen that mutates
-    // what it was handed cannot corrupt the store and pass anyway.
+    // Cloned, as a real response is a copy: a screen that mutates its result
+    // must not change the store.
     return structuredClone(work(caller));
   }
 
@@ -305,7 +299,7 @@ export class FakeAdminApi implements AdminApi {
     return realm;
   }
 
-  /** Checks the whole change before making any of it, because the node's 400 changes nothing. */
+  /** Checks the whole change before making any of it: the node's 400 changes nothing. */
   private apply(realm: StoredRealm, changes: UpdateRealm): void {
     const whole = (value: unknown, field: string) => {
       if (value === undefined) return undefined;
@@ -344,7 +338,7 @@ export class FakeAdminApi implements AdminApi {
     realm.nonce_expiry = nonce ?? realm.nonce_expiry;
     realm.registration_timeout = timeout ?? realm.registration_timeout;
     realm.registration_minimum = minimum ?? realm.registration_minimum;
-    // Left out is left alone; null is back to inheriting.
+    // Left out is left alone; null goes back to inheriting.
     if (anchor !== undefined) realm.behaviour.media_anchor = anchor;
     if (profile !== undefined) realm.behaviour.media_profile = profile;
     if (qualify !== undefined) realm.behaviour.qualify_interval = qualify;
@@ -386,14 +380,22 @@ export class FakeAdminApi implements AdminApi {
   }
 
   /**
-   * This node serves plain `ws` and no `wss`, so there is no `websocket_uri`,
-   * as the real node answers. STUN only: the fake mints no TURN credential.
+   * No `websocket_uri`, as this node has no `wss` listener. STUN only: no
+   * TURN credential is minted. Subscriber passwords are not kept, so any
+   * non-empty one signs; an unknown subscriber is a 401, as on the node.
    */
-  clientConfig(signal?: AbortSignal): Promise<ClientConfig> {
-    return this.settle(STATUS, () => ({
-      transports: FAKE_TRANSPORTS,
-      ice_servers: [{ urls: 'stun:203.0.113.5:3478' }],
-    }), signal);
+  subscriberConfig(line: SubscriberLine, signal?: AbortSignal): Promise<ClientConfig> {
+    return this.settle(undefined, () => {
+      this.find(line.realm);
+      if (!line.password || !this.subscribers.some((candidate) => candidate.realm === line.realm && candidate.user === line.user)) {
+        throw new ApiError('wrong SIP username or password for this realm', 401, 'unauthorized');
+      }
+      return {
+        transports: FAKE_TRANSPORTS,
+        ice_servers: [{ urls: 'stun:203.0.113.5:3478' }],
+        realm: { name: line.realm, registration: { expires: 300, minimum: 0 }, outbound: { flows: 1 }, push: [] },
+      };
+    }, signal);
   }
 
   nodes(signal?: AbortSignal): Promise<ClusterNode[]> {
@@ -478,7 +480,7 @@ export class FakeAdminApi implements AdminApi {
       }
       if (changes.password !== undefined && !changes.password) throw new ApiError('password must not be empty', 400, 'invalid_request');
       const behaviour = this.subscriberBehaviour(changes.behaviour);
-      // The password is not kept here any more than it is on the server.
+      // The password is not kept, as on the server.
       if (behaviour.media_profile !== undefined) subscriber.behaviour.media_profile = behaviour.media_profile;
       return subscriber;
     }, signal);
@@ -544,6 +546,22 @@ export class FakeAdminApi implements AdminApi {
     return this.settle(STATUS, () => this.calls.map((call) => this.liveCall(call)), signal);
   }
 
+  listCallRecords(limit = 100, signal?: AbortSignal): Promise<CallRecord[]> {
+    return this.settle(STATUS, () => {
+      if (!Number.isInteger(limit) || limit < 1 || limit > 1000) {
+        throw new ApiError('limit must be between 1 and 1000', 400, 'invalid_request');
+      }
+      const now = Date.now();
+      const at = (secondsAgo: number) => new Date(now - secondsAgo * 1000).toISOString();
+      return this.records.slice(0, limit).map(({ ended_ago_s, rang_s, answered, ...record }) => ({
+        ...record,
+        ended_at: at(ended_ago_s),
+        answered_at: record.duration || answered ? at(ended_ago_s + record.duration) : null,
+        created_at: at(ended_ago_s + record.duration + rang_s),
+      }));
+    }, signal);
+  }
+
   getCall(id: string, signal?: AbortSignal): Promise<Call> {
     return this.settle(STATUS, () => {
       const call = this.calls.find((candidate) => candidate.id === id);
@@ -582,14 +600,14 @@ export class FakeAdminApi implements AdminApi {
     }), signal);
   }
 
-  /** A call ending, as the node would see it. Not part of `AdminApi`. */
+  /** Ends a call, for tests. Not part of `AdminApi`. */
   endCallElsewhere(id: string): void {
     this.calls = this.calls.filter((call) => call.id !== id);
   }
 
   /**
-   * Another administrator's change, made outside this session and with no
-   * check: how a test takes a role away mid-session. Not part of `AdminApi`.
+   * Another user's change, made outside this session with no role check: how
+   * a test takes a role away mid-session. Not part of `AdminApi`.
    */
   alterUserElsewhere(username: string, changes: UpdateAdminUser): void {
     const user = this.user(username);
@@ -639,7 +657,7 @@ export class FakeAdminApi implements AdminApi {
   updateUser(username: string, changes: UpdateAdminUser, signal?: AbortSignal): Promise<AdminUser> {
     return this.settle(USERS, (caller) => {
       const user = this.user(username);
-      // Nobody locks themselves out of the door they are standing in.
+      // A user cannot disable itself or give up `manage-admin-users`.
       if (same(caller.username, username)) {
         if (changes.disabled === true) throw new ApiError('a user cannot disable itself', 409, 'would_lock_out');
         if (changes.roles && !changes.roles.includes('manage-admin-users')) {
@@ -680,13 +698,13 @@ export class FakeAdminApi implements AdminApi {
         throw failure;
       }
       if (!change.password) throw new ApiError('password is required', 400, 'invalid_request');
-      // Holding the role does not need the old one, because the case it exists for is somebody who has lost theirs.
-      // 403 with its own code: the bearer is fine, a body field is wrong, and it is not the missing-role 403 either.
+      // A caller with the role needs no old password: that is how a lost one is reset.
+      // 403 with its own code, to tell a wrong body field from a missing role.
       if (own && !manager && change.old_password !== user.password) {
         throw new ApiError('the old password is not right', 403, 'wrong_password');
       }
       user.password = change.password;
-      // Every session the user held, including the one that asked: the old password is no longer trusted.
+      // Ends every session the user holds, including the one that asked.
       this.revoke(username);
       return undefined;
     }, signal);
@@ -708,7 +726,7 @@ const OPEN: Caller = { username: '', display_name: '', roles: [] };
 /** What an unsecured node treats every request as. */
 const EVERYTHING: Caller = { username: 'admin', display_name: 'Administrator', roles: [...ROLES] };
 
-/** Usernames are compared case-insensitively and stored as given, as an email address is in practice. */
+/** Usernames are compared case-insensitively and stored as given. */
 function same(a: string, b: string): boolean {
   return a.toLowerCase() === b.toLowerCase();
 }
@@ -739,3 +757,16 @@ function validRoles(roles: readonly Role[]): Role[] {
   if (unknown.length > 0) throw new ApiError(`there is no role called ${unknown[0]}`, 400, 'unknown_role');
   return ROLES.filter((role) => roles.includes(role));
 }
+
+/**
+ * Ended calls, newest first, held as offsets from now and turned into
+ * instants at read time. `answered` marks a call answered and hung up within
+ * the second, which a duration of 0 alone would read as unanswered.
+ */
+type StoredRecord = Omit<CallRecord, 'created_at' | 'answered_at' | 'ended_at'> & { ended_ago_s: number; rang_s: number; answered?: boolean };
+
+const RECORDS: StoredRecord[] = [
+  { id: 'r1@192.168.1.24', caller: 'sip:tom@sip.athenasip.org', callee: 'sip:tomweb@sip.athenasip.org', duration: 184, ended_ago_s: 900, rang_s: 6, nodes: ['corvus-fi-1'], media_engine: 'builtin' },
+  { id: 'r2@203.0.113.40', caller: 'sip:reception@blackraven.co.nz', callee: 'sip:tom@sip.athenasip.org', duration: 0, ended_ago_s: 3_600, rang_s: 25, nodes: ['corvus-fi-1'], media_engine: null },
+  { id: 'r3@192.168.1.24', caller: 'sip:tomweb@sip.athenasip.org', callee: 'sip:tom@sip.athenasip.org', duration: 42, ended_ago_s: 86_400, rang_s: 3, nodes: ['corvus-fi-1'], media_engine: 'builtin' },
+];

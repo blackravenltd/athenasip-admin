@@ -4,15 +4,12 @@ import { routes } from './routes';
 
 describe('topNav', () => {
   it('points every section at a path the router actually serves', () => {
-    // The previous navigation listed `/sip`, the route table did not, and the
-    // link silently rendered Home. Anything in the bar has to be a route.
     const known = new Set<string>(Object.values(routes));
     for (const item of topNav) expect(known).toContain(item.to);
   });
 
   it('matches the overview exactly, so it is not active on every page', () => {
-    // `/` is a prefix of everything. Without `end` the overview stays
-    // highlighted while you are four pages away from it.
+    // `/` is a prefix of every path.
     const overview = topNav.find((item) => item.to === routes.home);
     expect(overview?.end).toBe(true);
   });
@@ -35,8 +32,6 @@ describe('sectionNavFor', () => {
   });
 
   it('matches on a path boundary, not on a bare prefix', () => {
-    // `/mediaserver` is not inside `/media`, and a `startsWith` says it is.
-    // Getting this wrong puts the Media bar above an unrelated page.
     expect(sectionNavFor('/mediaserver')).toBeUndefined();
     expect(sectionNavFor('/sipstack')).toBeUndefined();
   });
@@ -58,8 +53,8 @@ describe('visible', () => {
     expect(sip(['view-cluster-status'])).toEqual(['Registrations']);
     expect(sip(['manage-realm-subscribers'])).toEqual(['Subscribers']);
     expect(sip(['manage-realms', 'manage-realm-subscribers', 'view-cluster-status'])).toEqual(['Realms', 'Subscribers', 'Registrations']);
-    expect(top(['manage-admin-users'])).toEqual(['Overview', 'Users', 'Diagnostics']);
-    expect(top(['view-cluster-status'])).toEqual(['Overview', 'SIP', 'Calls', 'Media', 'Security', 'Diagnostics']);
-    expect(top(['manage-realms'])).toEqual(['Overview', 'SIP', 'Media', 'Diagnostics']);
+    expect(top(['manage-admin-users'])).toEqual(['Overview', 'Phone', 'Users', 'Diagnostics']);
+    expect(top(['view-cluster-status'])).toEqual(['Overview', 'Phone', 'SIP', 'Calls', 'Media', 'Security', 'Diagnostics']);
+    expect(top(['manage-realms'])).toEqual(['Overview', 'Phone', 'SIP', 'Media', 'Diagnostics']);
   });
 });

@@ -10,17 +10,11 @@ export interface RefreshableAsyncState<T> {
 }
 
 /**
- * Page-owned loading that keeps the last usable value across a refresh.
+ * Loads a value when `dependencies` change, and keeps it across a refresh.
  *
- * The distinction between `loading` and `refreshing` is the point. A first
- * load has nothing to show, so it shows a spinner. A refresh already has a
- * list on screen, and replacing it with a spinner to fetch the same list back
- * is how a page that is working looks broken. So `value` survives, and only
- * `refreshing` changes.
- *
- * An abort is not a failure. Every request here is cancelled on unmount and
- * superseded on refresh, and reporting those as errors is how a page that
- * navigated away leaves a red banner behind it.
+ * `loading` is a first load with nothing to show; `refreshing` keeps `value`
+ * on screen while it is fetched again. Requests are aborted on unmount and
+ * superseded on refresh, and an abort is never reported as an error.
  */
 export function useRefreshableAsync<T>(
   factory: (signal: AbortSignal) => Promise<T>,
@@ -46,8 +40,7 @@ export function useRefreshableAsync<T>(
       setState({ value, loading: false, refreshing: false });
     }).catch((cause: unknown) => {
       if (isAbort(cause) || controller.signal.aborted || activeRef.current?.id !== id) return;
-      // Normalised here rather than at every render site: a screen should be
-      // able to read `error.message` without first proving it has one.
+      // Normalised so a screen can always read `error.message`.
       const error = cause instanceof Error ? cause : new Error(String(cause));
       setState((current) => ({ ...current, error, loading: false, refreshing: false }));
     });
@@ -56,7 +49,7 @@ export function useRefreshableAsync<T>(
   useEffect(() => {
     load(false);
     return () => activeRef.current?.controller.abort(new DOMException('Async page was replaced', 'AbortError'));
-    // The caller explicitly owns the reload boundary.
+    // The caller's `dependencies` decide when to reload.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, dependencies);
 

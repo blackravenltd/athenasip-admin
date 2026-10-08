@@ -1,11 +1,6 @@
 /**
- * Every path this client knows, named once.
- *
- * Nothing constructs a path by string concatenation at a call site: a link and
- * the route it reaches have to be the same text, and the only way to guarantee
- * that is for them to be the same constant. The previous hand-rolled router
- * kept its route table in one file and its links in eight, which is how
- * `/sip` came to be in the navigation and absent from the table.
+ * Every path this client knows. Links and routes both use these constants;
+ * nothing builds a path by concatenation at a call site.
  */
 export const routes = {
   home: '/',
@@ -16,6 +11,8 @@ export const routes = {
   registrations: '/sip/registrations',
 
   calls: '/calls',
+
+  phone: '/phone',
 
   media: '/media',
 
@@ -31,7 +28,7 @@ export const routes = {
   softphone: '/diagnostics/softphone',
 } as const;
 
-/** The subscribers of one realm, which is the only path that carries a parameter. */
+/** The subscribers screen filtered to one realm. */
 export function realmSubscribers(realm: string): string {
   return `${routes.subscribers}?realm=${encodeURIComponent(realm)}`;
 }

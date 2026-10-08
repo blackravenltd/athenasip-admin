@@ -1,19 +1,18 @@
 import { useEffect, useState } from 'react';
 
-/** How long before the end the top bar starts counting down. */
+/** How long before expiry the top bar starts counting down. */
 export const WARN_SECONDS = 5 * 60;
 
-/** Minutes and seconds, as a countdown reads: 4:05. */
+/** Minutes and seconds, e.g. `4:05`. */
 export function formatRemaining(seconds: number): string {
   const whole = Math.max(0, Math.ceil(seconds));
   return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`;
 }
 
 /**
- * Seconds until `expiresAt` once it is within `within` of now, and undefined
- * before that or when there is no expiry. It waits with one timer until the
- * window opens and ticks each second only inside it, so a session hours long
- * costs nothing until its last minutes.
+ * Seconds until `expiresAt` (Unix seconds) once it is within `within` seconds
+ * of now; undefined before that or with no expiry. One timer waits for the
+ * window to open, and it ticks each second only inside it.
  */
 export function useSecondsLeft(expiresAt: number | undefined, within = WARN_SECONDS): number | undefined {
   const [now, setNow] = useState(() => Date.now());
@@ -36,14 +35,11 @@ export function useSecondsLeft(expiresAt: number | undefined, within = WARN_SECO
 }
 
 /**
- * The top bar's countdown in a session's last minutes. The node gives a
- * session an absolute expiry and nothing extends it, so the useful thing is
- * warning enough to finish a dialogue before the console signs out. With no
- * expiry given it shows nothing.
+ * The top bar's countdown in a session's last minutes. A session's expiry is
+ * absolute and nothing extends it.
  *
- * The live region announces once, as the countdown appears; the ticking
- * figure beside it is hidden from screen readers, which would otherwise read
- * it every second.
+ * The live region announces once, as the countdown appears; the ticking figure
+ * is hidden from screen readers.
  */
 export function SessionExpiry({ expiresAt }: { expiresAt?: number }) {
   const left = useSecondsLeft(expiresAt);

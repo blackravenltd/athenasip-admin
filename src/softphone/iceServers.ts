@@ -1,13 +1,11 @@
 import type { IceServer } from '../api/types';
 
 /**
- * The node's `ice_servers`, as `RTCPeerConnection` should be given them.
+ * The node's `ice_servers` in the form `RTCPeerConnection` takes.
  *
- * A `turn:` or `turns:` entry with no credential is a node with a TURN server
- * configured and no shared secret: the URL is reported because the operator
- * configured it, but the browser cannot use it, so it is dropped rather than
- * handed over half-built. So is one whose credential has already expired.
- * `expires_at` is ours, not WebRTC's, and is not passed on.
+ * A `turn:` or `turns:` entry is dropped when it has no credential (the node
+ * has no shared secret) or its credential has expired. `expires_at` is the
+ * node's field, not WebRTC's, and is not passed on.
  */
 export function usableIceServers(servers: readonly IceServer[], now: number = Date.now()): RTCIceServer[] {
   const usable: RTCIceServer[] = [];

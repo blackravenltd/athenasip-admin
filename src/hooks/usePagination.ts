@@ -9,13 +9,10 @@ export interface Pagination<T> {
 }
 
 /**
- * Paging held by the client, because the server does not page yet.
+ * Client-side paging; the server does not page.
  *
- * Deliberately a separate hook rather than something a screen does inline, so
- * that when `/api/v1/realms` grows `?page=` there is one place that changes and
- * one place that is already tested. The clamp matters: deleting the last record
- * on the last page must land somebody on a page that exists, not on an empty
- * one that reads as data loss.
+ * The page index is clamped, so deleting the last record on the last page
+ * lands on a page that exists. There is always at least one page.
  */
 export function usePagination<T>(items: readonly T[], pageSize: number): Pagination<T> {
   const [requested, setRequested] = useState(0);
