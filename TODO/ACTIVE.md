@@ -159,6 +159,20 @@ Not reopened without asking Tom.
 - [ ] Match legs to participants, once the node fills `participant`.
 - [ ] The media engine's settings, once the server exposes them.
 
+## Trunks and scripts (server Milestone 5)
+
+- [ ] A Trunks screen over `/trunks` (`manage-trunks`): list, add, change, remove, and set a
+      password (never returned; `password_set` says whether one is held). Show each trunk's
+      `registration` (`node`, `state` registering, registered or failed, `detail`,
+      `expires_at`, `at`, or null).
+- [ ] Attributes on realms, subscribers and trunks: show them and edit them as a whole, since
+      the node replaces `attributes` whole when given.
+- [ ] Flag a policy fingerprint mismatch on Overview: nodes of one cluster should agree on
+      `policy.fingerprint` on `GET /nodes` (server 5fbf3f3), each node's own entry included.
+      `policy` is absent for a node that reported none; `builtin 1.0.0` has no fingerprint.
+- [ ] The trunk a call leg ran over on Calls and in call records: each participant's `trunk`
+      (string or null).
+
 ## Settings and security
 
 - [ ] Read and edit the server's config, saying what applies live and what needs a restart.
