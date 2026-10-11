@@ -43,6 +43,10 @@ test.use({
 test('a browser calls the phone with video, and hangs up', async ({ browser }, info) => {
   test.setTimeout((fixture.answerSeconds + fixture.mediaSeconds + 60) * 1000);
   const [user] = fixture.subscribers;
+  const page_ = new URL(fixture.pageUrl);
+  if (page_.protocol !== 'https:' && !['127.0.0.1', 'localhost', '[::1]'].includes(page_.hostname)) {
+    throw new Error(`ATHENA_INTEROP_PAGE_URL is ${fixture.pageUrl}: a browser gives a plain-http page on another host no microphone, so no call can start. Use the node's https listener (such as https://${page_.hostname}:8443) with ATHENA_INTEROP_IGNORE_TLS=1 for a snakeoil certificate.`);
+  }
   const context = await browser.newContext({ ignoreHTTPSErrors: fixture.ignoreTls });
   const page = await context.newPage();
   page.on('pageerror', (error) => { throw error; });

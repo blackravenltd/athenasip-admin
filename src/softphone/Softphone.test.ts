@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { UA, UAConfiguration } from 'jssip/lib/UA';
 import { Softphone, summarise, videoLine, type SipStack } from './Softphone';
 
@@ -95,6 +95,30 @@ describe('Softphone', () => {
     sip.agents[0].emit('registrationFailed', { cause: 'Unauthorized' });
     expect(phone.state.registration).toBe('failed');
     expect(phone.state.notice).toBe('Registration failed: Unauthorized');
+  });
+
+  it('on a page that is not a secure context, fails a call at once rather than wait for a microphone', () => {
+    vi.stubGlobal('isSecureContext', false);
+    try {
+      const sip = stack();
+      const phone = new Softphone(sip);
+      phone.register(CONFIG);
+      const [agent] = sip.agents;
+      agent.emit('registered', {});
+      phone.call('sip:1002@example.com');
+      expect(agent.calls).toEqual([]);
+      expect(phone.state.call).toBe('failed');
+      expect(phone.state.notice).toMatch(/^Could not call: This page is not a secure context/);
+
+      const session = new FakeSession();
+      agent.emit('newRTCSession', { originator: 'remote', session, request: {} });
+      phone.answer();
+      expect(session.answered).toBe(0);
+      expect(session.terminated).toEqual([{ status_code: 488 }]);
+      expect(phone.state.notice).toMatch(/^Could not answer: This page is not a secure context/);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('treats a dropped socket as the end of the registration', () => {
