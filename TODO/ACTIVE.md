@@ -12,10 +12,12 @@ push only when Tom asks, never with Claude attribution (his global rule). Run te
 `npx vitest run --maxWorkers=4`; the test timeout is 20 s because a file's first screen test
 can take 5 s.
 
-**Deployed.** corvus-fi-1 (`root@10.35.1.20`) and corvus-gbni-1 (macnessa.athenasip.org,
-`root@10.44.1.50`, 8443 on the site network only) serve `assets/index-D1mNvEs7.js` on 8080 and
-8443, built from `2feecaa`, which needs the server's `/subscriber/{realm}/config` (server
-develop 17d9d60 or later). Same deploy command and path on both.
+**Deployed.** corvus-fi-1 (`root@10.35.1.20`) serves `assets/index-OrN2SLOz.js` on 8080 and
+8443, built from `0d8b484` (0.4.1 with the insecure-page call fix). corvus-gbni-1
+(macnessa.athenasip.org, `root@10.44.1.50`, 8443 on the site network only) still serves
+`index-D1mNvEs7.js` from `2feecaa`: it was unreachable on 2026-10-11 (no ping, SSH or HTTP), so
+deploy it when it is back. Same command and path on both. The console needs server 0.9.0 or
+later.
 
 **Waiting on Tom:**
 
