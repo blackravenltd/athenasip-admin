@@ -15,21 +15,22 @@ can take 5 s.
 **Deployed.** corvus-fi-1 (`root@10.35.1.20`) serves `assets/index-OrN2SLOz.js` on 8080 and
 8443, built from `0d8b484` (0.4.1 with the insecure-page call fix). corvus-gbni-1
 (macnessa.athenasip.org, `root@10.44.1.50`, 8443 on the site network only) still serves
-`index-D1mNvEs7.js` from `2feecaa`: it was unreachable on 2026-10-11 (no ping, SSH or HTTP), so
-deploy it when it is back. Same command and path on both. The console needs server 0.9.0 or
+`index-D1mNvEs7.js` from `2feecaa`. The site path to 10.44.1.50 has been down since
+2026-10-10; Tom says to reach it as `root@macnessa.macha.network` from now on, but port 22 was
+refused there on 2026-10-11. Deploy it when SSH answers, to the same path. Same command and path on both. The console needs server 0.9.0 or
 later.
 
-**Waiting on Tom:**
+**Decided by Tom (2026-10-11), in this order of work:**
 
-1. Try the Phone on corvus-fi-1 or macnessa once the server deploy lands (checklist under "The
-   phone"), including no browser login box on the Digest challenge. The browser must register
-   as a subscriber other than the one it calls: the A85 is `athenaphone`.
-2. Whether the Phone unregisters its line when the tab closes, so a closed browser leaves no
-   registration that answers 480 until it expires.
-3. Whether to run `e2e/phone-call.spec.ts` against macnessa; it rings the A85 there. The
-   server session has the command.
-4. When the Phone registers with the realm's `registration.expires` and `outbound.flows`.
-5. When the console moves from polling to `GET /events`.
+1. Milestone 5 now: Trunks screen, attributes, the policy fingerprint flag, trunk per leg.
+2. The event stream (`GET /events`) now, alongside, in place of polling.
+3. A Hang up button on Calls (`manage-cluster`).
+4. The Phone unregisters on tab close.
+5. The Phone registers with the realm's `registration.expires` and keeps `outbound.flows`
+   flows to different nodes.
+6. TURN on the nodes: asked of the server session.
+7. The phone spec reruns against macnessa over https when Tom lends the A85.
+8. Tom tries the Phone on corvus-fi-1 himself.
 
 **The server session**, "AthenaSIP Server" (ListAgents, then SendMessage). It owns
 `../athenasip`, the nodes and every fixture: nothing here edits them or starts or stops their
