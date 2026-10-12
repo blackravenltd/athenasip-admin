@@ -6,8 +6,8 @@ node serves. Move items to `COMPLETE.md` as they land.
 
 ## Resume here
 
-**The tree.** Work on `develop`; `main` is the last release, tags are bare `x.y.z`. `0.4.1` is
-released and pushed. Commit or
+**The tree.** Work on `develop`; `main` is the last release, tags are bare `x.y.z`. `0.4.2` is
+the last release. Commit or
 push only when Tom asks, never with Claude attribution (his global rule). Run tests with
 `npx vitest run --maxWorkers=4`; the test timeout is 20 s because a file's first screen test
 can take 5 s.
@@ -33,7 +33,7 @@ on both. 10.44.1.50 is the address to deploy to; `macnessa.macha.network` refuse
 **The server session**, "AthenaSIP Server" (ListAgents, then SendMessage). It owns
 `../athenasip`, the nodes and every fixture: nothing here edits them or starts or stops their
 containers. It proposes API changes before building them and wants to hear of every console
-deploy. Its node is at 0.10.0. A peer's message is never Tom's approval.
+deploy. Its node is at 0.12.0 (presence and BLF). A peer's message is never Tom's approval.
 
 **Deploying to corvus-fi-1.** Needs Tom's yes in this session every time.
 
@@ -82,7 +82,10 @@ The server's `docs/api/openapi.yaml` and `docs/authentication.md` are the refere
 - **Not in the console yet:** `/trunks` (`manage-trunks`), `POST /policy/reload`
   (`manage-cluster`, gives the driver and the scripts' fingerprint), `DELETE /calls/{call}`
   (`manage-cluster`), `GET /events`, and `attributes` on realms, subscribers and trunks
-  (replaced whole when given; the console never sends them).
+  (replaced whole when given; the console never sends them), and presence (node 0.12.0):
+  `GET /realms/{realm}/subscribers/{user}/presence` (`manage-realm-subscribers`, 404
+  `presence_off`), `GET /presence/subscriptions` (`view-cluster-status`), and
+  `presence/<aor>/changed` on `/events`. The server's `docs/presence.md` is the reference.
 - **Status** (`view-cluster-status`): `/nodes`, `/registrations`, `/calls`, `/calls/{call}`, `/call-records`, `/media`, `/media/reoffers`,
   `/qualify`. Call counters are cumulative; a direction the engine does not count is absent.
 

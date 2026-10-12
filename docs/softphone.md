@@ -9,7 +9,9 @@ WebSocket transport and places or answers one call at a time. Three things use i
 | The diagnostic softphone | `/diagnostics/softphone` in the console | Proving a node by hand, with the full negotiation on screen. |
 | The harness page | `/softphone.html`, a plain file with no console around it | The end-to-end runs. |
 
-All three need a secure context: https, or `localhost`.
+All three need a secure context: https, or `localhost`. On any other page the browser gives
+no microphone, so a call fails at once with a message saying so, and an incoming call is
+declined with 488.
 
 ## The Phone
 
@@ -43,7 +45,8 @@ The rest uses the console user's roles, and each part says so when a role is mis
 | `GET /realms/{realm}/subscribers` | Manage subscribers | The directory lists only who is registered now. |
 
 On an https page the phone signals over the node's `wss` listener (`websocket_uri`); on an
-http page over `ws`. ICE servers are fetched per call, because TURN credentials expire.
+http page over `ws`. A node's TURN entries carry their transport (`?transport=udp` or `tcp`)
+and are handed to the browser as given.
 
 ## The harness page
 

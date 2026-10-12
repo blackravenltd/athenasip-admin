@@ -57,6 +57,8 @@ The node can do more than the console shows. Until it does, use the admin API
 | Attributes on a realm, subscriber or trunk | `attributes` on create or update | as for the record |
 | Ending a live call | `DELETE /api/v1/calls/{call}` | Manage cluster |
 | The event stream | `GET /api/v1/events` | View cluster status |
+| A subscriber's presence and dialogs | `GET /api/v1/realms/{realm}/subscribers/{user}/presence` | Manage subscribers |
+| Who is watching whom (presence and BLF) | `GET /api/v1/presence/subscriptions` | View cluster status |
 
 The console never sends `attributes`, and the node replaces them only when they are given,
 so changing a realm or subscriber here leaves what a script reads alone.

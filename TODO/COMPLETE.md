@@ -2,6 +2,15 @@
 
 What exists and works, by release. The commit history has the detail.
 
+## 0.4.2 (2026-10-13)
+
+- **No call without a microphone.** On a page that is not a secure context the phone fails a
+  call at once and declines an incoming one with 488, saying why, where JsSIP used to hang.
+  The phone run refuses a page that is neither https nor loopback.
+- **TURN from the nodes.** A test pins the nodes' TURN entries, with their transport, as
+  passed to the browser unchanged.
+- **Docs for node 0.12.0.** Presence and BLF added to what the console does not manage yet.
+
 ## 0.4.1 (2026-10-08)
 
 - **The sixth role.** The console knows `manage-trunks` (node 0.10.0), so editing a user who
