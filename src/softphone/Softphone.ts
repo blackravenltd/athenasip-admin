@@ -138,6 +138,16 @@ export interface IceOptions {
 
 const NO_ICE: IceOptions = { servers: [] };
 
+/**
+ * Why no call can start on this page, if it is not a secure context: a
+ * browser gives such a page no microphone, and JsSIP then waits for one for
+ * ever. Undefined where the runtime does not say, as in a test.
+ */
+const INSECURE = 'This page is not a secure context, so the browser gives it no microphone. Open it over https, or through localhost.';
+function insecure(): boolean {
+  return (globalThis as { isSecureContext?: boolean }).isSecureContext === false;
+}
+
 function constraints({ video, microphone, camera }: CallMedia): MediaStreamConstraints {
   return {
     audio: microphone ? { deviceId: { exact: microphone } } : true,
@@ -241,6 +251,10 @@ export class Softphone {
   /** Audio only unless `media.video` is set. */
   call(target: string, ice: IceOptions = this.ice, media: CallMedia = {}): void {
     if (!this.agent || this.session) return;
+    if (insecure()) {
+      this.update({ call: 'failed', notice: `Could not call: ${INSECURE}` });
+      return;
+    }
     this.update({ notice: undefined, cause: undefined });
     try {
       this.agent.call(target, {
@@ -256,6 +270,11 @@ export class Softphone {
   /** Without `media.video`, an offered video line is answered receive-only. */
   answer(ice: IceOptions = this.ice, media: CallMedia = {}): void {
     if (!this.session || this.current.call !== 'incoming') return;
+    if (insecure()) {
+      this.session.terminate({ status_code: 488 });
+      this.update({ notice: `Could not answer: ${INSECURE}` });
+      return;
+    }
     this.session.answer({ mediaConstraints: constraints(media), pcConfig: peerConfiguration(ice.servers, ice.relayOnly ?? false) });
   }
 

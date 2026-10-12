@@ -234,7 +234,7 @@ export function SoftphoneScreen({ options = NO_OPTIONS, stack = jssipStack, api 
                 type="button"
                 data-testid="softphone-call"
                 onClick={() => withIceServers((ice) => phone.call(connection.target, ice, { video }))}
-                disabled={inCall || !connection.target}
+                disabled={insecure || inCall || !connection.target}
               >
                 Call
               </button>

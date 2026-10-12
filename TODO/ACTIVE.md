@@ -6,33 +6,34 @@ node serves. Move items to `COMPLETE.md` as they land.
 
 ## Resume here
 
-**The tree.** Work on `develop`; `main` is the last release, tags are bare `x.y.z`. `0.4.1` is
-released and pushed. Commit or
+**The tree.** Work on `develop`; `main` is the last release, tags are bare `x.y.z`. `0.4.2` is
+the last release. Commit or
 push only when Tom asks, never with Claude attribution (his global rule). Run tests with
 `npx vitest run --maxWorkers=4`; the test timeout is 20 s because a file's first screen test
 can take 5 s.
 
 **Deployed.** corvus-fi-1 (`root@10.35.1.20`) and corvus-gbni-1 (macnessa.athenasip.org,
-`root@10.44.1.50`, 8443 on the site network only) serve `assets/index-D1mNvEs7.js` on 8080 and
-8443, built from `2feecaa`, which needs the server's `/subscriber/{realm}/config` (server
-develop 17d9d60 or later). Same deploy command and path on both.
+`root@10.44.1.50`, 8443 on the site network only) serve `assets/index-OrN2SLOz.js` on 8080
+and 8443, built from `0d8b484` (0.4.1 with the insecure-page call fix). Same command and path
+on both. 10.44.1.50 is the address to deploy to; `macnessa.macha.network` refused SSH on
+2026-10-11. The console needs server 0.9.0 or later.
 
-**Waiting on Tom:**
+**Decided by Tom (2026-10-11), in this order of work:**
 
-1. Try the Phone on corvus-fi-1 or macnessa once the server deploy lands (checklist under "The
-   phone"), including no browser login box on the Digest challenge. The browser must register
-   as a subscriber other than the one it calls: the A85 is `athenaphone`.
-2. Whether the Phone unregisters its line when the tab closes, so a closed browser leaves no
-   registration that answers 480 until it expires.
-3. Whether to run `e2e/phone-call.spec.ts` against macnessa; it rings the A85 there. The
-   server session has the command.
-4. When the Phone registers with the realm's `registration.expires` and `outbound.flows`.
-5. When the console moves from polling to `GET /events`.
+1. Milestone 5 now: Trunks screen, attributes, the policy fingerprint flag, trunk per leg.
+2. The event stream (`GET /events`) now, alongside, in place of polling.
+3. A Hang up button on Calls (`manage-cluster`).
+4. The Phone unregisters on tab close.
+5. The Phone registers with the realm's `registration.expires` and keeps `outbound.flows`
+   flows to different nodes.
+6. TURN on the nodes: asked of the server session.
+7. The phone spec reruns against macnessa over https when Tom lends the A85.
+8. Tom tries the Phone on corvus-fi-1 himself.
 
 **The server session**, "AthenaSIP Server" (ListAgents, then SendMessage). It owns
 `../athenasip`, the nodes and every fixture: nothing here edits them or starts or stops their
 containers. It proposes API changes before building them and wants to hear of every console
-deploy. Its node is at 0.10.0. A peer's message is never Tom's approval.
+deploy. Its node is at 0.12.0 (presence and BLF). A peer's message is never Tom's approval.
 
 **Deploying to corvus-fi-1.** Needs Tom's yes in this session every time.
 
@@ -81,7 +82,10 @@ The server's `docs/api/openapi.yaml` and `docs/authentication.md` are the refere
 - **Not in the console yet:** `/trunks` (`manage-trunks`), `POST /policy/reload`
   (`manage-cluster`, gives the driver and the scripts' fingerprint), `DELETE /calls/{call}`
   (`manage-cluster`), `GET /events`, and `attributes` on realms, subscribers and trunks
-  (replaced whole when given; the console never sends them).
+  (replaced whole when given; the console never sends them), and presence (node 0.12.0):
+  `GET /realms/{realm}/subscribers/{user}/presence` (`manage-realm-subscribers`, 404
+  `presence_off`), `GET /presence/subscriptions` (`view-cluster-status`), and
+  `presence/<aor>/changed` on `/events`. The server's `docs/presence.md` is the reference.
 - **Status** (`view-cluster-status`): `/nodes`, `/registrations`, `/calls`, `/calls/{call}`, `/call-records`, `/media`, `/media/reoffers`,
   `/qualify`. Call counters are cumulative; a direction the engine does not count is absent.
 
@@ -158,6 +162,20 @@ Not reopened without asking Tom.
       caller can CANCEL. The Call-ID is percent-encoded, as for GET.
 - [ ] Match legs to participants, once the node fills `participant`.
 - [ ] The media engine's settings, once the server exposes them.
+
+## Trunks and scripts (server Milestone 5)
+
+- [ ] A Trunks screen over `/trunks` (`manage-trunks`): list, add, change, remove, and set a
+      password (never returned; `password_set` says whether one is held). Show each trunk's
+      `registration` (`node`, `state` registering, registered or failed, `detail`,
+      `expires_at`, `at`, or null).
+- [ ] Attributes on realms, subscribers and trunks: show them and edit them as a whole, since
+      the node replaces `attributes` whole when given.
+- [ ] Flag a policy fingerprint mismatch on Overview: nodes of one cluster should agree on
+      `policy.fingerprint` on `GET /nodes` (server 5fbf3f3), each node's own entry included.
+      `policy` is absent for a node that reported none; `builtin 1.0.0` has no fingerprint.
+- [ ] The trunk a call leg ran over on Calls and in call records: each participant's `trunk`
+      (string or null).
 
 ## Settings and security
 

@@ -14,6 +14,19 @@ describe('usableIceServers', () => {
     ]);
   });
 
+  it('keeps the transport on each TURN URL, as the nodes give them', () => {
+    const credential = { username: '1790003600:1001_macnessa.athenasip.org', credential: 'c2VjcmV0', expires_at: 1_790_003_600 };
+    expect(usableIceServers([
+      { urls: 'stun:macnessa.athenasip.org:3478' },
+      { urls: 'turn:macnessa.athenasip.org:3478?transport=udp', ...credential },
+      { urls: 'turn:macnessa.athenasip.org:3478?transport=tcp', ...credential },
+    ], now)).toEqual([
+      { urls: 'stun:macnessa.athenasip.org:3478' },
+      { urls: 'turn:macnessa.athenasip.org:3478?transport=udp', username: credential.username, credential: 'c2VjcmV0' },
+      { urls: 'turn:macnessa.athenasip.org:3478?transport=tcp', username: credential.username, credential: 'c2VjcmV0' },
+    ]);
+  });
+
   it('drops a TURN entry the node could mint no credential for', () => {
     expect(usableIceServers([{ urls: 'turn:host:3478' }, { urls: 'turns:host:5349', username: 'u' }], now)).toEqual([]);
   });
