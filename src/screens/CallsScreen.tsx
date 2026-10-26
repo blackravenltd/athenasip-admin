@@ -1,8 +1,14 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import type { AdminApi } from '../api/AdminApi';
-import { retryAfter } from '../api/errors';
-import type { Call, CallLeg, CallState } from '../api/types';
+import { ApiError, retryAfter } from '../api/errors';
+import type { Call, CallLeg, CallState, Role } from '../api/types';
+import { can } from '../auth/roles';
+import { routes } from '../app/routes';
+import { useEventRefresh } from '../hooks/useEvents';
 import { useRefreshableAsync } from '../hooks/useRefreshableAsync';
+import { useSubmit } from '../hooks/useSubmit';
+import { ConfirmModal } from '../components/Modal';
 import { Empty, ErrorMessage, Loading } from '../components/Status';
 
 /** How often the list is read again. The counters are cumulative, so this is also the window a rate is taken over. */
@@ -25,6 +31,20 @@ export function callParties(call: Call): { from: string; to: string } {
     from: from?.identity ?? 'unknown caller',
     to: others.map((participant) => participant.identity).join(', ') || 'unknown callee',
   };
+}
+
+/** The trunks a call runs over, by name, each once: the one it came in by or left by. */
+export function callTrunks(call: Call): string[] {
+  return [...new Set(call.participants.flatMap((participant) => (participant.trunk ? [participant.trunk] : [])))];
+}
+
+/** Why a hang-up failed, in words. A ringing call has no dialog to send a BYE in. */
+export function hangUpProblem(error: unknown): string | undefined {
+  if (error instanceof ApiError && error.status === 409) {
+    return 'The call has not been answered, so there is nothing to send a BYE in. Only its caller can cancel it.';
+  }
+  if (error instanceof ApiError && error.status === 404) return 'The call had already ended.';
+  return undefined;
 }
 
 /** How long a call has been talking, or ringing when it has not been answered. */
@@ -99,10 +119,32 @@ function Leg({ leg, before, index }: { leg: CallLeg; before?: CallLeg; index: nu
   );
 }
 
-function CallRow({ call, previous, now }: { call: Call; previous?: Call; now: number }) {
+function CallRow({ api, call, previous, now, canEnd, onEnded }: {
+  api: AdminApi;
+  call: Call;
+  previous?: Call;
+  now: number;
+  /** The user holds `manage-cluster`. */
+  canEnd: boolean;
+  onEnded: () => void;
+}) {
   const { from, to } = callParties(call);
   const tone = STATE_TONE[call.state] ?? 'warn';
   const faulty = oneWay(call, previous);
+  const trunks = callTrunks(call);
+  const [confirming, setConfirming] = useState(false);
+  const { busy, error, failure, clearError, run } = useSubmit();
+  // A BYE needs a dialog: only an answered call can be ended from here.
+  const answered = call.answered_at !== null && call.state !== 'Closing' && call.state !== 'Closed';
+
+  const hangUp = () => {
+    void run(() => api.hangUpCall(call.id)).then((done) => {
+      if (!done) return;
+      setConfirming(false);
+      onEnded();
+    });
+  };
+
   return (
     <li className="record-row call-row">
       <div className="record-main" role="group" aria-label={call.id}>
@@ -111,6 +153,12 @@ function CallRow({ call, previous, now }: { call: Call; previous?: Call; now: nu
           {from} to {to}
         </span>
         <span className="record-detail">Call-ID <code>{call.id}</code></span>
+        {call.focus && (
+          <span className="record-detail">
+            A leg of the conference <Link to={routes.conferences}><code>{call.focus}</code></Link>
+          </span>
+        )}
+        {trunks.length > 0 && <span className="record-detail">Over trunk {trunks.join(', ')}</span>}
         {call.media && call.media.idle_seconds !== null && call.media.idle_seconds >= 5 && (
           <span className="record-detail">No media in either direction for {call.media.idle_seconds}s.</span>
         )}
@@ -119,6 +167,11 @@ function CallRow({ call, previous, now }: { call: Call; previous?: Call; now: nu
       <span className="record-tag">{callDuration(call, now)}</span>
       <span className="record-tag">{call.media ? `Relayed: ${call.media.engine}` : 'Not relayed'}</span>
       {faulty && <span className="record-tag state-tag-down">One-way audio</span>}
+      {canEnd && answered && (
+        <button className="secondary-button" type="button" onClick={() => { clearError(); setConfirming(true); }}>
+          Hang up
+        </button>
+      )}
       {call.media && call.media.legs.length > 0 && (
         <div className="call-legs">
           {call.media.legs.map((leg, index) => (
@@ -126,6 +179,21 @@ function CallRow({ call, previous, now }: { call: Call; previous?: Call; now: nu
           ))}
         </div>
       )}
+      <ConfirmModal
+        open={confirming}
+        title="Hang up this call?"
+        confirmLabel="Hang up"
+        destructive
+        busy={busy}
+        onConfirm={hangUp}
+        onCancel={() => setConfirming(false)}
+      >
+        <p>
+          The node sends a BYE to {from} and to {to}. Both phones see the call end as if the other
+          side had hung up, and its record is written once they answer.
+        </p>
+        {error && <p className="error-message" role="alert">{hangUpProblem(failure) ?? error}</p>}
+      </ConfirmModal>
     </li>
   );
 }
@@ -137,9 +205,11 @@ function CallRow({ call, previous, now }: { call: Call; previous?: Call; now: nu
  * readings. Legs are not matched to participants: the API does not say which
  * is whose.
  */
-export function CallsScreen({ api }: { api: AdminApi }) {
+export function CallsScreen({ api, roles = [] }: { api: AdminApi; roles?: readonly Role[] }) {
   const result = useRefreshableAsync((signal) => api.listCalls(signal), [api]);
   const { refresh } = result;
+  // A call starting or ending shows at once; the poll still runs, since the counters only move by reading them.
+  useEventRefresh(api, ['calls'], refresh, can(roles, 'view-cluster-status'));
   const [samples, setSamples] = useState<{ current?: Call[]; previous?: Call[] }>({});
   if (result.value !== samples.current) setSamples({ current: result.value, previous: samples.current });
 
@@ -183,7 +253,17 @@ export function CallsScreen({ api }: { api: AdminApi }) {
           <Empty>No calls in progress.</Empty>
         ) : (
           <ul className="record-list">
-            {result.value.map((call) => <CallRow key={call.id} call={call} previous={previous.get(call.id)} now={now} />)}
+            {result.value.map((call) => (
+              <CallRow
+                key={call.id}
+                api={api}
+                call={call}
+                previous={previous.get(call.id)}
+                now={now}
+                canEnd={can(roles, 'manage-cluster')}
+                onEnded={refresh}
+              />
+            ))}
           </ul>
         )}
       </section>

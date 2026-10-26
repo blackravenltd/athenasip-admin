@@ -50,9 +50,11 @@ describe('visible', () => {
   it('shows each role only what it can use, rather than letting it click through to a 403', () => {
     const sip = (roles: Parameters<typeof visible>[1]) => sectionNavFor(routes.sip, roles)?.items.map((item) => item.label);
     const top = (roles: Parameters<typeof visible>[1]) => visible(topNav, roles).map((item) => item.label);
-    expect(sip(['view-cluster-status'])).toEqual(['Registrations']);
+    expect(sip(['view-cluster-status'])).toEqual(['Registrations', 'Presence']);
     expect(sip(['manage-realm-subscribers'])).toEqual(['Subscribers']);
-    expect(sip(['manage-realms', 'manage-realm-subscribers', 'view-cluster-status'])).toEqual(['Realms', 'Subscribers', 'Registrations']);
+    expect(sip(['manage-trunks'])).toEqual(['Trunks']);
+    expect(sip(['manage-realms', 'manage-realm-subscribers', 'view-cluster-status'])).toEqual(['Realms', 'Subscribers', 'Registrations', 'Presence']);
+    expect(top(['manage-trunks'])).toEqual(['Overview', 'Phone', 'SIP', 'Diagnostics']);
     expect(top(['manage-admin-users'])).toEqual(['Overview', 'Phone', 'Users', 'Diagnostics']);
     expect(top(['view-cluster-status'])).toEqual(['Overview', 'Phone', 'SIP', 'Calls', 'Media', 'Security', 'Diagnostics']);
     expect(top(['manage-realms'])).toEqual(['Overview', 'Phone', 'SIP', 'Media', 'Diagnostics']);

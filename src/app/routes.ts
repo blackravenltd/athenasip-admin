@@ -9,8 +9,12 @@ export const routes = {
   realms: '/sip/realms',
   subscribers: '/sip/subscribers',
   registrations: '/sip/registrations',
+  trunks: '/sip/trunks',
+  presence: '/sip/presence',
 
   calls: '/calls',
+  conferences: '/calls/conferences',
+  callHistory: '/calls/history',
 
   phone: '/phone',
 

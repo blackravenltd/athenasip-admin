@@ -175,3 +175,15 @@
 .phone-list-main { display: grid; gap: .1rem; min-width: 0; }
 .phone-list-name { display: inline-flex; align-items: center; gap: .45rem; font-weight: 600; }
 .phone-list-detail { color: var(--text-dim); font-size: .82rem; overflow-wrap: anywhere; }
+
+/* Attributes are JSON: monospaced, so nesting lines up. */
+.attributes-input { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .85rem; }
+
+/* A control beside a panel's heading, such as how many records to show. */
+.panel-heading .panel-actions { margin-top: 0; align-items: center; flex-wrap: nowrap; }
+.inline-field { grid-auto-flow: column; align-items: center; }
+
+/* A field and its button on one line, such as a lookup. */
+.inline-form { display: flex; gap: .6rem; align-items: end; flex-wrap: wrap; margin-bottom: 1rem; }
+.inline-form .field { flex: 1 1 16rem; }
+.presence-document { margin: 0; white-space: pre-wrap; font-size: .8rem; color: var(--text-dim); }

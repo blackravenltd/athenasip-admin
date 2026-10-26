@@ -1,11 +1,31 @@
 // @vitest-environment jsdom
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import type { ClusterNode } from '../api/types';
 import { FakeAdminApi } from '../api/FakeAdminApi';
 import type { AdminApi } from '../api/AdminApi';
 import { signedInAs } from '../test/signedIn';
-import { OverviewScreen, healthState, nodeState, selfNode } from './OverviewScreen';
+import { OverviewScreen, healthState, nodeState, policyStragglers, selfNode } from './OverviewScreen';
+
+describe('policyStragglers', () => {
+  const node = (id: string, fingerprint?: string, driver = 'lua 1.0.0'): ClusterNode => ({
+    id, self: id === 'a', transports: [], ...(fingerprint === undefined ? {} : { policy: { driver, fingerprint } }),
+  });
+
+  it('names the nodes outside the policy most of them run', () => {
+    expect(policyStragglers([node('a', 'x'), node('b', 'y'), node('c', 'y')]).map((each) => each.id)).toEqual(['a']);
+  });
+
+  it('finds no fault where they agree, or where a node reported nothing', () => {
+    expect(policyStragglers([node('a', 'x'), node('b', 'x'), node('c')])).toEqual([]);
+  });
+
+  it('counts a different driver as different, fingerprint or not', () => {
+    const builtin: ClusterNode = { id: 'b', self: false, transports: [], policy: { driver: 'builtin 1.0.0' } };
+    expect(policyStragglers([node('a', 'x'), builtin]).map((each) => each.id)).toEqual(['b']);
+  });
+});
 
 describe('healthState', () => {
   it('says a degraded node is not serving, and why', () => {
@@ -52,6 +72,30 @@ describe('OverviewScreen', () => {
     expect(self.parentElement!.textContent).toContain('This node');
     const quiet = screen.getByRole('group', { name: 'Node sip-0002' });
     expect(quiet.parentElement!.textContent).toContain('No recent report');
+  });
+
+  it('flags a node running different routing scripts from the rest', async () => {
+    render(<MemoryRouter><OverviewScreen api={new FakeAdminApi()} /></MemoryRouter>);
+    expect(await screen.findByText(/The nodes disagree on their routing scripts: sip-0002 runs/)).toBeTruthy();
+    const quiet = screen.getByRole('group', { name: 'Node sip-0002' });
+    expect(quiet.parentElement!.textContent).toContain('Different scripts');
+    expect(screen.getByRole('group', { name: 'Node sip-0001' }).textContent).toContain('Routing: lua 1.0.0, scripts 9f2c4e1ab07d');
+  });
+
+  it('offers a reload of the scripts only with manage-cluster, and says what runs after', async () => {
+    const { unmount } = render(<MemoryRouter><OverviewScreen api={new FakeAdminApi()} roles={['view-cluster-status']} /></MemoryRouter>);
+    await screen.findByRole('group', { name: 'Node sip-0001' });
+    expect(screen.queryByRole('button', { name: 'Reload scripts' })).toBeNull();
+    unmount();
+
+    const api = new FakeAdminApi();
+    const reload = vi.spyOn(api, 'reloadPolicy');
+    render(<MemoryRouter><OverviewScreen api={api} roles={['view-cluster-status', 'manage-cluster']} /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole('button', { name: 'Reload scripts' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Reload the routing scripts?' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Reload' }));
+    expect(await screen.findByText('This node now runs lua 1.0.0, scripts 9f2c4e1ab07d.')).toBeTruthy();
+    expect(reload).toHaveBeenCalledOnce();
   });
 
   it('shows the failure rather than an empty panel when the node is unreachable', async () => {

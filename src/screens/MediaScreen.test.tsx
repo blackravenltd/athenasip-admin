@@ -40,7 +40,7 @@ describe('MediaScreen', () => {
   it('shows the media engine and what it can do', async () => {
     render(<MediaScreen api={new FakeAdminApi()} />);
     expect(await screen.findByText('builtin, connected')).toBeTruthy();
-    expect(screen.getByText('bridge')).toBeTruthy();
+    expect(screen.getByText('bridge, dtmf')).toBeTruthy();
   });
 
   it('shows each realm’s media policy in words, marking what is the server’s', async () => {

@@ -9,8 +9,9 @@ import { useSubmit } from '../hooks/useSubmit';
 import { ConfirmModal, FormModal } from '../components/Modal';
 import { Empty, ErrorMessage, Loading } from '../components/Status';
 import { realmSubscribers } from '../app/routes';
-import { DEFAULT_POLICY, describeBehaviour, describeSeconds, policyForm, policySettings, serverDefaults } from '../realms/policy';
+import { DEFAULT_POLICY, DTMF_TEXT, describeBehaviour, describeSeconds, policyForm, policySettings, serverDefaults } from '../realms/policy';
 import { MediaFields, RegistrationFields } from '../realms/PolicyFields';
+import { AttributesField, attributesText, parseAttributes } from '../components/AttributesField';
 
 const PAGE_SIZE = 10;
 
@@ -25,17 +26,23 @@ function RealmDialogue({ api, realm, defaults, onClose, onSaved }: {
 }) {
   const [name, setName] = useState('');
   const [form, setForm] = useState(realm ? policyForm(realm) : DEFAULT_POLICY);
+  const original = attributesText(realm?.attributes);
+  const [attributes, setAttributes] = useState(original);
   const { busy, error, failure, clearError, run } = useSubmit();
-  const checked = policySettings(form);
-  const problem = 'problem' in checked ? checked.problem : undefined;
+  const checked = policySettings(form, defaults.dtmf !== undefined);
+  const parsed = parseAttributes(attributes);
+  const problem = 'problem' in checked ? checked.problem : 'problem' in parsed ? parsed.problem : undefined;
   // A taken name belongs beside the name, not in the dialogue's general slot.
   const nameTaken = !realm && isConflict(failure);
 
   const submit = () => {
-    if (!('settings' in checked)) return;
+    if (!('settings' in checked) || !('attributes' in parsed)) return;
+    // Attributes replace the whole set, so they go only when edited: a node
+    // that has none to give is never sent an empty set over its own.
+    const settings = attributes.trim() === original.trim() ? checked.settings : { ...checked.settings, attributes: parsed.attributes };
     void run(() => (realm
-      ? api.updateRealm(realm.name, checked.settings)
-      : api.createRealm({ name: name.trim(), ...checked.settings }))).then((saved) => {
+      ? api.updateRealm(realm.name, settings)
+      : api.createRealm({ name: name.trim(), ...settings }))).then((saved) => {
       if (!saved) return;
       onSaved();
       onClose();
@@ -77,6 +84,15 @@ function RealmDialogue({ api, realm, defaults, onClose, onSaved }: {
       )}
       <RegistrationFields form={form} defaults={defaults} busy={busy} onChange={setForm} />
       <MediaFields form={form} defaults={defaults} busy={busy} onChange={setForm} />
+      <fieldset className="policy-fieldset">
+        <legend>For the routing scripts</legend>
+        <AttributesField
+          value={attributes}
+          busy={busy}
+          onChange={setAttributes}
+          hint="Anything this realm's routing scripts read, such as a default room for its phones; the node itself reads none of it."
+        />
+      </fieldset>
       {problem && <p className="field-hint field-problem" role="status">{problem}</p>}
     </FormModal>
   );
@@ -141,6 +157,7 @@ function RealmRow({ api, realm, onChanged }: { api: AdminApi; realm: Realm; onCh
           {registration}, nonces last {describeSeconds(realm.nonce_expiry)}
           {realm.behaviour_effective.qualify_interval > 0 && `, probed every ${describeSeconds(realm.behaviour_effective.qualify_interval)}`}
           {realm.behaviour_effective.rewrite_contact && ', Contact rewritten to source'}
+          {realm.behaviour_effective.dtmf && realm.behaviour_effective.dtmf !== 'auto' && `, key presses as ${DTMF_TEXT[realm.behaviour_effective.dtmf].label}`}
         </span>
       </div>
       <span className="record-tag">

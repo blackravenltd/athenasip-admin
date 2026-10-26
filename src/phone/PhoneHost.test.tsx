@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { UA, UAConfiguration } from 'jssip/lib/UA';
 import type { AdminApi } from '../api/AdminApi';
 import { ApiError } from '../api/errors';
+import { FakeAdminApi } from '../api/FakeAdminApi';
 import type { CallRecord, ClientConfig, Registration, Role, Subscriber, SubscriberLine } from '../api/types';
 import type { SipStack } from '../softphone/Softphone';
 import PhoneHost from './PhoneHost';
@@ -256,7 +257,8 @@ describe('PhoneHost', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Call' }));
     await vi.waitFor(() => expect(sip.agents[0].calls).toHaveLength(1));
     expect(sip.agents[0].calls[0].options.pcConfig).toEqual({ iceServers: [{ urls: 'stun:10.35.1.20:3478' }] });
-    expect(api.asked).toEqual(['1001@10.35.1.20 pw']);
+    // Once at registering, for the realm's rooms, and once for the call's ICE servers.
+    expect(api.asked).toEqual(['1001@10.35.1.20 pw', '1001@10.35.1.20 pw']);
   });
 
   it('keeps the call, and its indicator, while another screen is shown', async () => {
@@ -271,5 +273,82 @@ describe('PhoneHost', () => {
     expect(screen.queryByRole('heading', { name: 'Phone' })).toBeNull();
     expect(slot.textContent).toMatch(/^Connected athenaphone 0:0\d$/);
     expect(sip.agents[0].sessions[0].log).toEqual([]);
+  });
+});
+
+describe('PhoneHost conferences', () => {
+  /** Registers `uri` against the fake node, which seeds a room `conf-sales` in sip.athenasip.org. */
+  async function on(uri: string, roles: readonly Role[] = STATUS, api = new FakeAdminApi()) {
+    const config = vi.spyOn(api, 'subscriberConfig');
+    const sip = stack();
+    saveSettings({ uri, socket: 'ws://203.0.113.5:8088' });
+    show(sip, true, api, roles);
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'pw' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Register' }));
+    act(() => { sip.agents[0].emit('registered', {}); });
+    await screen.findByText(/^Registered as /);
+    await vi.waitFor(() => expect(config).toHaveBeenCalled());
+    await act(async () => { await config.mock.results[0].value; });
+    return { sip, api };
+  }
+
+  async function dialByHand(sip: ReturnType<typeof stack>, typed: string) {
+    fireEvent.change(screen.getByLabelText('Number or address'), { target: { value: typed } });
+    fireEvent.click(screen.getByRole('button', { name: 'Call' }));
+    await vi.waitFor(() => expect(sip.agents[0].sessions).toHaveLength(1));
+    act(() => { sip.agents[0].sessions[0].emit('accepted', {}); });
+  }
+
+  it('offers rooms in a realm with a focus, and none in a realm without', async () => {
+    await on('sip:tomweb@sip.athenasip.org');
+    expect(await screen.findByRole('heading', { name: 'Conferences' })).toBeTruthy();
+    expect(screen.getByText(/A room exists once somebody dials it/)).toBeTruthy();
+    document.body.innerHTML = '';
+
+    await on('sip:reception@blackraven.co.nz');
+    expect(screen.queryByRole('heading', { name: 'Conferences' })).toBeNull();
+    expect(screen.queryByLabelText('Room')).toBeNull();
+  });
+
+  it('joins a room by name, with the realm prefix added once', async () => {
+    const { sip } = await on('sip:tomweb@sip.athenasip.org');
+    fireEvent.change(await screen.findByLabelText('Room'), { target: { value: 'conf-sales' } });
+    expect(screen.getByText('sip:conf-sales@sip.athenasip.org')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Room'), { target: { value: 'sales' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Join with video' }));
+
+    await vi.waitFor(() => expect(sip.agents[0].calls).toHaveLength(1));
+    expect(sip.agents[0].calls[0].target).toBe('sip:conf-sales@sip.athenasip.org');
+    expect(sip.agents[0].calls[0].options.mediaConstraints).toEqual({ audio: true, video: true });
+  });
+
+  it('shows a room dialled by hand as a conference, with who the node routed to it', async () => {
+    const { sip } = await on('sip:tomweb@sip.athenasip.org');
+    await dialByHand(sip, 'conf-sales');
+
+    expect(sip.agents[0].calls[0].target).toBe('sip:conf-sales@sip.athenasip.org');
+    expect(screen.getByRole('status').textContent).toContain('In conference conf-sales');
+    expect(screen.getByRole('heading', { name: 'In conference conf-sales' })).toBeTruthy();
+    const roster = await screen.findByRole('list', { name: 'In the room' });
+    expect(within(roster).getAllByRole('listitem').map((row) => row.querySelector('.phone-list-name')!.textContent)).toEqual(['tom', 'tomweb (you)']);
+    expect(roster.textContent).toMatch(/In the room, joined 4 min ago/);
+  });
+
+  it('says nobody else is in yet when the node knows no one in the room', async () => {
+    const { sip } = await on('sip:tomweb@sip.athenasip.org');
+    await dialByHand(sip, 'conf-support');
+    expect(await screen.findByText('Nobody else is in this room yet, or the focus has not answered.')).toBeTruthy();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('says the roster needs a role, and never asks, for a console user without it', async () => {
+    const api = new FakeAdminApi();
+    const roster = vi.spyOn(api, 'getConference');
+    const { sip } = await on('sip:tomweb@sip.athenasip.org', [], api);
+    await dialByHand(sip, 'sip:conf-sales@sip.athenasip.org');
+
+    expect(screen.getByRole('heading', { name: 'In conference conf-sales' })).toBeTruthy();
+    expect(screen.getByText(/Who is in the room comes from the node.s live calls, which need the View cluster status role/)).toBeTruthy();
+    expect(roster).not.toHaveBeenCalled();
   });
 });

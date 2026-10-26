@@ -20,6 +20,10 @@ import { MeScreen } from './screens/MeScreen';
 import { RegistrationsScreen } from './screens/RegistrationsScreen';
 import { MediaScreen } from './screens/MediaScreen';
 import { CallsScreen } from './screens/CallsScreen';
+import { ConferencesScreen } from './screens/ConferencesScreen';
+import { CallHistoryScreen } from './screens/CallHistoryScreen';
+import { TrunksScreen } from './screens/TrunksScreen';
+import { PresenceScreen } from './screens/PresenceScreen';
 import { SecurityScreen, TlsScreen } from './screens/SecurityScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { DiagnosticsScreen } from './screens/DiagnosticsScreen';
@@ -62,7 +66,10 @@ export default function App({ api, session, loginHint }: { api: AdminApi; sessio
   const section = signedIn ? sectionNavFor(location.pathname, roles) : undefined;
   const guard = (needed: readonly Role[], element: ReactNode) => <Require roles={needed} held={roles}>{element}</Require>;
   // The SIP section root redirects to the first screen in it the user may use.
-  const sipHome = can(roles, 'manage-realms') ? routes.realms : can(roles, 'manage-realm-subscribers') ? routes.subscribers : routes.registrations;
+  const sipHome = can(roles, 'manage-realms') ? routes.realms
+    : can(roles, 'manage-realm-subscribers') ? routes.subscribers
+      : can(roles, 'view-cluster-status') ? routes.registrations
+        : routes.trunks;
   // Once opened, the phone stays mounted until sign-out, so a call outlives a change of screen.
   const onPhone = location.pathname === routes.phone;
   const [phoneOpened, setPhoneOpened] = useState(false);
@@ -112,14 +119,18 @@ export default function App({ api, session, loginHint }: { api: AdminApi; sessio
             <NoPermissionsScreen info={info} />
           ) : (
             <Routes>
-              <Route path={routes.home} element={<OverviewScreen api={api} />} />
+              <Route path={routes.home} element={<OverviewScreen api={api} roles={roles} />} />
 
               <Route path={routes.sip} element={<Navigate to={sipHome} replace />} />
               <Route path={routes.realms} element={guard(['manage-realms'], <RealmsScreen api={api} />)} />
               <Route path={routes.subscribers} element={guard(['manage-realm-subscribers'], <SubscribersScreen api={api} />)} />
               <Route path={routes.registrations} element={guard(['view-cluster-status'], <RegistrationsScreen api={api} />)} />
+              <Route path={routes.presence} element={guard(['view-cluster-status'], <PresenceScreen api={api} roles={roles} />)} />
+              <Route path={routes.trunks} element={guard(['manage-trunks'], <TrunksScreen api={api} roles={roles} />)} />
 
-              <Route path={routes.calls} element={guard(['view-cluster-status'], <CallsScreen api={api} />)} />
+              <Route path={routes.calls} element={guard(['view-cluster-status'], <CallsScreen api={api} roles={roles} />)} />
+              <Route path={routes.conferences} element={guard(['view-cluster-status'], <ConferencesScreen api={api} roles={roles} />)} />
+              <Route path={routes.callHistory} element={guard(['view-cluster-status'], <CallHistoryScreen api={api} roles={roles} />)} />
 
               {/* Drawn by PhoneHost, below. */}
               <Route path={routes.phone} element={null} />

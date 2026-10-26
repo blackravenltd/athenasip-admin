@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { FakeAdminApi } from '../api/FakeAdminApi';
 import { RealmsScreen } from './RealmsScreen';
 
@@ -19,7 +19,7 @@ describe('RealmsScreen', () => {
   it('lists what the node holds, with each realm’s registration and media policy', async () => {
     show();
     const row = await screen.findByRole('group', { name: 'blackraven.co.nz' });
-    expect(row.textContent).toContain('Registrations 1m to 5000s, nonces last 1h');
+    expect(row.textContent).toContain('Registrations 1m to 5000s, nonces last 5m');
     expect(await screen.findByText('WebRTC')).toBeTruthy();
   });
 
@@ -50,6 +50,35 @@ describe('RealmsScreen', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect((await api.listRealms()).find((realm) => realm.name === 'sip.athenasip.org')?.behaviour.rewrite_contact).toBe(true);
     expect((await screen.findByRole('group', { name: 'sip.athenasip.org' })).textContent).toContain('Contact rewritten to source');
+  });
+
+  it('sets how a realm’s phones send key presses, naming the server’s default', async () => {
+    const api = show();
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit blackraven.co.nz' }));
+    const keys = within(dialogue()).getByLabelText('Key presses');
+    expect(within(keys).getByRole('option', { name: 'Server default (automatic)' })).toBeTruthy();
+    fireEvent.change(keys, { target: { value: 'inband' } });
+    fireEvent.click(within(dialogue()).getByRole('button', { name: 'Save realm' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect((await screen.findByRole('group', { name: 'blackraven.co.nz' })).textContent).toContain('key presses as Tones in the audio');
+    expect((await api.listRealms()).find((realm) => realm.name === 'blackraven.co.nz')?.behaviour.dtmf).toBe('inband');
+  });
+
+  it('sends attributes only when edited, and then whole', async () => {
+    const api = show();
+    const update = vi.spyOn(api, 'updateRealm');
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit blackraven.co.nz' }));
+    const text = within(dialogue()).getByRole('textbox', { name: /Attributes/ });
+    expect((text as HTMLTextAreaElement).value).toContain('"default_room": "conf-sales"');
+    fireEvent.click(within(dialogue()).getByRole('button', { name: 'Save realm' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(update.mock.calls[0][1]).not.toHaveProperty('attributes');
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit blackraven.co.nz' }));
+    fireEvent.change(within(dialogue()).getByRole('textbox', { name: /Attributes/ }), { target: { value: '{"default_room": "conf-support"}' } });
+    fireEvent.click(within(dialogue()).getByRole('button', { name: 'Save realm' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(update.mock.calls[1][1].attributes).toEqual({ default_room: 'conf-support' });
   });
 
   it('will not submit a realm with no name', async () => {

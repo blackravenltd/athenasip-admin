@@ -13,10 +13,17 @@ describe('policySettings', () => {
   it('turns the form into the numbers the API wants', () => {
     expect(policySettings({ ...DEFAULT_POLICY, registration_minimum: ' 60 ' })).toEqual({
       settings: {
-        registration_timeout: 5000, registration_minimum: 60, nonce_expiry: 3600,
-        behaviour: { media_anchor: null, media_profile: null, qualify_interval: null, rewrite_contact: null },
+        registration_timeout: 5000, registration_minimum: 60, nonce_expiry: 300,
+        behaviour: { media_anchor: null, media_profile: null, dtmf: null, qualify_interval: null, rewrite_contact: null },
       },
     });
+  });
+
+  it('leaves dtmf out for a node that does not have the setting, which would refuse it', () => {
+    const checked = policySettings({ ...DEFAULT_POLICY, dtmf: 'info' }, false);
+    expect('settings' in checked && checked.settings.behaviour).not.toHaveProperty('dtmf');
+    const sent = policySettings({ ...DEFAULT_POLICY, dtmf: 'info' });
+    expect('settings' in sent && sent.settings.behaviour?.dtmf).toBe('info');
   });
 
   it('sends a setting the realm inherits as null, which is how it goes back to the server’s', () => {

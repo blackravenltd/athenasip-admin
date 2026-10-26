@@ -10,7 +10,7 @@ import { ROLES } from '../api/types';
 export const ROLE_TEXT: Record<Role, { label: string; detail: string }> = {
   'view-cluster-status': {
     label: 'View cluster status',
-    detail: 'Read the node, its transports and who is registered. Changes nothing.',
+    detail: 'Read the nodes, who is registered, live calls, conferences, call history and presence. Changes nothing.',
   },
   'manage-realms': {
     label: 'Manage realms',
@@ -26,11 +26,11 @@ export const ROLE_TEXT: Record<Role, { label: string; detail: string }> = {
   },
   'manage-cluster': {
     label: 'Manage cluster',
-    detail: 'End live calls and reload the routing scripts. Nothing in this console uses it yet.',
+    detail: 'Hang up live calls, remove someone from a conference, and reload the routing scripts.',
   },
   'manage-trunks': {
     label: 'Manage trunks',
-    detail: 'Create, change and remove trunks and set their passwords, which the node keeps as given. Give it to as few users as possible. Nothing in this console uses it yet.',
+    detail: 'Create, change and remove trunks, including conference foci, and set their passwords, which the node keeps as given. Give it to as few users as possible.',
   },
 };
 

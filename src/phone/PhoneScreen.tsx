@@ -83,6 +83,9 @@ export function PhoneScreen({ handle, settings, onSettings, aside }: {
   }, [connected]);
 
   const notice = state.notice ?? iceNotice;
+  // A call to a room is named by the room, whether joined from Conferences or dialled by hand.
+  const room = handle.room;
+  const farEnd = room?.name ?? userOf(state.remoteIdentity);
 
   return (
     <>
@@ -180,7 +183,7 @@ export function PhoneScreen({ handle, settings, onSettings, aside }: {
           <section className="panel phone-dialler" aria-label="Dialler">
             {state.call !== 'idle' && (
               <div className={`phone-call phone-call-${state.call}`} role="status" aria-live="polite">
-                <span className="phone-call-who">{userOf(state.remoteIdentity)}</span>
+                <span className="phone-call-who">{room && connected ? `In conference ${room.name}` : farEnd}</span>
                 <span className="phone-call-state">
                   {describeCallState(state.call)}
                   {connected && state.connectedAt !== undefined ? `, ${callTimer(Date.now() - state.connectedAt)}` : ''}
@@ -253,7 +256,7 @@ export function PhoneScreen({ handle, settings, onSettings, aside }: {
               <div className="softphone-video">
                 <figure>
                   <video ref={remoteVideo} autoPlay playsInline muted aria-label="Far end video" />
-                  <figcaption>{userOf(state.remoteIdentity)}</figcaption>
+                  <figcaption>{farEnd}</figcaption>
                 </figure>
                 <figure>
                   <video ref={localVideo} autoPlay playsInline muted aria-label="Your video" />

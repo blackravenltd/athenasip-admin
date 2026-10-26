@@ -9,6 +9,7 @@ import type { SipStack } from '../softphone/Softphone';
 import { describeCallState } from '../softphone/words';
 import { callTimer, userOf } from './dial';
 import { PhoneAside } from './PhoneAside';
+import { PhoneConferences } from './PhoneConferences';
 import { PhoneScreen, useRememberedSettings } from './PhoneScreen';
 import { useIncomingNotification, useRinging } from './ringing';
 import { usePhone } from './usePhone';
@@ -20,6 +21,9 @@ import { usePhone } from './usePhone';
  * a call survives a change of screen. For the same reason the far end's audio
  * plays from here, and a call indicator is rendered into `indicator`, a slot
  * in the top bar.
+ *
+ * The Conferences panel sits above history and the directory, since it reads
+ * the room's roster with the console user's roles, as they do.
  */
 export default function PhoneHost({ api, roles, visible, indicator, stack = jssipStack }: {
   api: AdminApi;
@@ -50,6 +54,7 @@ export default function PhoneHost({ api, roles, visible, indicator, stack = jssi
     void element.setSinkId(settings.speaker ?? '').catch(() => undefined);
   }, [settings.speaker]);
 
+  const room = handle.room;
   const call = state.call === 'idle' || state.call === 'ended' || state.call === 'failed' ? undefined : state.call;
 
   return (
@@ -61,20 +66,34 @@ export default function PhoneHost({ api, roles, visible, indicator, stack = jssi
           settings={settings}
           onSettings={setSettings}
           aside={(
-            <PhoneAside
-              api={api}
-              roles={roles}
-              ownUri={settings.uri ?? ''}
-              call={state.call}
-              onDial={(uri) => handle.call(uri, { microphone: settings.microphone })}
-            />
+            <div className="phone-aside">
+              <PhoneConferences
+                api={api}
+                roles={roles}
+                realm={handle.realm}
+                prefixes={handle.conferences}
+                room={room}
+                call={state.call}
+                ownUri={settings.uri ?? ''}
+                onJoin={(uri, video) => handle.call(uri, { video, microphone: settings.microphone, camera: settings.camera })}
+              />
+              <PhoneAside
+                api={api}
+                roles={roles}
+                ownUri={settings.uri ?? ''}
+                call={state.call}
+                onDial={(uri) => handle.call(uri, { microphone: settings.microphone })}
+              />
+            </div>
           )}
         />
       )}
       {indicator && call && createPortal(
         <Link className={`topbar-call topbar-call-${call}`} to={routes.phone}>
           <span className={`state-dot state-${call === 'connected' ? 'ok' : 'warn'}`} aria-hidden="true" />
-          {call === 'incoming' ? `Incoming call from ${userOf(state.remoteIdentity)}` : `${describeCallState(call)} ${userOf(state.remoteIdentity)}`}
+          {call === 'incoming'
+            ? `Incoming call from ${userOf(state.remoteIdentity)}`
+            : call === 'connected' && room ? `In conference ${room.name}` : `${describeCallState(call)} ${room?.name ?? userOf(state.remoteIdentity)}`}
           {call === 'connected' && state.connectedAt !== undefined ? ` ${callTimer(Date.now() - state.connectedAt)}` : ''}
         </Link>,
         indicator,

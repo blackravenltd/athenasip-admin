@@ -2,9 +2,10 @@ import { useCallback, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import type { AdminApi } from '../api/AdminApi';
 import { isConflict } from '../api/errors';
-import type { Subscriber, MediaProfile } from '../api/types';
-import { MEDIA_PROFILE_TEXT } from '../realms/policy';
-import { SubscriberMediaField } from '../realms/PolicyFields';
+import type { DtmfMode, Subscriber, MediaProfile } from '../api/types';
+import { DTMF_TEXT, MEDIA_PROFILE_TEXT } from '../realms/policy';
+import { DtmfField, SubscriberMediaField } from '../realms/PolicyFields';
+import { AttributesField, attributesText, parseAttributes } from '../components/AttributesField';
 import { useRefreshableAsync } from '../hooks/useRefreshableAsync';
 import { useSubmit } from '../hooks/useSubmit';
 import { ConfirmModal, FormModal } from '../components/Modal';
@@ -78,15 +79,20 @@ function NewSubscriberDialogue({ api, realm, realmProfile, onClose, onSaved }: {
   );
 }
 
-function SubscriberRow({ api, subscriber, realmProfile, onChanged }: {
+function SubscriberRow({ api, subscriber, realmProfile, realmDtmf, onChanged }: {
   api: AdminApi;
   subscriber: Subscriber;
   realmProfile?: MediaProfile;
+  /** The realm's effective key presses; absent from a node without the setting, which is then never sent. */
+  realmDtmf?: DtmfMode;
   onChanged: () => void;
 }) {
-  const [dialogue, setDialogue] = useState<'password' | 'media' | 'delete'>();
+  const [dialogue, setDialogue] = useState<'password' | 'media' | 'attributes' | 'delete'>();
   const [password, setPassword] = useState('');
   const [profile, setProfile] = useState(subscriber.behaviour.media_profile);
+  const [dtmf, setDtmf] = useState(subscriber.behaviour.dtmf ?? null);
+  const [attributes, setAttributes] = useState(attributesText(subscriber.attributes));
+  const parsedAttributes = parseAttributes(attributes);
   const { busy, error, clearError, run } = useSubmit();
   const close = () => { setPassword(''); clearError(); setDialogue(undefined); };
 
@@ -106,6 +112,7 @@ function SubscriberRow({ api, subscriber, realmProfile, onChanged }: {
       </div>
       {/* Only the subscriber's own setting: the realm's is on the realm. */}
       {subscriber.behaviour.media_profile && <span className="record-tag">{MEDIA_PROFILE_TEXT[subscriber.behaviour.media_profile].label}</span>}
+      {subscriber.behaviour.dtmf && <span className="record-tag">Keys: {DTMF_TEXT[subscriber.behaviour.dtmf].label}</span>}
       <div className="record-actions">
         <button
           className="secondary-button"
@@ -120,10 +127,20 @@ function SubscriberRow({ api, subscriber, realmProfile, onChanged }: {
           type="button"
           aria-label={`Media for ${subscriber.user}`}
           // Reset from the subscriber, which a refresh may have changed.
-          onClick={() => { setProfile(subscriber.behaviour.media_profile); setDialogue('media'); }}
+          onClick={() => { setProfile(subscriber.behaviour.media_profile); setDtmf(subscriber.behaviour.dtmf ?? null); setDialogue('media'); }}
         >
           Media
         </button>
+        {subscriber.attributes !== undefined && (
+          <button
+            className="secondary-button"
+            type="button"
+            aria-label={`Attributes for ${subscriber.user}`}
+            onClick={() => { setAttributes(attributesText(subscriber.attributes)); setDialogue('attributes'); }}
+          >
+            Attributes
+          </button>
+        )}
         <button
           className="secondary-button danger-button"
           type="button"
@@ -160,13 +177,45 @@ function SubscriberRow({ api, subscriber, realmProfile, onChanged }: {
       <FormModal
         open={dialogue === 'media'}
         title={`Media for ${subscriber.user}`}
-        submitLabel="Save media profile"
+        submitLabel="Save media"
         busy={busy}
         error={error}
-        onSubmit={() => act(() => api.updateSubscriber(subscriber.realm, subscriber.user, { behaviour: { media_profile: profile } }))}
+        onSubmit={() => act(() => api.updateSubscriber(subscriber.realm, subscriber.user, {
+          behaviour: { media_profile: profile, ...(realmDtmf !== undefined ? { dtmf } : {}) },
+        }))}
         onCancel={close}
       >
         <SubscriberMediaField value={profile} realmProfile={realmProfile} busy={busy} onChange={setProfile} />
+        {realmDtmf !== undefined && (
+          <DtmfField
+            value={dtmf}
+            inherited={realmDtmf}
+            inheritedFrom="Realm"
+            busy={busy}
+            onChange={setDtmf}
+            hint="Set it for a phone that sends key presses differently from the rest of its realm."
+          />
+        )}
+      </FormModal>
+
+      <FormModal
+        open={dialogue === 'attributes'}
+        title={`Attributes for ${subscriber.user}`}
+        submitLabel="Save attributes"
+        busy={busy}
+        submitDisabled={'problem' in parsedAttributes}
+        error={error}
+        onSubmit={() => {
+          if ('attributes' in parsedAttributes) act(() => api.updateSubscriber(subscriber.realm, subscriber.user, { attributes: parsedAttributes.attributes }));
+        }}
+        onCancel={close}
+      >
+        <AttributesField
+          value={attributes}
+          busy={busy}
+          onChange={setAttributes}
+          hint="Anything the routing scripts read about this subscriber, such as a group or the room it joins by default; the node itself reads none of it."
+        />
       </FormModal>
 
       <ConfirmModal
@@ -206,7 +255,9 @@ export function SubscribersScreen({ api }: { api: AdminApi }) {
   const refresh = result.refresh;
   const onChanged = useCallback(() => refresh(), [refresh]);
   const [adding, setAdding] = useState(false);
-  const realmProfile = realms.value?.find((candidate) => candidate.name === realm)?.behaviour_effective.media_profile;
+  const chosen = realms.value?.find((candidate) => candidate.name === realm);
+  const realmProfile = chosen?.behaviour_effective.media_profile;
+  const realmDtmf = chosen?.behaviour_effective.dtmf;
 
   return (
     <>
@@ -257,7 +308,7 @@ export function SubscribersScreen({ api }: { api: AdminApi }) {
             ) : (
               <ul className="record-list">
                 {(result.value ?? []).map((subscriber) => (
-                  <SubscriberRow key={subscriber.user} api={api} subscriber={subscriber} realmProfile={realmProfile} onChanged={onChanged} />
+                  <SubscriberRow key={subscriber.user} api={api} subscriber={subscriber} realmProfile={realmProfile} realmDtmf={realmDtmf} onChanged={onChanged} />
                 ))}
               </ul>
             )}

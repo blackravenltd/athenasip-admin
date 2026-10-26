@@ -1,4 +1,4 @@
-import type { BehaviourEffective, MediaProfile, Realm, RealmSettings } from '../api/types';
+import type { BehaviourEffective, DtmfMode, MediaProfile, Realm, RealmSettings } from '../api/types';
 import { QUALIFY_MAX, QUALIFY_MIN } from '../api/types';
 
 /**
@@ -28,6 +28,26 @@ export const MEDIA_PROFILE_TEXT: Record<MediaProfile, { label: string; detail: s
   },
 };
 
+/** How a leg sends key presses, in plain words. The media engine converts between legs that differ. */
+export const DTMF_TEXT: Record<DtmfMode, { label: string; detail: string }> = {
+  auto: {
+    label: 'Automatic',
+    detail: 'Read from what each phone offers: telephone-events when it offers them, otherwise tones in the audio. Never SIP INFO, which a phone cannot announce.',
+  },
+  rfc4733: {
+    label: 'RFC 4733 telephone-events',
+    detail: 'Key presses travel in the media as named events. What nearly every phone and browser does.',
+  },
+  info: {
+    label: 'SIP INFO',
+    detail: 'Key presses travel as SIP INFO requests, for an older desk phone or carrier that sends nothing else.',
+  },
+  inband: {
+    label: 'Tones in the audio',
+    detail: 'Key presses are heard as tones in the call’s audio, for a phone or carrier that neither sends events nor reads them.',
+  },
+};
+
 /**
  * A realm's settings as form state: numbers as text, and null for a setting
  * inherited from the server's `behaviour:` section.
@@ -38,6 +58,7 @@ export interface PolicyForm {
   nonce_expiry: string;
   media_anchor: boolean | null;
   media_profile: MediaProfile | null;
+  dtmf: DtmfMode | null;
   /** Empty for the server's. */
   qualify_interval: string;
   rewrite_contact: boolean | null;
@@ -47,9 +68,10 @@ export interface PolicyForm {
 export const DEFAULT_POLICY: PolicyForm = {
   registration_timeout: '5000',
   registration_minimum: '0',
-  nonce_expiry: '3600',
+  nonce_expiry: '300',
   media_anchor: null,
   media_profile: null,
+  dtmf: null,
   qualify_interval: '',
   rewrite_contact: null,
 };
@@ -61,6 +83,7 @@ export function policyForm(realm: Realm): PolicyForm {
     nonce_expiry: String(realm.nonce_expiry),
     media_anchor: realm.behaviour.media_anchor,
     media_profile: realm.behaviour.media_profile,
+    dtmf: realm.behaviour.dtmf ?? null,
     qualify_interval: realm.behaviour.qualify_interval === null ? '' : String(realm.behaviour.qualify_interval),
     rewrite_contact: realm.behaviour.rewrite_contact,
   };
@@ -91,8 +114,11 @@ export function describeBehaviour(realm: Realm): {
 /**
  * The form as the API wants it, or the reason it cannot be sent. The server
  * does not check the numbers against each other, so that is done here.
+ * `dtmf` is sent only when the node has it: one before refuses a setting it
+ * does not know with a 400, and says it has it by giving `dtmf` among its
+ * defaults.
  */
-export function policySettings(form: PolicyForm): { settings: RealmSettings } | { problem: string } {
+export function policySettings(form: PolicyForm, dtmf = true): { settings: RealmSettings } | { problem: string } {
   const seconds = (text: string, what: string): number | string => {
     const trimmed = text.trim();
     if (!/^\d+$/.test(trimmed)) return `${what} must be a whole number of seconds.`;
@@ -123,7 +149,13 @@ export function policySettings(form: PolicyForm): { settings: RealmSettings } | 
       registration_minimum: minimum,
       nonce_expiry: nonce,
       // Null makes a setting inherit the server's.
-      behaviour: { media_anchor: form.media_anchor, media_profile: form.media_profile, qualify_interval: qualify, rewrite_contact: form.rewrite_contact },
+      behaviour: {
+        media_anchor: form.media_anchor,
+        media_profile: form.media_profile,
+        ...(dtmf ? { dtmf: form.dtmf } : {}),
+        qualify_interval: qualify,
+        rewrite_contact: form.rewrite_contact,
+      },
     },
   };
 }

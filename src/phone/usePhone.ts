@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AdminApi } from '../api/AdminApi';
 import { ApiError, errorMessage } from '../api/errors';
-import type { SubscriberLine } from '../api/types';
+import type { ClientConfig, ConferencePrefix, SubscriberLine } from '../api/types';
 import { usableIceServers } from '../softphone/iceServers';
+import { roomOf, type Room } from './conference';
 import { sendingSilence } from './devices';
 import { Softphone, type CallMedia, type MediaStats, type SipStack, type SoftphoneState } from '../softphone/Softphone';
 import { lineOf, signallingUri } from '../softphone/words';
@@ -22,12 +23,23 @@ export interface PhoneHandle {
   lineNotice?: string;
   /** The connected, unmuted call has sent nothing but silence for the last few seconds. */
   silent: boolean;
+  /** The registered line's realm. */
+  realm?: string;
+  /**
+   * The realm's conference prefixes, from its client configuration; empty
+   * until the node has said, and for a realm with no rooms.
+   */
+  conferences: ConferencePrefix[];
+  /** The room the current or last outgoing call is to, when its target is one. */
+  room?: Room;
   /** Registers; an empty `socket` asks the node, signed with the line's own credentials. */
   register: (line: { uri: string; password: string; socket: string }) => void;
   unregister: () => void;
   call: (target: string, media?: CallMedia) => void;
   answer: (media?: CallMedia) => void;
 }
+
+const NO_ROOMS: ConferencePrefix[] = [];
 
 /** The fallback SIP WebSocket: this host, port 8088. */
 function guessedSocket(): string {
@@ -42,6 +54,11 @@ function guessedSocket(): string {
  * says where to connect when no WebSocket was given, and TURN credentials
  * expire, so ICE servers are fetched as each call is placed or answered; if
  * the node does not answer, the call proceeds with none.
+ *
+ * The same configuration names the realm's conference prefixes, so it is also
+ * asked for when registering with a WebSocket given; that request is not
+ * waited for, and a failure leaves the phone with no rooms, never unable to
+ * register. Each call's fetch refreshes them too.
  */
 export function usePhone(stack: SipStack, api: AdminApi): PhoneHandle {
   const phone = useMemo(() => new Softphone(stack), [stack]);
@@ -53,6 +70,15 @@ export function usePhone(stack: SipStack, api: AdminApi): PhoneHandle {
   const [lineNotice, setLineNotice] = useState<string>();
   const line = useRef<SubscriberLine | undefined>(undefined);
   const [energies, setEnergies] = useState<Array<number | undefined>>([]);
+  const [rooms, setRooms] = useState<{ realm: string; prefixes: ConferencePrefix[] }>();
+  // What the last outgoing call dialled, as given: a room's URI is asked for exactly so.
+  const [dialled, setDialled] = useState<string>();
+
+  /** Keeps the realm's rooms from a configuration fetched for the line still in use. */
+  const learn = useCallback((asked: SubscriberLine, config: ClientConfig) => {
+    if (line.current !== asked) return;
+    setRooms({ realm: asked.realm, prefixes: config.realm?.conferences ?? [] });
+  }, []);
 
   useEffect(() => {
     const unsubscribe = phone.subscribe((next) => {
@@ -90,19 +116,23 @@ export function usePhone(stack: SipStack, api: AdminApi): PhoneHandle {
 
   const register = useCallback(({ uri, password, socket }: { uri: string; password: string; socket: string }) => {
     setLineNotice(undefined);
-    line.current = lineOf(uri, password);
+    setRooms(undefined);
+    const asked = lineOf(uri, password);
+    line.current = asked;
     if (socket) {
       phone.register({ socket, uri, password });
+      if (asked) api.subscriberConfig(asked).then((config) => learn(asked, config), () => undefined);
       return;
     }
-    if (!line.current) {
+    if (!asked) {
       setLineNotice('A SIP address is sip:user@realm.');
       return;
     }
     setAsking(true);
     const https = window.location.protocol === 'https:';
-    api.subscriberConfig(line.current).then(
+    api.subscriberConfig(asked).then(
       (config) => {
+        learn(asked, config);
         const found = signallingUri(config, https);
         if (!found) {
           setLineNotice(https
@@ -123,39 +153,51 @@ export function usePhone(stack: SipStack, api: AdminApi): PhoneHandle {
         }
       },
     ).finally(() => setAsking(false));
-  }, [api, phone]);
+  }, [api, phone, learn]);
 
   const unregister = useCallback(() => {
     line.current = undefined;
+    setRooms(undefined);
     phone.unregister();
   }, [phone]);
 
   const withIce = useCallback((place: (servers: RTCIceServer[]) => void) => {
     setIceNotice(undefined);
-    if (!line.current) {
+    const asked = line.current;
+    if (!asked) {
       place([]);
       return;
     }
-    api.subscriberConfig(line.current).then(
-      (config) => usableIceServers(config.ice_servers),
+    api.subscriberConfig(asked).then(
+      (config) => {
+        learn(asked, config);
+        return usableIceServers(config.ice_servers);
+      },
       (cause: unknown) => {
         setIceNotice(`No ICE servers from the node, calling without: ${errorMessage(cause)}`);
         return [];
       },
     ).then(place);
-  }, [api]);
+  }, [api, learn]);
 
   const call = useCallback((target: string, media: CallMedia = {}) => {
+    setDialled(target);
     withIce((servers) => phone.call(target, { servers }, media));
   }, [phone, withIce]);
 
   const answer = useCallback((media: CallMedia = {}) => {
+    setDialled(undefined);
     withIce((servers) => phone.answer({ servers }, media));
   }, [phone, withIce]);
 
+  const conferences = rooms?.prefixes ?? NO_ROOMS;
+  const room = useMemo(
+    () => (state.direction === 'outgoing' ? roomOf(dialled, conferences, rooms?.realm) : undefined),
+    [state.direction, dialled, conferences, rooms?.realm],
+  );
   const silent = state.call === 'connected' && !state.muted && !state.held && sendingSilence(energies);
   return {
     phone, state, remoteStream: streams.remote, localStream: streams.local, stats, iceNotice, asking, lineNotice, silent,
-    register, unregister, call, answer,
+    realm: rooms?.realm, conferences, room, register, unregister, call, answer,
   };
 }

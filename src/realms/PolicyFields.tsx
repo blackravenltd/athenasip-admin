@@ -1,6 +1,39 @@
-import type { BehaviourEffective, MediaProfile } from '../api/types';
-import { MEDIA_PROFILES, QUALIFY_MAX, QUALIFY_MIN } from '../api/types';
-import { MEDIA_PROFILE_TEXT, describeQualify, type PolicyForm } from './policy';
+import type { BehaviourEffective, DtmfMode, MediaProfile } from '../api/types';
+import { DTMF_MODES, MEDIA_PROFILES, QUALIFY_MAX, QUALIFY_MIN } from '../api/types';
+import { DTMF_TEXT, MEDIA_PROFILE_TEXT, describeQualify, type PolicyForm } from './policy';
+
+/**
+ * How phones send key presses, inheriting from `inherits` (the server's for a
+ * realm, the realm's for a subscriber). Shown only when the node has the
+ * setting, which it says by giving a default for it.
+ */
+export function DtmfField({ value, inherited, inheritedFrom, busy, onChange, hint }: {
+  value: DtmfMode | null;
+  inherited?: DtmfMode;
+  inheritedFrom: 'Server' | 'Realm';
+  busy: boolean;
+  onChange: (value: DtmfMode | null) => void;
+  hint: string;
+}) {
+  const shown = value ?? inherited;
+  const label = inherited ? `${inheritedFrom} default (${DTMF_TEXT[inherited].label.toLowerCase()})` : `${inheritedFrom} default`;
+  return (
+    <>
+      <label className="field">
+        <span>Key presses</span>
+        <select
+          value={value ?? ''}
+          disabled={busy}
+          onChange={(event) => onChange(event.target.value === '' ? null : event.target.value as DtmfMode)}
+        >
+          <option value="">{label}</option>
+          {DTMF_MODES.map((mode) => <option key={mode} value={mode}>{DTMF_TEXT[mode].label}</option>)}
+        </select>
+      </label>
+      <p className="field-hint">{shown ? `${DTMF_TEXT[shown].detail} ` : ''}{hint}</p>
+    </>
+  );
+}
 
 /** The registration half of a realm's settings. */
 export function RegistrationFields({ form, defaults, busy, onChange }: {
@@ -129,6 +162,16 @@ export function MediaFields({ form, defaults, busy, onChange }: {
         Once a phone has sent its own description, the node answers it in its own terms; this
         decides only for one it has not heard from yet.
       </p>
+      {defaults.dtmf !== undefined && (
+        <DtmfField
+          value={form.dtmf}
+          inherited={defaults.dtmf}
+          inheritedFrom="Server"
+          busy={busy}
+          onChange={(dtmf) => onChange({ ...form, dtmf })}
+          hint="Where two phones on a call differ, the media engine converts between them. A subscriber can be set apart from its realm."
+        />
+      )}
     </fieldset>
   );
 }

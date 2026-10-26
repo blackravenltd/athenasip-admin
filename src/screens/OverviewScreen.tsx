@@ -1,9 +1,14 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { AdminApi } from '../api/AdminApi';
 import { ApiError } from '../api/errors';
-import type { ClusterNode, Health, NodeTransport } from '../api/types';
+import type { ClusterNode, Health, NodeTransport, PolicyReload, Role } from '../api/types';
 import { isEncrypted } from '../api/types';
+import { can } from '../auth/roles';
+import { useEventRefresh } from '../hooks/useEvents';
 import { useRefreshableAsync } from '../hooks/useRefreshableAsync';
+import { useSubmit } from '../hooks/useSubmit';
+import { ConfirmModal } from '../components/Modal';
 import { ErrorMessage, Loading } from '../components/Status';
 import { routes } from '../app/routes';
 
@@ -36,6 +41,70 @@ export function selfNode(nodes: readonly ClusterNode[]): ClusterNode | undefined
   return nodes.find((node) => node.self) ?? nodes[0];
 }
 
+/** A policy as one string to compare: the driver and the scripts' fingerprint. */
+function policyKey(node: ClusterNode): string | undefined {
+  return node.policy && `${node.policy.driver}\n${node.policy.fingerprint ?? ''}`;
+}
+
+/**
+ * The nodes whose routing policy differs from the one most nodes run, or
+ * none when they agree. A node that reported no policy is not counted
+ * either way. With a tie, every node outside the largest group in the
+ * order listed is out of step; this node is listed first, so its own
+ * policy wins a tie.
+ */
+export function policyStragglers(nodes: readonly ClusterNode[]): ClusterNode[] {
+  const counts = new Map<string, number>();
+  for (const node of nodes) {
+    const key = policyKey(node);
+    if (key !== undefined) counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  if (counts.size < 2) return [];
+  let common: string | undefined;
+  for (const [key, count] of counts) if (common === undefined || count > counts.get(common)!) common = key;
+  return nodes.filter((node) => { const key = policyKey(node); return key !== undefined && key !== common; });
+}
+
+/** A fingerprint short enough to read and compare by eye. */
+export function shortFingerprint(fingerprint: string | undefined): string {
+  return fingerprint ? fingerprint.slice(0, 12) : 'none';
+}
+
+/** Has the answering node read its routing scripts again, after asking. */
+function ReloadPolicy({ api, onReloaded }: { api: AdminApi; onReloaded: () => void }) {
+  const [asking, setAsking] = useState(false);
+  const [result, setResult] = useState<PolicyReload>();
+  const { busy, error, run } = useSubmit();
+  const reload = () => {
+    void run(async () => setResult(await api.reloadPolicy())).then((done) => {
+      if (!done) return;
+      setAsking(false);
+      onReloaded();
+    });
+  };
+  return (
+    <>
+      <button className="secondary-button" type="button" onClick={() => { setResult(undefined); setAsking(true); }}>
+        Reload scripts
+      </button>
+      {result && (
+        <p className="field-hint" role="status">
+          This node now runs {result.driver}{result.fingerprint ? `, scripts ${shortFingerprint(result.fingerprint)}` : ''}.
+        </p>
+      )}
+      <ConfirmModal open={asking} title="Reload the routing scripts?" confirmLabel="Reload" busy={busy} onConfirm={reload} onCancel={() => setAsking(false)}>
+        <p>
+          This node reads its routing scripts from disk again. Calls already being routed finish
+          on the old ones. Scripts that do not load are refused with the file and line, and the
+          ones in force stay. Each node reads its own scripts, so a cluster is reloaded node by
+          node; this reloads only the node this console is talking to.
+        </p>
+        {error && <p className="error-message" role="alert">{error}</p>}
+      </ConfirmModal>
+    </>
+  );
+}
+
 /**
  * What this node is and whether it is serving.
  *
@@ -43,7 +112,7 @@ export function selfNode(nodes: readonly ClusterNode[]): ClusterNode | undefined
  * realm count Manage users. Each panel loads on its own, so a user lacking a
  * role still sees the rest.
  */
-export function OverviewScreen({ api }: { api: AdminApi }) {
+export function OverviewScreen({ api, roles = [] }: { api: AdminApi; roles?: readonly Role[] }) {
   const health = useRefreshableAsync((signal) => api.health(signal), [api]);
   const nodes = useRefreshableAsync((signal) => api.nodes(signal), [api]);
   const registrations = useRefreshableAsync((signal) => api.listRegistrations(undefined, signal), [api]);
@@ -52,6 +121,11 @@ export function OverviewScreen({ api }: { api: AdminApi }) {
   const refresh = () => { health.refresh(); nodes.refresh(); registrations.refresh(); realms.refresh(); };
   const refreshing = health.refreshing || nodes.refreshing || registrations.refreshing || realms.refreshing;
   const self = nodes.value && selfNode(nodes.value);
+  const status = can(roles, 'view-cluster-status');
+  // Nodes report on the bus every status interval, and a registration is published as it is written.
+  useEventRefresh(api, ['nodes'], nodes.refresh, status);
+  useEventRefresh(api, ['subscribers'], registrations.refresh, status);
+  const stragglers = nodes.value ? policyStragglers(nodes.value) : [];
 
   return (
     <>
@@ -98,10 +172,21 @@ export function OverviewScreen({ api }: { api: AdminApi }) {
             <p>
               Every node serving these realms, as each last described itself. This node first;
               the others as they reported on the event bus. A node whose reports stopped is still
-              listed, so it can be told from one never heard of.
+              listed, so it can be told from one never heard of. The nodes of one cluster should
+              run the same routing scripts.
             </p>
           </div>
+          {can(roles, 'manage-cluster') && <div className="panel-actions"><ReloadPolicy api={api} onReloaded={nodes.refresh} /></div>}
         </div>
+
+        {stragglers.length > 0 && (
+          <p className="error-message" role="alert">
+            The nodes disagree on their routing scripts: {stragglers.map((node) => node.id).join(', ')}{' '}
+            {stragglers.length === 1 ? 'runs' : 'run'} different ones from the rest. A call may be
+            routed differently depending on the node it reaches. Copy the same scripts to every node
+            and reload each.
+          </p>
+        )}
 
         {notForThisLogin(nodes.error)
           ? <p className="field-hint">This login&apos;s roles do not include the node&apos;s status.</p>
@@ -118,9 +203,16 @@ export function OverviewScreen({ api }: { api: AdminApi }) {
                       {node.id}
                     </span>
                     {node.at && <span className="record-detail">Reported {new Date(node.at).toLocaleString()}</span>}
+                    {node.policy && (
+                      <span className="record-detail">
+                        Routing: {node.policy.driver}{node.policy.fingerprint && <>, scripts <code title={node.policy.fingerprint}>{shortFingerprint(node.policy.fingerprint)}</code></>}
+                      </span>
+                    )}
+                    {node.cluster && <span className="record-detail">Peers reach it at <code>{node.cluster.address}:{node.cluster.port}</code></span>}
                   </div>
                   {node.self && <span className="record-tag">This node</span>}
                   {node.version && <span className="record-tag">{node.version}</span>}
+                  {stragglers.includes(node) && <span className="record-tag state-tag-warn">Different scripts</span>}
                   <span className={`record-tag state-tag-${state.tone}`}>{state.label}</span>
                 </li>
               );

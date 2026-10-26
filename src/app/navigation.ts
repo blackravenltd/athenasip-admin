@@ -16,7 +16,7 @@ export const topNav: readonly NavItem[] = [
   { to: routes.home, label: 'Overview', end: true },
   // No role needed: the phone registers as a subscriber, not with the user's roles.
   { to: routes.phone, label: 'Phone', end: false },
-  { to: routes.sip, label: 'SIP', end: false, requires: ['manage-realms', 'manage-realm-subscribers', 'view-cluster-status'] },
+  { to: routes.sip, label: 'SIP', end: false, requires: ['manage-realms', 'manage-realm-subscribers', 'view-cluster-status', 'manage-trunks'] },
   { to: routes.calls, label: 'Calls', end: false, requires: ['view-cluster-status'] },
   { to: routes.media, label: 'Media', end: false, requires: ['manage-realms', 'view-cluster-status'] },
   { to: routes.security, label: 'Security', end: false, requires: ['view-cluster-status'] },
@@ -33,6 +33,17 @@ const sectionNavs: ReadonlyArray<{ prefix: string; ariaLabel: string; items: rea
       { to: routes.realms, label: 'Realms', end: true, requires: ['manage-realms'] },
       { to: routes.subscribers, label: 'Subscribers', end: true, requires: ['manage-realm-subscribers'] },
       { to: routes.registrations, label: 'Registrations', end: true, requires: ['view-cluster-status'] },
+      { to: routes.presence, label: 'Presence', end: true, requires: ['view-cluster-status'] },
+      { to: routes.trunks, label: 'Trunks', end: true, requires: ['manage-trunks'] },
+    ],
+  },
+  {
+    prefix: routes.calls,
+    ariaLabel: 'Calls navigation',
+    items: [
+      { to: routes.calls, label: 'Live', end: true },
+      { to: routes.conferences, label: 'Conferences', end: true },
+      { to: routes.callHistory, label: 'History', end: true },
     ],
   },
   {

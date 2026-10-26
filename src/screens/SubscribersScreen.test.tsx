@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { FakeAdminApi } from '../api/FakeAdminApi';
 import { realmSubscribers, routes } from '../app/routes';
 import { SubscribersScreen } from './SubscribersScreen';
@@ -72,16 +72,56 @@ describe('SubscribersScreen', () => {
     // blackraven.co.nz inherits the server's profile, which is mirror.
     expect(within(select).getByRole('option', { name: 'Realm default (mirror the caller)' })).toBeTruthy();
     fireEvent.change(select, { target: { value: 'webrtc' } });
-    fireEvent.click(within(dialogue()).getByRole('button', { name: 'Save media profile' }));
+    fireEvent.click(within(dialogue()).getByRole('button', { name: 'Save media' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect((await api.listSubscribers('blackraven.co.nz'))[0].behaviour.media_profile).toBe('webrtc');
 
     fireEvent.click(await screen.findByRole('button', { name: 'Media for reception' }));
     expect(within(dialogue()).getByLabelText('Media profile')).toHaveProperty('value', 'webrtc');
     fireEvent.change(within(dialogue()).getByLabelText('Media profile'), { target: { value: '' } });
-    fireEvent.click(within(dialogue()).getByRole('button', { name: 'Save media profile' }));
+    fireEvent.click(within(dialogue()).getByRole('button', { name: 'Save media' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect((await api.listSubscribers('blackraven.co.nz'))[0].behaviour.media_profile).toBeNull();
+  });
+
+  it('sets how a subscriber sends key presses, and shows one set apart from its realm', async () => {
+    const api = show(realmSubscribers('blackraven.co.nz'));
+    const reception = await screen.findByRole('group', { name: 'reception' });
+    expect(reception.parentElement!.textContent).toContain('Keys: SIP INFO');
+    fireEvent.click(screen.getByRole('button', { name: 'Media for reception' }));
+    const keys = within(dialogue()).getByLabelText('Key presses');
+    expect(within(keys).getByRole('option', { name: 'Realm default (automatic)' })).toBeTruthy();
+    fireEvent.change(keys, { target: { value: 'rfc4733' } });
+    fireEvent.click(within(dialogue()).getByRole('button', { name: 'Save media' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect((await api.listSubscribers('blackraven.co.nz'))[0].behaviour.dtmf).toBe('rfc4733');
+  });
+
+  it('never sends key presses to a node without the setting', async () => {
+    const api = new FakeAdminApi();
+    const realms = await api.listRealms();
+    for (const realm of realms) delete realm.behaviour_effective.dtmf;
+    api.listRealms = async () => realms;
+    const update = vi.spyOn(api, 'updateSubscriber');
+    show(realmSubscribers('blackraven.co.nz'), api);
+    fireEvent.click(await screen.findByRole('button', { name: 'Media for reception' }));
+    expect(within(dialogue()).queryByLabelText('Key presses')).toBeNull();
+    fireEvent.click(within(dialogue()).getByRole('button', { name: 'Save media' }));
+    await waitFor(() => expect(update).toHaveBeenCalled());
+    expect(update.mock.calls[0][2].behaviour).not.toHaveProperty('dtmf');
+  });
+
+  it('replaces a subscriber’s attributes whole, and refuses what is not a JSON object', async () => {
+    const api = show(realmSubscribers('blackraven.co.nz'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Attributes for reception' }));
+    const text = within(dialogue()).getByRole('textbox', { name: /Attributes/ });
+    expect((text as HTMLTextAreaElement).value).toContain('"group": "front-desk"');
+    fireEvent.change(text, { target: { value: '[1]' } });
+    expect(within(dialogue()).getByRole('button', { name: 'Save attributes' })).toHaveProperty('disabled', true);
+    fireEvent.change(text, { target: { value: '{"group": "sales"}' } });
+    fireEvent.click(within(dialogue()).getByRole('button', { name: 'Save attributes' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect((await api.listSubscribers('blackraven.co.nz'))[0].attributes).toEqual({ group: 'sales' });
   });
 
   it('says a realm that does not exist does not exist', async () => {
