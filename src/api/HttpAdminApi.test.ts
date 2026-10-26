@@ -197,6 +197,55 @@ describe('HttpAdminApi', () => {
     });
   });
 
+  it('addresses a room by its conference URI as one segment, and a participant by Call-ID', async () => {
+    const fetch = respond(null, { status: 202 });
+    await new HttpAdminApi({ fetch }).removeConferenceParticipant('sip:conf-sales@example.com', 'a/b@c');
+    expect(fetch).toHaveBeenCalledWith('/api/v1/conferences/sip%3Aconf-sales%40example.com/calls/a%2Fb%40c', expect.objectContaining({ method: 'DELETE' }));
+  });
+
+  it('hangs up a call with DELETE, and reports a ringing one as not answered', async () => {
+    const fetch = respond(envelope('not_answered', 'the call has not been answered'), { status: 409 });
+    const failure = await new HttpAdminApi({ fetch }).hangUpCall('x@y').catch((cause: unknown) => cause);
+    expect(fetch).toHaveBeenCalledWith('/api/v1/calls/x%40y', expect.objectContaining({ method: 'DELETE' }));
+    expect(failure).toMatchObject({ status: 409, code: 'not_answered' });
+  });
+
+  describe('the event stream', () => {
+    /** A response whose body arrives in the pieces given, then stays open until aborted when `hold` is set. */
+    function streaming(pieces: string[], hold = false): typeof globalThis.fetch {
+      return vi.fn(async (_url: string, init: RequestInit) => new Response(new ReadableStream<Uint8Array>({
+        start(controller) {
+          for (const piece of pieces) controller.enqueue(new TextEncoder().encode(piece));
+          if (!hold) controller.close();
+          init.signal?.addEventListener('abort', () => controller.error(new DOMException('Aborted', 'AbortError')));
+        },
+      }), { status: 200, headers: { 'Content-Type': 'text/event-stream' } })) as unknown as typeof globalThis.fetch;
+    }
+
+    it('sends the bearer, opens, and delivers each event until the stream ends', async () => {
+      const fetch = streaming(['retry: 5000\n\n', 'event: trunks/changed\ndata: acme\n\n']);
+      const seen: unknown[] = [];
+      const onOpen = vi.fn();
+      await new HttpAdminApi({ fetch, token: () => 'tok' }).events((event) => seen.push(event), new AbortController().signal, onOpen);
+      expect(onOpen).toHaveBeenCalledOnce();
+      expect(seen).toEqual([{ topic: 'trunks/changed', data: 'acme' }]);
+      const init = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0][1] as RequestInit;
+      expect((init.headers as Record<string, string>).Authorization).toBe('Bearer tok');
+    });
+
+    it('resolves quietly when aborted while open', async () => {
+      const controller = new AbortController();
+      const ended = new HttpAdminApi({ fetch: streaming([], true) }).events(() => undefined, controller.signal);
+      controller.abort();
+      await expect(ended).resolves.toBeUndefined();
+    });
+
+    it('rejects with the refusal when the node serves too many streams', async () => {
+      const fetch = respond(envelope('too_many_streams', 'too many streams'), { status: 503 });
+      await expect(new HttpAdminApi({ fetch }).events(() => undefined, new AbortController().signal)).rejects.toMatchObject({ status: 503, code: 'too_many_streams' });
+    });
+  });
+
   describe('a subscriber route', () => {
     const LINE = { realm: 'sip.example.org', user: '1001', password: 'secret' };
     const challenge = (nonce: string, stale = false) => new Response(envelope('unauthorized', 'sign this'), {
@@ -234,6 +283,16 @@ describe('HttpAdminApi', () => {
       expect(JSON.stringify(sent)).not.toContain('session-token');
       expect((sent[1].headers as Record<string, string>).Authorization).toMatch(/^Digest username="1001", realm="sip.example.org", nonce="n1", uri="\/api\/v1\/subscriber\/sip.example.org\/config", algorithm=SHA-256/);
       expect(onUnauthorized).not.toHaveBeenCalled();
+    });
+
+    it('takes a fresh nonce for every request, since the node accepts each answer once', async () => {
+      const { fetch, sent } = signedNode(['n1']);
+      const api = new HttpAdminApi({ fetch });
+      await api.subscriberConfig(LINE);
+      await api.subscriberConfig(LINE);
+      expect(sent).toHaveLength(4);
+      expect((sent[2].headers as Record<string, string>).Authorization).toBeUndefined();
+      expect((sent[3].headers as Record<string, string>).Authorization).toContain('nc=00000001');
     });
 
     it('answers a stale nonce once more', async () => {

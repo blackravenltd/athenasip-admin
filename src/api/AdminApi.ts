@@ -1,7 +1,14 @@
 import type {
   Subscriber,
+  BusEvent,
   Call,
   CallRecord,
+  Conference,
+  Presence,
+  PresenceSubscription,
+  PolicyReload,
+  Trunk,
+  TrunkWrite,
   AdminUser,
   ChangePassword,
   ClientConfig,
@@ -77,6 +84,43 @@ export interface AdminApi {
   listCallRecords(limit?: number, signal?: AbortSignal): Promise<CallRecord[]>;
   /** One live call by its Call-ID; a 404 once it has ended. */
   getCall(id: string, signal?: AbortSignal): Promise<Call>;
+  /**
+   * Ends a live call with a BYE to each end (`manage-cluster`). Resolves once
+   * the BYEs are sent; the call leaves the list as the ends answer. A 409
+   * `not_answered` is a call still ringing, which only its caller can cancel.
+   */
+  hangUpCall(id: string, signal?: AbortSignal): Promise<void>;
+
+  /** The rooms with somebody in them (RFC 4579), from the call records. */
+  listConferences(signal?: AbortSignal): Promise<Conference[]>;
+  /** One room by its conference URI; a 404 once nobody is in it. */
+  getConference(uri: string, signal?: AbortSignal): Promise<Conference>;
+  /** Ends one participant's call in a room (`manage-cluster`); 409 `not_answered` before the focus answers. */
+  removeConferenceParticipant(uri: string, call: string, signal?: AbortSignal): Promise<void>;
+
+  /** Every trunk (`manage-trunks`). Passwords are never returned. */
+  listTrunks(signal?: AbortSignal): Promise<Trunk[]>;
+  createTrunk(trunk: TrunkWrite & { name: string; uri: string }, signal?: AbortSignal): Promise<Trunk>;
+  /** Only the fields given change; `attributes` given replaces the whole set. */
+  updateTrunk(name: string, changes: TrunkWrite, signal?: AbortSignal): Promise<Trunk>;
+  deleteTrunk(name: string, signal?: AbortSignal): Promise<void>;
+
+  /** Has the answering node read its routing scripts again (`manage-cluster`); 422 when they do not load. */
+  reloadPolicy(signal?: AbortSignal): Promise<PolicyReload>;
+
+  /** A subscriber as its watchers are told (`manage-realm-subscribers`); 404 `presence_off` on a node without presence. */
+  subscriberPresence(realm: string, user: string, signal?: AbortSignal): Promise<Presence>;
+  /** Who watches whom, across the cluster. */
+  listPresenceSubscriptions(signal?: AbortSignal): Promise<PresenceSubscription[]>;
+
+  /**
+   * The event bus (`view-cluster-status`): calls `onEvent` for each message
+   * on `nodes/#`, `subscribers/#`, `calls/#`, `trunks/#` and `presence/#`
+   * until `signal` aborts or the stream ends, then resolves. Rejects on a
+   * refusal, such as a 503 `too_many_streams`, and when the connection drops.
+   * `onOpen` is called once the node has accepted the stream.
+   */
+  events(onEvent: (event: BusEvent) => void, signal: AbortSignal, onOpen?: () => void): Promise<void>;
   mediaEngine(signal?: AbortSignal): Promise<MediaEngine>;
   /** Subscribers whose endpoint refused the media profile it was offered, most recent first. */
   listMediaReoffers(signal?: AbortSignal): Promise<MediaReoffer[]>;

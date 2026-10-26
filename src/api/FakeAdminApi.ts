@@ -1,9 +1,18 @@
 import type { AdminApi } from './AdminApi';
 import { ApiError } from './errors';
 import type {
+  Attributes,
+  BusEvent,
   Subscriber,
   Call,
   CallRecord,
+  Conference,
+  FocusAttribute,
+  Presence,
+  PresenceSubscription,
+  PolicyReload,
+  Trunk,
+  TrunkWrite,
   AdminUser,
   ChangePassword,
   ClientConfig,
@@ -14,8 +23,8 @@ import type {
   CreateRealm,
   Health,
   SubscriberBehaviour,
-  Behaviour,
   BehaviourEffective,
+  RealmBehaviour,
   Realm,
   LoginResult,
   MediaProfile,
@@ -30,10 +39,13 @@ import type {
   UpdateAdminUser,
   UpdateRealm,
 } from './types';
-import { MEDIA_PROFILES, QUALIFY_MAX, QUALIFY_MIN, ROLES } from './types';
+import { DTMF_MODES, MEDIA_PROFILES, QUALIFY_MAX, QUALIFY_MIN, ROLES, TRUNK_EXPIRES_MAX, TRUNK_EXPIRES_MIN } from './types';
 
 /** The server's shipped `behaviour:` defaults, which a realm inherits where it sets nothing. */
-const SERVER_BEHAVIOUR: BehaviourEffective = { media_anchor: true, media_profile: 'mirror', qualify_interval: 0, rewrite_contact: false };
+const SERVER_BEHAVIOUR: BehaviourEffective = { media_anchor: true, media_profile: 'mirror', dtmf: 'auto', qualify_interval: 0, rewrite_contact: false };
+
+/** The scripts the fake node runs, as `GET /nodes` and `POST /policy/reload` report them. */
+const POLICY: PolicyReload = { driver: 'lua 1.0.0', fingerprint: '9f2c4e1ab07d53c8e6f1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f7' };
 
 /** A realm as held: its own settings; the effective ones are worked out at read time, as on the node. */
 type StoredRealm = Omit<Realm, 'behaviour_effective' | 'behaviour_default'>;
@@ -62,6 +74,8 @@ const REALMS: readonly Role[] = ['manage-realms'];
 const REALMS_READ: readonly Role[] = ['manage-realms', 'manage-realm-subscribers'];
 const SUBSCRIBERS: readonly Role[] = ['manage-realm-subscribers'];
 const USERS: readonly Role[] = ['manage-admin-users'];
+const CLUSTER: readonly Role[] = ['manage-cluster'];
+const TRUNKS: readonly Role[] = ['manage-trunks'];
 /** Any authenticated caller. */
 const ANYONE: readonly Role[] = [];
 
@@ -101,6 +115,10 @@ export class FakeAdminApi implements AdminApi {
   private registrations: Stored[];
   private calls: StoredCall[];
   private records: StoredRecord[] = RECORDS;
+  private trunks: Trunk[];
+  private policy: PolicyReload = { ...POLICY };
+  /** Who is listening on `events`, each with the topics it hears. */
+  private listeners = new Set<(event: BusEvent) => void>();
   private reoffers: Array<Omit<MediaReoffer, 'last_at'> & { age_s: number }> = [{
     subscriber: 'sip:reception@blackraven.co.nz', rejected: 'webrtc', took: 'rtp', count: 2, age_s: 420, suggested_media_profile: 'rtp',
   }];
@@ -148,6 +166,39 @@ export class FakeAdminApi implements AdminApi {
       // AthenaPhone, whose media is WebRTC whatever transport it registers over.
       this.subscriber('sip.athenasip.org', 'tomweb', 'webrtc'),
       this.subscriber('blackraven.co.nz', 'reception'),
+    ];
+    // A desk phone that sends its key presses as SIP INFO, and a script's routing hint.
+    this.subscribers[2].behaviour.dtmf = 'info';
+    this.subscribers[2].attributes = { group: 'front-desk' };
+    this.realms[1].attributes = { default_room: 'conf-sales' };
+    // A carrier that registers, and a FreeSWITCH conference focus for the first realm's rooms.
+    this.trunks = [
+      {
+        name: 'acme',
+        uri: 'sip:sip.acme.example;transport=tls',
+        username: 'athena',
+        password_set: true,
+        register: { enabled: true, expires: 3600, contact_user: 'athena' },
+        inbound_addresses: ['198.51.100.0/24'],
+        tls_ca: '',
+        attributes: { prefixes: ['0'], dtmf: 'rfc4733' },
+        created_at: now - 86_400 * 12,
+        registration: {
+          node: 'sip-0001', state: 'registered', detail: '200 OK',
+          expires_at: now + 3000, at: new Date(Date.now() - 600_000).toISOString(),
+        },
+      },
+      {
+        name: 'rooms',
+        uri: 'sip:freeswitch.internal:5080;transport=tcp',
+        password_set: false,
+        register: { enabled: false },
+        inbound_addresses: ['10.0.0.5/32'],
+        tls_ca: '',
+        attributes: { focus: { prefix: 'conf-', realms: ['sip.athenasip.org'], profile: 'default' } },
+        created_at: now - 86_400 * 2,
+        registration: null,
+      },
     ];
     // Held as offsets and turned into instants at read time, so no binding
     // expires during a development session.
@@ -200,17 +251,123 @@ export class FakeAdminApi implements AdminApi {
         ],
         media: null,
       },
+      // Two people in a room, through the focus trunk; the second joined a minute later.
+      {
+        id: 'c0nf1@192.168.1.24',
+        focus: 'sip:conf-sales@sip.athenasip.org',
+        state: 'Connected',
+        age_s: 240,
+        answered_age_s: 239,
+        participants: [
+          { identity: 'sip:tom@sip.athenasip.org', originator: true, profile: 'plain-rtp', trunk: null },
+          { identity: 'sip:conf-sales@sip.athenasip.org', originator: false, profile: 'plain-rtp', trunk: 'rooms' },
+        ],
+        media: { engine: 'builtin', legs: [{ in: 50, out: 50 }, { in: 50, out: 50 }] },
+      },
+      {
+        id: 'c0nf2@203.0.113.40',
+        focus: 'sip:conf-sales@sip.athenasip.org',
+        state: 'Connected',
+        age_s: 180,
+        answered_age_s: 179,
+        participants: [
+          { identity: 'sip:tomweb@sip.athenasip.org', originator: true, profile: 'webrtc', trunk: null },
+          { identity: 'sip:conf-sales@sip.athenasip.org', originator: false, profile: 'plain-rtp', trunk: 'rooms' },
+        ],
+        media: { engine: 'builtin', legs: [{ in: 50, out: 50 }, { in: 50, out: 50 }] },
+      },
     ];
   }
 
-  private realm(name: string, behaviour: Required<Behaviour> = { media_anchor: null, media_profile: null, qualify_interval: null, rewrite_contact: null }): StoredRealm {
+  /** Tells every listener on `events`, as the node publishes on its bus. */
+  private publish(topic: string, data: unknown): void {
+    for (const listener of [...this.listeners]) listener({ topic, data });
+  }
+
+  /** A trunk by name, without regard to case, as on the node. */
+  private trunk(name: string): Trunk {
+    const trunk = this.trunks.find((candidate) => same(candidate.name, name));
+    if (!trunk) throw new ApiError(`no such trunk: ${name}`, 404, 'not_found');
+    return trunk;
+  }
+
+  /** The rooms each realm may dial, from the trunks whose `focus` attribute names it or names no realm. */
+  private conferencePrefixes(realm: string): Array<{ prefix: string; trunk: string }> {
+    return this.trunks.flatMap((trunk) => {
+      const focus = trunk.attributes?.focus as Partial<FocusAttribute> | undefined;
+      if (!focus || typeof focus.prefix !== 'string' || !focus.prefix) return [];
+      if (Array.isArray(focus.realms) && focus.realms.length > 0 && !focus.realms.includes(realm)) return [];
+      return [{ prefix: focus.prefix, trunk: trunk.name }];
+    });
+  }
+
+  /** The rooms with somebody in them, grouped from the live calls whose focus is set. */
+  private rooms(): Conference[] {
+    const byUri = new Map<string, Conference>();
+    for (const call of this.calls) {
+      if (!call.focus || call.state === 'Closed') continue;
+      const room = byUri.get(call.focus) ?? { uri: call.focus, focus: null, participants: [] };
+      byUri.set(call.focus, room);
+      const caller = call.participants.find((participant) => participant.originator);
+      const towards = call.participants.find((participant) => !participant.originator);
+      if (call.answered_age_s !== null && towards?.trunk) room.focus = towards.trunk;
+      const identity = caller?.identity ?? 'unknown';
+      room.participants.push({
+        call: call.id,
+        identity,
+        subscriber: caller?.trunk ? null : identity,
+        state: call.state as Conference['participants'][number]['state'],
+        joined_at: new Date(Date.now() - call.age_s * 1000).toISOString(),
+        node: 'sip-0001',
+      });
+    }
+    return [...byUri.values()];
+  }
+
+  /** Checks a trunk write whole before any of it is kept: the node's 400 changes nothing. */
+  private trunkWrite(write: TrunkWrite): void {
+    if (write.name !== undefined && !/^[A-Za-z0-9._-]{1,64}$/.test(write.name)) {
+      throw new ApiError('name must be 1 to 64 letters, digits, dots, dashes or underscores', 400, 'invalid_request');
+    }
+    if (write.uri !== undefined && !/^sips?:/i.test(write.uri.trim())) {
+      throw new ApiError('uri must be a sip: or sips: URI', 400, 'invalid_request');
+    }
+    if (write.proxy && !/^sips?:/i.test(write.proxy.trim())) {
+      throw new ApiError('proxy must be a sip: or sips: URI', 400, 'invalid_request');
+    }
+    const expires = write.register?.expires;
+    if (expires !== undefined && (!Number.isInteger(expires) || expires < TRUNK_EXPIRES_MIN || expires > TRUNK_EXPIRES_MAX)) {
+      throw new ApiError(`register.expires must be ${TRUNK_EXPIRES_MIN} to ${TRUNK_EXPIRES_MAX} seconds`, 400, 'invalid_request');
+    }
+    if (write.inbound_addresses !== undefined && !Array.isArray(write.inbound_addresses)) {
+      throw new ApiError('inbound_addresses must be a list', 400, 'invalid_request');
+    }
+    this.attributes(write.attributes);
+  }
+
+  /** Attributes are any JSON object; anything else is a 400. */
+  private attributes(attributes: unknown): Attributes | undefined {
+    if (attributes === undefined) return undefined;
+    if (!attributes || typeof attributes !== 'object' || Array.isArray(attributes)) {
+      throw new ApiError('attributes must be an object', 400, 'invalid_request');
+    }
+    return attributes as Attributes;
+  }
+
+  /** A trunk as the API gives it: never its password. */
+  private publicTrunk({ password: _password, ...trunk }: Trunk): Trunk {
+    return trunk;
+  }
+
+  private realm(name: string, behaviour: RealmBehaviour = { media_anchor: null, media_profile: null, qualify_interval: null, rewrite_contact: null }): StoredRealm {
     return {
       name,
       id: this.nextId++,
-      nonce_expiry: 3600,
+      nonce_expiry: 300,
       registration_timeout: 5000,
       registration_minimum: 0,
-      behaviour,
+      behaviour: { dtmf: null, ...behaviour },
+      attributes: {},
     };
   }
 
@@ -220,6 +377,7 @@ export class FakeAdminApi implements AdminApi {
       behaviour_effective: {
         media_anchor: realm.behaviour.media_anchor ?? SERVER_BEHAVIOUR.media_anchor,
         media_profile: realm.behaviour.media_profile ?? SERVER_BEHAVIOUR.media_profile,
+        dtmf: realm.behaviour.dtmf ?? SERVER_BEHAVIOUR.dtmf,
         qualify_interval: realm.behaviour.qualify_interval ?? SERVER_BEHAVIOUR.qualify_interval,
         rewrite_contact: realm.behaviour.rewrite_contact ?? SERVER_BEHAVIOUR.rewrite_contact,
       },
@@ -228,18 +386,22 @@ export class FakeAdminApi implements AdminApi {
   }
 
   private subscriber(realm: string, user: string, media_profile: MediaProfile | null = null): Subscriber {
-    return { id: this.nextId++, uri: `sip:${user}@${realm}`, user, realm, behaviour: { media_profile } };
+    return { id: this.nextId++, uri: `sip:${user}@${realm}`, user, realm, behaviour: { media_profile, dtmf: null }, attributes: {} };
   }
 
   /** A subscriber's behaviour, checked whole before any of it is kept: the node's 400 changes nothing. */
   private subscriberBehaviour(behaviour: SubscriberBehaviour | undefined): SubscriberBehaviour {
     if (behaviour === undefined) return {};
     for (const key of Object.keys(behaviour)) {
-      if (key !== 'media_profile') throw new ApiError(`a subscriber's behaviour has no setting called ${key}`, 400, 'invalid_request');
+      if (key !== 'media_profile' && key !== 'dtmf') throw new ApiError(`a subscriber's behaviour has no setting called ${key}`, 400, 'invalid_request');
     }
     const profile = behaviour.media_profile;
     if (profile !== undefined && profile !== null && !MEDIA_PROFILES.includes(profile)) {
       throw new ApiError(`there is no media profile called ${String(profile)}`, 400, 'invalid_request');
+    }
+    const dtmf = behaviour.dtmf;
+    if (dtmf !== undefined && dtmf !== null && !DTMF_MODES.includes(dtmf)) {
+      throw new ApiError(`there is no dtmf setting called ${String(dtmf)}`, 400, 'invalid_request');
     }
     return behaviour;
   }
@@ -316,11 +478,15 @@ export class FakeAdminApi implements AdminApi {
     const minimum = whole(changes.registration_minimum, 'registration_minimum');
     const behaviour = changes.behaviour ?? {};
     for (const key of Object.keys(behaviour)) {
-      if (!['media_anchor', 'media_profile', 'qualify_interval', 'rewrite_contact'].includes(key)) {
+      if (!['media_anchor', 'media_profile', 'dtmf', 'qualify_interval', 'rewrite_contact'].includes(key)) {
         throw new ApiError(`there is no behaviour setting called ${key}`, 400, 'invalid_request');
       }
     }
-    const { media_anchor: anchor, media_profile: profile, qualify_interval: qualify, rewrite_contact: rewrite } = behaviour;
+    const { media_anchor: anchor, media_profile: profile, dtmf, qualify_interval: qualify, rewrite_contact: rewrite } = behaviour;
+    if (dtmf !== undefined && dtmf !== null && !DTMF_MODES.includes(dtmf)) {
+      throw new ApiError(`there is no dtmf setting called ${String(dtmf)}`, 400, 'invalid_request');
+    }
+    const attributes = this.attributes(changes.attributes);
     if (rewrite !== undefined && rewrite !== null && typeof rewrite !== 'boolean') {
       throw new ApiError('rewrite_contact must be true, false or null', 400, 'invalid_request');
     }
@@ -341,6 +507,9 @@ export class FakeAdminApi implements AdminApi {
     // Left out is left alone; null goes back to inheriting.
     if (anchor !== undefined) realm.behaviour.media_anchor = anchor;
     if (profile !== undefined) realm.behaviour.media_profile = profile;
+    if (dtmf !== undefined) realm.behaviour.dtmf = dtmf;
+    // Replaced whole when given.
+    if (attributes !== undefined) realm.attributes = attributes;
     if (qualify !== undefined) realm.behaviour.qualify_interval = qualify;
     if (rewrite !== undefined) realm.behaviour.rewrite_contact = rewrite;
   }
@@ -393,18 +562,27 @@ export class FakeAdminApi implements AdminApi {
       return {
         transports: FAKE_TRANSPORTS,
         ice_servers: [{ urls: 'stun:203.0.113.5:3478' }],
-        realm: { name: line.realm, registration: { expires: 300, minimum: 0 }, outbound: { flows: 1 }, push: [] },
+        realm: {
+          name: line.realm,
+          registration: { expires: 300, minimum: 0 },
+          outbound: { flows: 1 },
+          push: [],
+          conferences: this.conferencePrefixes(line.realm),
+        },
       };
     }, signal);
   }
 
   nodes(signal?: AbortSignal): Promise<ClusterNode[]> {
     return this.settle(STATUS, () => [
-      { id: 'sip-0001', self: true, status: 'ok', version: '0.7.0', transports: FAKE_TRANSPORTS },
-      // A node that went quiet: still listed, so it can be told from one never heard of.
+      { id: 'sip-0001', self: true, status: 'ok', version: '0.13.0', transports: FAKE_TRANSPORTS, policy: { ...this.policy } },
+      // A node that went quiet, still on the scripts before the last reload: still
+      // listed, so it can be told from one never heard of.
       {
-        id: 'sip-0002', self: false, status: 'ok', stale: true, version: '0.7.0',
+        id: 'sip-0002', self: false, status: 'ok', stale: true, version: '0.13.0',
         at: new Date(Date.now() - 95_000).toISOString(), transports: FAKE_TRANSPORTS_2,
+        cluster: { address: '203.0.113.6', port: 5062 },
+        policy: { driver: 'lua 1.0.0', fingerprint: '1a0b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f9' },
       },
     ], signal);
   }
@@ -464,7 +642,10 @@ export class FakeAdminApi implements AdminApi {
       if (this.subscribers.some((candidate) => candidate.realm === realm && candidate.user === user)) {
         throw new ApiError('that subscriber already exists', 409, 'conflict');
       }
+      const attributes = this.attributes(subscriber.attributes);
       const created = this.subscriber(realm, user, behaviour.media_profile ?? null);
+      created.behaviour.dtmf = behaviour.dtmf ?? null;
+      if (attributes) created.attributes = attributes;
       this.subscribers.push(created);
       return created;
     }, signal);
@@ -475,13 +656,16 @@ export class FakeAdminApi implements AdminApi {
       this.find(realm);
       const subscriber = this.subscribers.find((candidate) => candidate.realm === realm && candidate.user === user);
       if (!subscriber) throw new ApiError('no such subscriber', 404, 'not_found');
-      if (changes.password === undefined && changes.behaviour === undefined) {
-        throw new ApiError('password, ha1 or behaviour is required', 400, 'invalid_request');
+      if (changes.password === undefined && changes.behaviour === undefined && changes.attributes === undefined) {
+        throw new ApiError('password, ha1, behaviour or attributes is required', 400, 'invalid_request');
       }
       if (changes.password !== undefined && !changes.password) throw new ApiError('password must not be empty', 400, 'invalid_request');
       const behaviour = this.subscriberBehaviour(changes.behaviour);
+      const attributes = this.attributes(changes.attributes);
       // The password is not kept, as on the server.
       if (behaviour.media_profile !== undefined) subscriber.behaviour.media_profile = behaviour.media_profile;
+      if (behaviour.dtmf !== undefined) subscriber.behaviour.dtmf = behaviour.dtmf;
+      if (attributes !== undefined) subscriber.attributes = attributes;
       return subscriber;
     }, signal);
   }
@@ -522,11 +706,13 @@ export class FakeAdminApi implements AdminApi {
     };
     const { age_s, answered_age_s, media, ...rest } = call;
     return {
+      focus: null,
       ...rest,
       created_at: instant(age_s),
       answered_at: instant(answered_age_s),
       media: media && {
         engine: media.engine,
+        held: true,
         idle_seconds: 0,
         legs: media.legs.map((leg) => {
           const elapsed = since(answered_age_s ?? 0);
@@ -570,8 +756,171 @@ export class FakeAdminApi implements AdminApi {
     }, signal);
   }
 
+  hangUpCall(id: string, signal?: AbortSignal): Promise<void> {
+    return this.settle(CLUSTER, () => {
+      const call = this.calls.find((candidate) => candidate.id === id);
+      if (!call) throw new ApiError('no such call', 404, 'not_found');
+      if (call.answered_age_s === null) {
+        throw new ApiError('the call has not been answered; its caller ends it with a CANCEL', 409, 'not_answered');
+      }
+      this.endCall(id);
+      return undefined;
+    }, signal);
+  }
+
+  /** A call gone, and the bus told, as the node does once the BYEs are answered. */
+  private endCall(id: string): void {
+    const call = this.calls.find((candidate) => candidate.id === id);
+    if (!call) return;
+    this.calls = this.calls.filter((candidate) => candidate !== call);
+    this.publish(`calls/${id}/state`, 'Closed');
+    this.publish(`calls/${id}/unregister`, id);
+  }
+
+  listConferences(signal?: AbortSignal): Promise<Conference[]> {
+    return this.settle(STATUS, () => this.rooms(), signal);
+  }
+
+  getConference(uri: string, signal?: AbortSignal): Promise<Conference> {
+    return this.settle(STATUS, () => {
+      const room = this.rooms().find((candidate) => candidate.uri === uri);
+      if (!room) throw new ApiError('nobody is in that room', 404, 'not_found');
+      return room;
+    }, signal);
+  }
+
+  removeConferenceParticipant(uri: string, call: string, signal?: AbortSignal): Promise<void> {
+    return this.settle(CLUSTER, () => {
+      const leg = this.calls.find((candidate) => candidate.id === call && candidate.focus === uri);
+      if (!leg) throw new ApiError('no live call with that Call-ID in that room', 404, 'not_found');
+      if (leg.answered_age_s === null) {
+        throw new ApiError('the focus has not answered yet; the caller ends it with a CANCEL', 409, 'not_answered');
+      }
+      this.endCall(call);
+      return undefined;
+    }, signal);
+  }
+
+  listTrunks(signal?: AbortSignal): Promise<Trunk[]> {
+    return this.settle(TRUNKS, () => this.trunks.map((trunk) => this.publicTrunk(trunk)), signal);
+  }
+
+  createTrunk(trunk: TrunkWrite & { name: string; uri: string }, signal?: AbortSignal): Promise<Trunk> {
+    return this.settle(TRUNKS, () => {
+      if (!trunk.name?.trim()) throw new ApiError('name is required', 400, 'invalid_request');
+      if (!trunk.uri?.trim()) throw new ApiError('uri is required', 400, 'invalid_request');
+      this.trunkWrite(trunk);
+      if (this.trunks.some((candidate) => same(candidate.name, trunk.name))) {
+        throw new ApiError(`trunk ${trunk.name} already exists`, 409, 'conflict');
+      }
+      const { password, ...rest } = trunk;
+      const created: Trunk = {
+        register: { enabled: false },
+        inbound_addresses: [],
+        tls_ca: '',
+        attributes: {},
+        ...rest,
+        password,
+        password_set: Boolean(password),
+        created_at: Math.floor(Date.now() / 1000),
+        registration: null,
+      };
+      this.trunks.push(created);
+      this.publish('trunks/changed', created.name);
+      return this.publicTrunk(created);
+    }, signal);
+  }
+
+  updateTrunk(name: string, changes: TrunkWrite, signal?: AbortSignal): Promise<Trunk> {
+    return this.settle(TRUNKS, () => {
+      const trunk = this.trunk(name);
+      if (changes.name !== undefined && changes.name !== trunk.name) {
+        throw new ApiError('a trunk cannot be renamed', 400, 'invalid_request');
+      }
+      this.trunkWrite(changes);
+      const { password, register, ...rest } = changes;
+      Object.assign(trunk, rest);
+      if (register !== undefined) trunk.register = { ...trunk.register, ...register };
+      if (password !== undefined) {
+        trunk.password = password;
+        trunk.password_set = Boolean(password);
+      }
+      if (trunk.register?.enabled === false) trunk.registration = null;
+      this.publish('trunks/changed', trunk.name);
+      return this.publicTrunk(trunk);
+    }, signal);
+  }
+
+  deleteTrunk(name: string, signal?: AbortSignal): Promise<void> {
+    return this.settle(TRUNKS, () => {
+      const trunk = this.trunk(name);
+      this.trunks = this.trunks.filter((candidate) => candidate !== trunk);
+      this.publish('trunks/changed', trunk.name);
+      return undefined;
+    }, signal);
+  }
+
+  /** The answering node reads its scripts again, which brings it into line with any it had fallen out of. */
+  reloadPolicy(signal?: AbortSignal): Promise<PolicyReload> {
+    return this.settle(CLUSTER, () => ({ ...this.policy }), signal);
+  }
+
+  /** From whether the subscriber has a registration, as with nothing published. */
+  subscriberPresence(realm: string, user: string, signal?: AbortSignal): Promise<Presence> {
+    return this.settle(SUBSCRIBERS, () => {
+      this.find(realm);
+      const subscriber = this.subscribers.find((candidate) => candidate.realm === realm && candidate.user === user);
+      if (!subscriber) throw new ApiError('no such subscriber', 404, 'not_found');
+      const open = this.registrations.some((binding) => binding.subscriber === subscriber.uri);
+      return { subscriber: subscriber.uri, basic: open ? 'open' : 'closed', source: 'registrations', publications: [] };
+    }, signal);
+  }
+
+  /** A receptionist's BLF keys: one on a colleague, one on the sales room. */
+  listPresenceSubscriptions(signal?: AbortSignal): Promise<PresenceSubscription[]> {
+    return this.settle(STATUS, () => {
+      const expires = Math.floor(Date.now() / 1000) + 1800;
+      return [
+        { id: 'sub-1', watcher: 'sip:reception@blackraven.co.nz', presentity: 'sip:tom@sip.athenasip.org', package: 'dialog', node_id: 'sip-0001', expires_at: expires },
+        { id: 'sub-2', watcher: 'sip:tom@sip.athenasip.org', presentity: 'sip:conf-sales@sip.athenasip.org', package: 'dialog', node_id: 'sip-0001', expires_at: expires },
+      ];
+    }, signal);
+  }
+
+  /**
+   * Hears what this fake publishes as its writes happen, until `signal` aborts.
+   * Retained topics, the nodes' and trunks' status, arrive first, as from a broker.
+   */
+  events(onEvent: (event: BusEvent) => void, signal: AbortSignal, onOpen?: () => void): Promise<void> {
+    return this.settle(STATUS, () => undefined, signal).then(() => new Promise<void>((resolve) => {
+      if (signal.aborted) { resolve(); return; }
+      const listener = (event: BusEvent) => onEvent(structuredClone(event));
+      this.listeners.add(listener);
+      signal.addEventListener('abort', () => { this.listeners.delete(listener); resolve(); }, { once: true });
+      onOpen?.();
+      for (const trunk of this.trunks) {
+        if (trunk.registration) listener({ topic: `trunks/${trunk.name}/status`, data: trunk.registration });
+      }
+    }));
+  }
+
+  /** How many are listening on `events`, for tests. Not part of `AdminApi`. */
+  get eventListeners(): number {
+    return this.listeners.size;
+  }
+
+  /** Publishes on the bus as if another node had, for tests. Not part of `AdminApi`. */
+  publishElsewhere(topic: string, data: unknown): void {
+    this.publish(topic, data);
+  }
+
+  /** Has the policy change on this node, as an edit to its scripts and a reload would. Not part of `AdminApi`. */
+  changePolicyElsewhere(policy: PolicyReload): void {
+    this.policy = { ...policy };
+  }
+
   mediaEngine(signal?: AbortSignal): Promise<MediaEngine> {
-    return this.settle(STATUS, () => ({ engine: 'builtin', connected: true, capabilities: ['bridge'] }), signal);
+    return this.settle(STATUS, () => ({ engine: 'builtin', connected: true, capabilities: ['bridge', 'dtmf'] }), signal);
   }
 
   /** A desk phone that would not take WebRTC, offered plain RTP instead, twice. */
@@ -602,7 +951,7 @@ export class FakeAdminApi implements AdminApi {
 
   /** Ends a call, for tests. Not part of `AdminApi`. */
   endCallElsewhere(id: string): void {
-    this.calls = this.calls.filter((call) => call.id !== id);
+    this.endCall(id);
   }
 
   /**

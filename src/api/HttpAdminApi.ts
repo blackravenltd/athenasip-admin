@@ -1,10 +1,18 @@
 import type { AdminApi } from './AdminApi';
 import { authorization, digestHashes, parseChallenges } from './digest';
 import { ApiError } from './errors';
+import { EventStreamParser } from './sse';
 import type {
+  BusEvent,
   Subscriber,
   Call,
   CallRecord,
+  Conference,
+  Presence,
+  PresenceSubscription,
+  PolicyReload,
+  Trunk,
+  TrunkWrite,
   AdminUser,
   ChangePassword,
   ClientConfig,
@@ -202,6 +210,76 @@ export class HttpAdminApi implements AdminApi {
   }
   /** A Call-ID can hold `@` and `/`; encoded, it is still one segment. */
   getCall(id: string, signal?: AbortSignal) { return this.request<Call>('GET', `/calls/${segment(id)}`, { signal }); }
+  async hangUpCall(id: string, signal?: AbortSignal) { await this.request<unknown>('DELETE', `/calls/${segment(id)}`, { signal }); }
+
+  listConferences(signal?: AbortSignal) { return this.request<Conference[]>('GET', '/conferences', { signal }); }
+  /** A conference URI holds `:` and `@`; encoded, it is one segment. */
+  getConference(uri: string, signal?: AbortSignal) {
+    return this.request<Conference>('GET', `/conferences/${segment(uri)}`, { signal });
+  }
+  async removeConferenceParticipant(uri: string, call: string, signal?: AbortSignal) {
+    await this.request<unknown>('DELETE', `/conferences/${segment(uri)}/calls/${segment(call)}`, { signal });
+  }
+
+  listTrunks(signal?: AbortSignal) { return this.request<Trunk[]>('GET', '/trunks', { signal }); }
+  createTrunk(trunk: TrunkWrite & { name: string; uri: string }, signal?: AbortSignal) {
+    return this.request<Trunk>('POST', '/trunks', { body: trunk, signal });
+  }
+  updateTrunk(name: string, changes: TrunkWrite, signal?: AbortSignal) {
+    return this.request<Trunk>('PUT', `/trunks/${segment(name)}`, { body: changes, signal });
+  }
+  deleteTrunk(name: string, signal?: AbortSignal) {
+    return this.request<void>('DELETE', `/trunks/${segment(name)}`, { signal });
+  }
+
+  reloadPolicy(signal?: AbortSignal) { return this.request<PolicyReload>('POST', '/policy/reload', { signal }); }
+
+  subscriberPresence(realm: string, user: string, signal?: AbortSignal) {
+    return this.request<Presence>('GET', `/realms/${segment(realm)}/subscribers/${segment(user)}/presence`, { signal });
+  }
+  listPresenceSubscriptions(signal?: AbortSignal) {
+    return this.request<PresenceSubscription[]>('GET', '/presence/subscriptions', { signal });
+  }
+
+  /**
+   * Read with `fetch` and a stream reader, since `EventSource` cannot send
+   * the bearer. A refusal goes through the session callbacks as any request
+   * does; an abort resolves quietly.
+   */
+  async events(onEvent: (event: BusEvent) => void, signal: AbortSignal, onOpen?: () => void): Promise<void> {
+    const headers: Record<string, string> = { Accept: 'text/event-stream' };
+    const token = this.token();
+    if (token) headers.Authorization = `Bearer ${token}`;
+    let response: Response;
+    try {
+      response = await this.http(`${this.baseUrl}/api/v1/events`, { method: 'GET', headers, signal });
+    } catch (cause) {
+      if (signal.aborted) return;
+      throw cause;
+    }
+    if (!response.ok) {
+      const failure = await describeFailure(response);
+      if (failure.isUnauthorized) this.onUnauthorized(failure);
+      if (failure.isForbidden) this.onForbidden(failure);
+      throw failure;
+    }
+    if (!response.body) throw new ApiError('the node sent no event stream', response.status);
+    onOpen?.();
+    const parser = new EventStreamParser(onEvent);
+    const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+    try {
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) return;
+        parser.push(value);
+      }
+    } catch (cause) {
+      if (signal.aborted) return;
+      throw cause;
+    } finally {
+      reader.releaseLock();
+    }
+  }
   mediaEngine(signal?: AbortSignal) { return this.request<MediaEngine>('GET', '/media', { signal }); }
   listMediaReoffers(signal?: AbortSignal) { return this.request<MediaReoffer[]>('GET', '/media/reoffers', { signal }); }
   listQualifiedClients(signal?: AbortSignal) { return this.request<QualifiedClient[]>('GET', '/qualify', { signal }); }

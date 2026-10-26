@@ -121,9 +121,21 @@ export interface SubscriberLine {
   password: string;
 }
 
+/**
+ * A namespace of conference rooms (RFC 4579): a URI in the realm whose user
+ * part starts with `prefix` is a room, served by the focus trunk named.
+ */
+export interface ConferencePrefix {
+  prefix: string;
+  /** The focus trunk's name. */
+  trunk: string;
+}
+
 /** What a realm expects of a client, in `GET /subscriber/{realm}/config`. */
 export interface RealmClientPolicy {
   name: string;
+  /** The rooms a client may dial; empty when the realm has no focus. Absent from a node before conferencing. */
+  conferences?: ConferencePrefix[];
   /** Seconds granted when a client asks for none, and the shortest taken (0 for no minimum). */
   registration: { expires?: number; minimum?: number };
   /** How many flows to keep, each to a different node (RFC 5626). */
@@ -159,7 +171,34 @@ export interface ClusterNode {
   at?: string;
   /** One per enabled SIP transport. A transport that is off is absent, not listed as off. */
   transports: NodeTransport[];
+  /** Where a peer reaches this node's inter-node listener. Absent for this node and outside a cluster. */
+  cluster?: { address: string; port: number };
+  /**
+   * The routing policy the node last reported: its driver and, for scripts,
+   * a SHA-256 of the scripts loaded. The nodes of one cluster should agree.
+   * Absent for a node that has reported none.
+   */
+  policy?: PolicyReport;
 }
+
+/** A node's routing policy. `builtin://` has no fingerprint. */
+export interface PolicyReport {
+  /** Such as `lua 1.0.0` or `builtin 1.0.0`. */
+  driver: string;
+  fingerprint?: string;
+}
+
+/** How a leg sends key presses: RFC 4733 telephone-events, SIP INFO or tones in the audio. */
+export type DtmfMode = 'auto' | 'rfc4733' | 'info' | 'inband';
+
+export const DTMF_MODES: readonly DtmfMode[] = ['auto', 'rfc4733', 'info', 'inband'];
+
+/**
+ * Anything a routing script reads (the server's `docs/scripting.md`); the
+ * node reads none of it, except a trunk's `focus` for its API views. Replaced
+ * whole when given, so a client sends all of it or none of it.
+ */
+export type Attributes = Record<string, unknown>;
 
 /** What the media engine is asked to produce for a leg that has not said what it speaks. */
 export type MediaProfile = 'mirror' | 'transport' | 'rtp' | 'webrtc' | 'srtp';
@@ -175,6 +214,8 @@ export interface Behaviour {
   /** Whether this node puts itself in the media path when a media engine is configured. */
   media_anchor?: boolean | null;
   media_profile?: MediaProfile | null;
+  /** How a leg sends key presses; `auto` reads it from the leg's offer and never means INFO. */
+  dtmf?: DtmfMode | null;
   /** Seconds between OPTIONS to each registered client; 0 for never, otherwise 5 to 86400. */
   qualify_interval?: number | null;
   /**
@@ -184,10 +225,15 @@ export interface Behaviour {
   rewrite_contact?: boolean | null;
 }
 
+/** A realm's own behaviour as read back: every setting present, `dtmf` only from a node that has it. */
+export type RealmBehaviour = Required<Omit<Behaviour, 'dtmf'>> & { dtmf?: DtmfMode | null };
+
 /** A complete behaviour: what a realm's comes to, or the server's own. */
 export interface BehaviourEffective {
   media_anchor: boolean;
   media_profile: MediaProfile;
+  /** Absent from a node before 0.13.0. */
+  dtmf?: DtmfMode;
   qualify_interval: number;
   rewrite_contact: boolean;
 }
@@ -201,14 +247,16 @@ export interface Realm {
   name: string;
   /** Rounded; see the top of this file. */
   id: number;
-  /** How long a Digest nonce stays good, in seconds. 3600 when not given. */
+  /** How long a Digest nonce stays good, in seconds. 300 when not given. */
   nonce_expiry: number;
+  /** For the routing scripts. Absent from a node that has none to give. */
+  attributes?: Attributes;
   /** The longest registration this realm grants, in seconds. 5000 when not given. */
   registration_timeout: number;
   /** The shortest registration it accepts, in seconds. Zero accepts any. */
   registration_minimum: number;
-  /** As the realm set it: every setting present, null where it inherits. */
-  behaviour: Required<Behaviour>;
+  /** As the realm set it: every setting present, null where it inherits. `dtmf` is absent from a node before 0.13.0. */
+  behaviour: RealmBehaviour;
   behaviour_effective: BehaviourEffective;
   /** The `behaviour:` section of the node that answered: what a null setting inherits. */
   behaviour_default: BehaviourEffective;
@@ -219,6 +267,8 @@ export interface RealmSettings {
   registration_timeout?: number;
   registration_minimum?: number;
   behaviour?: Behaviour;
+  /** Replaces the realm's attributes whole. Left out, they are left alone. */
+  attributes?: Attributes;
 }
 
 /** The server generates `nonce_secret` and never returns it. */
@@ -236,17 +286,21 @@ export interface Subscriber {
   uri: string;
   user: string;
   realm: string;
-  /** As the subscriber set it: null where it takes its realm's. */
-  behaviour: Required<SubscriberBehaviour>;
+  /** As the subscriber set it: null where it takes its realm's. `dtmf` is absent from a node before 0.13.0. */
+  behaviour: { media_profile: MediaProfile | null; dtmf?: DtmfMode | null };
+  /** For the routing scripts. Absent from a node that has none to give. */
+  attributes?: Attributes;
 }
 
 /**
- * The one behaviour setting that belongs to an endpoint: the media profile
- * first offered to it. Overrides the realm's and yields to what the endpoint
- * has itself said. Null takes the realm's; null in an update goes back to it.
+ * The behaviour settings that belong to an endpoint: the media profile first
+ * offered to it, and how it sends key presses. Each overrides the realm's;
+ * the profile yields to what the endpoint has itself said. Null takes the
+ * realm's; null in an update goes back to it.
  */
 export interface SubscriberBehaviour {
   media_profile?: MediaProfile | null;
+  dtmf?: DtmfMode | null;
 }
 
 /** The server computes HA1 from the password and keeps only that. */
@@ -254,12 +308,14 @@ export interface CreateSubscriber {
   user: string;
   password: string;
   behaviour?: SubscriberBehaviour;
+  attributes?: Attributes;
 }
 
-/** Either or both. A password left out is left alone. */
+/** Any of them. A password left out is left alone; attributes given replace the whole set. */
 export interface UpdateSubscriber {
   password?: string;
   behaviour?: SubscriberBehaviour;
+  attributes?: Attributes;
 }
 
 /** A live binding. Read only: only a REGISTER writes one. */
@@ -298,6 +354,8 @@ export interface CallParticipant {
   originator: boolean;
   /** What this participant's session description said it is; null until it has said. */
   profile: 'webrtc' | 'plain-rtp' | 'srtp-sdes' | null;
+  /** The trunk this leg came in by or left by, by name; null or absent for a subscriber's leg. */
+  trunk?: string | null;
 }
 
 /**
@@ -321,6 +379,8 @@ export interface CallLeg {
 
 export interface CallMedia {
   engine: string;
+  /** False when the engine holds nothing for the call. */
+  held?: boolean;
   /** Seconds all of the call's media has been silent; null when the engine cannot say. */
   idle_seconds: number | null;
   legs: CallLeg[];
@@ -351,6 +411,8 @@ export interface CallRecord {
 export interface Call {
   /** The Call-ID. */
   id: string;
+  /** The conference URI this call is a leg of (RFC 4579); null or absent for a call between two. */
+  focus?: string | null;
   state: CallState;
   /** ISO 8601. */
   created_at: string | null;
@@ -399,4 +461,122 @@ export interface QualifiedClient {
   unanswered: number;
   /** What media the client said it takes, when its answer carried a description. */
   said_media_profile: 'rtp' | 'webrtc' | 'srtp' | null;
+}
+
+/** One participant of a room, as the node routed them: one live call to the room's focus. */
+export interface ConferenceParticipant {
+  /** The participant's Call-ID. */
+  call: string;
+  /** Who joined, as a SIP URI. */
+  identity: string;
+  /** The subscriber's address of record, or null for a caller from a trunk. */
+  subscriber: string | null;
+  state: Exclude<CallState, 'Closed'>;
+  /** ISO 8601. */
+  joined_at: string;
+  /** The node carrying the participant's call. */
+  node: string;
+}
+
+/**
+ * `GET /conferences`: a room with somebody in it (RFC 4579), as the call
+ * records say. A room exists when someone dials it and the focus accepts:
+ * there is no creating or deleting one. What the focus itself knows of the
+ * room (its roster, mute state) is not here yet.
+ */
+export interface Conference {
+  /** The conference URI as dialled, such as `sip:conf-sales@example.com`. */
+  uri: string;
+  /** The focus trunk's name; null until the focus has answered a call. */
+  focus: string | null;
+  participants: ConferenceParticipant[];
+}
+
+/** What a trunk's `attributes.focus` says: the trunk is a conference focus for these rooms. */
+export interface FocusAttribute {
+  /** A URI whose user part starts with this is a room, such as `conf-`. */
+  prefix: string;
+  /** The realms whose rooms it serves; every realm when empty or absent. */
+  realms?: string[];
+  /** The focus's own conference profile, passed through to it. */
+  profile?: string;
+}
+
+/** A trunk's registration as the node registering it last reported it. */
+export interface TrunkRegistration {
+  node: string;
+  state: 'registering' | 'registered' | 'failed';
+  detail?: string;
+  /** Unix seconds. */
+  expires_at?: number;
+  at?: string;
+}
+
+/** What a trunk may be given. On a change, only the fields given change; the name cannot. */
+export interface TrunkWrite {
+  name?: string;
+  /** Where calls and the REGISTER go, located by RFC 3263. */
+  uri?: string;
+  /** An outbound proxy, where calls and the REGISTER are sent instead. */
+  proxy?: string;
+  /** For the carrier's challenges. */
+  username?: string;
+  /** Written, never returned. */
+  password?: string;
+  register?: { enabled?: boolean; expires?: number; contact_user?: string };
+  /** Addresses or CIDR ranges a call from the trunk comes from. */
+  inbound_addresses?: string[];
+  /** A CA file for TLS to the trunk; empty is the system's store. */
+  tls_ca?: string;
+  /** Replaced whole when given. `focus`, `dtmf`, `codes`, `prefixes` and `numbers` are the standard scripts'. */
+  attributes?: Attributes;
+}
+
+/** `GET /trunks`: a SIP peer the node sends calls to and takes them from. A focus is one. */
+export interface Trunk extends TrunkWrite {
+  name: string;
+  uri: string;
+  /** Whether a password is held; the password itself is never returned. */
+  password_set?: boolean;
+  /** Unix seconds. */
+  created_at?: number;
+  /** Null when the trunk does not register or no node has reported yet. */
+  registration?: TrunkRegistration | null;
+}
+
+/** The trunk sizes the node accepts for `register.expires`. */
+export const TRUNK_EXPIRES_MIN = 60;
+export const TRUNK_EXPIRES_MAX = 86400;
+
+/** `POST /policy/reload`: the rules now in force on the node that answered. */
+export type PolicyReload = PolicyReport;
+
+/** `GET /realms/{realm}/subscribers/{user}/presence`: a subscriber as its watchers are told. */
+export interface Presence {
+  subscriber: string;
+  basic: 'open' | 'closed';
+  /** Whether it is what the subscriber published, or only whether it has a registration. */
+  source: 'published' | 'registrations';
+  /** The PIDF document a `presence` watcher is sent. */
+  document?: string;
+  publications?: Array<{ etag: string; [field: string]: unknown }>;
+  [field: string]: unknown;
+}
+
+/** `GET /presence/subscriptions`: one watcher of one presentity, across the cluster. */
+export interface PresenceSubscription {
+  id: string;
+  watcher: string;
+  presentity: string;
+  package: 'presence' | 'dialog';
+  node_id: string;
+  /** Unix seconds. */
+  expires_at: number;
+}
+
+/** One message from `GET /events`: the bus topic it was published on, and its body. */
+export interface BusEvent {
+  topic: string;
+  /** The message, parsed when it is JSON and the text otherwise. */
+  data: unknown;
 }

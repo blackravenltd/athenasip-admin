@@ -12,10 +12,10 @@ describe('FakeAdminApi', () => {
     const api = new FakeAdminApi();
     const realm = await api.createRealm({ name: 'sip.example.org', registration_minimum: 30 });
     expect(realm).toMatchObject({
-      nonce_expiry: 3600, registration_timeout: 5000, registration_minimum: 30,
-      behaviour: { media_anchor: null, media_profile: null, qualify_interval: null, rewrite_contact: null },
-      behaviour_effective: { media_anchor: true, media_profile: 'mirror', qualify_interval: 0, rewrite_contact: false },
-      behaviour_default: { media_anchor: true, media_profile: 'mirror', qualify_interval: 0, rewrite_contact: false },
+      nonce_expiry: 300, registration_timeout: 5000, registration_minimum: 30,
+      behaviour: { media_anchor: null, media_profile: null, dtmf: null, qualify_interval: null, rewrite_contact: null },
+      behaviour_effective: { media_anchor: true, media_profile: 'mirror', dtmf: 'auto', qualify_interval: 0, rewrite_contact: false },
+      behaviour_default: { media_anchor: true, media_profile: 'mirror', dtmf: 'auto', qualify_interval: 0, rewrite_contact: false },
     });
   });
 
@@ -33,7 +33,7 @@ describe('FakeAdminApi', () => {
   it('puts a setting back to the server’s on null, and leaves alone one it is not given', async () => {
     const api = new FakeAdminApi();
     const realm = await api.updateRealm('sip.athenasip.org', { behaviour: { media_profile: null } });
-    expect(realm.behaviour).toEqual({ media_anchor: null, media_profile: null, qualify_interval: 60, rewrite_contact: null });
+    expect(realm.behaviour).toEqual({ media_anchor: null, media_profile: null, dtmf: null, qualify_interval: 60, rewrite_contact: null });
     expect(realm.behaviour_effective.media_profile).toBe('mirror');
   });
 
@@ -207,5 +207,68 @@ describe('FakeAdminApi', () => {
       await expect(api.session()).rejects.toMatchObject({ status: 401 });
       await expect(securedNode().api.login('ops', 'new')).rejects.toMatchObject({ status: 401 });
     });
+  });
+});
+
+describe('FakeAdminApi conferencing, trunks and the bus', () => {
+  it('groups the calls to a focus into a room, with the focus named once answered', async () => {
+    const api = new FakeAdminApi();
+    const [room] = await api.listConferences();
+    expect(room).toMatchObject({ uri: 'sip:conf-sales@sip.athenasip.org', focus: 'rooms' });
+    expect(room.participants.map((participant) => participant.identity)).toEqual(['sip:tom@sip.athenasip.org', 'sip:tomweb@sip.athenasip.org']);
+    expect((await api.listCalls()).filter((call) => call.focus === room.uri)).toHaveLength(2);
+  });
+
+  it('removes a participant from a room only by its own Call-ID, and tells the bus', async () => {
+    const api = new FakeAdminApi();
+    const seen: string[] = [];
+    const controller = new AbortController();
+    void api.events((event) => seen.push(event.topic), controller.signal);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await expect(api.removeConferenceParticipant('sip:conf-other@sip.athenasip.org', 'c0nf1@192.168.1.24')).rejects.toMatchObject({ status: 404 });
+    await api.removeConferenceParticipant('sip:conf-sales@sip.athenasip.org', 'c0nf1@192.168.1.24');
+    expect((await api.getConference('sip:conf-sales@sip.athenasip.org')).participants).toHaveLength(1);
+    expect(seen).toContain('calls/c0nf1@192.168.1.24/unregister');
+    controller.abort();
+    expect(api.eventListeners).toBe(0);
+  });
+
+  it('refuses to hang up a ringing call, which only its caller can cancel', async () => {
+    const api = new FakeAdminApi();
+    await expect(api.hangUpCall('3848276298220188511@203.0.113.40')).rejects.toMatchObject({ status: 409, code: 'not_answered' });
+    await api.hangUpCall('a84b4c76e66710@192.168.1.24');
+    expect((await api.listCalls()).map((call) => call.id)).not.toContain('a84b4c76e66710@192.168.1.24');
+  });
+
+  it('needs manage-cluster to end a call, and manage-trunks for trunks', async () => {
+    const { api } = await signedInAs('ops');
+    await expect(api.hangUpCall('a84b4c76e66710@192.168.1.24')).rejects.toMatchObject({ status: 403 });
+    await expect(api.listTrunks()).rejects.toMatchObject({ status: 403 });
+  });
+
+  it('never gives a trunk password back, and says whether one is held', async () => {
+    const api = new FakeAdminApi();
+    const created = await api.createTrunk({ name: 'carrier2', uri: 'sip:sip.carrier2.example', password: 'secret' });
+    expect(created).not.toHaveProperty('password');
+    expect(created.password_set).toBe(true);
+    await expect(api.createTrunk({ name: 'CARRIER2', uri: 'sip:x.example' })).rejects.toMatchObject({ status: 409 });
+    await expect(api.updateTrunk('carrier2', { register: { expires: 30 } })).rejects.toMatchObject({ status: 400 });
+  });
+
+  it('gives a subscriber the rooms of each focus serving its realm', async () => {
+    const api = new FakeAdminApi();
+    const line = (realm: string, user: string) => ({ realm, user, password: 'x' });
+    expect((await api.subscriberConfig(line('sip.athenasip.org', 'tom'))).realm?.conferences).toEqual([{ prefix: 'conf-', trunk: 'rooms' }]);
+    expect((await api.subscriberConfig(line('blackraven.co.nz', 'reception'))).realm?.conferences).toEqual([]);
+    await api.updateTrunk('rooms', { attributes: { focus: { prefix: '8' } } });
+    expect((await api.subscriberConfig(line('blackraven.co.nz', 'reception'))).realm?.conferences).toEqual([{ prefix: '8', trunk: 'rooms' }]);
+  });
+
+  it('keeps dtmf and attributes on a subscriber, replacing attributes whole', async () => {
+    const api = new FakeAdminApi();
+    const saved = await api.updateSubscriber('blackraven.co.nz', 'reception', { behaviour: { dtmf: 'rfc4733' }, attributes: { floor: 2 } });
+    expect(saved.behaviour).toEqual({ media_profile: null, dtmf: 'rfc4733' });
+    expect(saved.attributes).toEqual({ floor: 2 });
+    await expect(api.updateSubscriber('blackraven.co.nz', 'reception', { behaviour: { dtmf: 'morse' as never } })).rejects.toMatchObject({ status: 400 });
   });
 });

@@ -80,6 +80,18 @@ describe.skipIf(!present)('HttpAdminApi against the server OpenAPI document', ()
     await api.deleteUser('u');
     await api.changePassword('u', { password: 'p' });
     await api.revokeSessions('u');
+    await api.hangUpCall('a84b4c76e66710@pc33.atlanta.com');
+    await api.listConferences();
+    await api.getConference('sip:conf-sales@example.com');
+    await api.removeConferenceParticipant('sip:conf-sales@example.com', 'a84b4c76e66710@pc33.atlanta.com');
+    await api.listTrunks();
+    await api.createTrunk({ name: 't', uri: 'sip:t.example' });
+    await api.updateTrunk('t', { attributes: { focus: { prefix: 'conf-' } } });
+    await api.deleteTrunk('t');
+    await api.reloadPolicy();
+    await api.subscriberPresence('r', 'u');
+    await api.listPresenceSubscriptions();
+    await api.events(() => undefined, new AbortController().signal);
 
     const described = operations(readFileSync(DOCUMENT, 'utf8'));
     expect(described.size).toBeGreaterThan(0);
