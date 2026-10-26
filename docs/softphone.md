@@ -25,13 +25,22 @@ screens are used, until the user signs out of the console.
   before registering: changing a browser permission reloads the page.
 - **Ringing.** Tones are generated in the browser. A browser notification, once allowed,
   announces a call while the tab is hidden.
+- **Conferences.** In a realm with a conference focus, a room name and Join, or Join with
+  video, dial `sip:<prefix><name>@<realm>`: one ordinary call, mixed by the focus (RFC 4579),
+  so mute, hold, tones and hang-up are as on any call. A room exists once somebody dials it.
+  A call to a room, joined here or dialled by hand, shows as "In conference conf-sales" with
+  who the node routed to it, from `GET /conferences/{uri}`, re-read on the event stream or
+  every 5 s without it. That is the node's view, not yet the focus's own roster with mute
+  state. Muting others, locking and creating rooms belong to the focus and are not offered.
 - **Remembered** in the browser: the SIP address, the WebSocket and the devices. Never the
   password.
 
 Where to connect and what to use for ICE come from `GET /subscriber/{realm}/config`, signed
 with HTTP Digest using the line's own SIP address and password, so the console user needs no
-role for them. The phone asks when it registers with the WebSocket field left empty, and again
-as each call is placed or answered, because TURN credentials expire. The password is held in
+role for them. The phone asks when it registers, for where to connect when the WebSocket field
+is left empty and for the realm's conference prefixes (`realm.conferences`) either way, and
+again as each call is placed or answered, because TURN credentials expire. A failed request
+never stops registering or calling; it leaves the phone with no rooms. The password is held in
 memory while the line is in use. The request is sent with `credentials: 'omit'`, so the
 browser does not offer its own login box on the challenge. A console served over plain http
 answers with MD5, because a browser gives WebCrypto's SHA-256 only to a secure context.
@@ -42,6 +51,7 @@ The rest uses the console user's roles, and each part says so when a role is mis
 | --- | --- | --- |
 | `GET /call-records` | View cluster status | No recent calls. |
 | `GET /registrations` | View cluster status | The directory does not show who is registered. |
+| `GET /conferences/{uri}` | View cluster status | A room's call shows no roster. |
 | `GET /realms/{realm}/subscribers` | Manage subscribers | The directory lists only who is registered now. |
 
 On an https page the phone signals over the node's `wss` listener (`websocket_uri`); on an

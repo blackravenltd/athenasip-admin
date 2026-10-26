@@ -9,16 +9,22 @@
 The administration console for [AthenaSIP](https://github.com/blackravenltd/athenasip), with
 a browser phone. It is a static React bundle that the SIP server serves beside its admin API.
 
-It needs an AthenaSIP node at 0.9.0 or later, and is tested against 0.12.0. Routing scripts,
-trunks, the attributes scripts read and presence are not managed here yet: use the server's admin API and its
-[scripting guide](https://github.com/blackravenltd/athenasip/blob/main/docs/scripting.md). See
+It needs an AthenaSIP node at 0.9.0 or later, and is tested against the server's `develop`
+after 0.12.0, which adds conferencing. Screens for what an older node lacks say so when it
+refuses them. The routing scripts themselves are not managed here: see the server's
+[scripting guide](https://github.com/blackravenltd/athenasip/blob/main/docs/scripting.md) and
 [what the console does not manage](docs/configuration.md#what-the-console-does-not-manage).
 
 ## Features
 
-* **Provisioning** - realms, subscribers, users and roles.
-* **Live view** - registrations, calls, the media engine and the cluster.
-* **A browser phone** - audio and video calls, dial pad, hold, mute, history and directory.
+* **Provisioning** - realms, subscribers, trunks, users and roles, with the attributes routing
+  scripts read.
+* **Live view** - registrations, calls, conferences, call history, presence, the media engine
+  and the cluster, kept current by the node's event stream.
+* **Control** - hang up a call, remove someone from a conference, reload the routing scripts.
+* **Conferencing** - conference foci as trunks, the rooms in use and who is in them.
+* **A browser phone** - audio and video calls, dial pad, hold, mute, history, directory, and
+  joining a conference room.
 * **Low dependency** - React, React Router and JsSIP, with hand-written CSS.
 * **Same origin** - the node serves the bundle and the API, so nothing is cross-origin.
 

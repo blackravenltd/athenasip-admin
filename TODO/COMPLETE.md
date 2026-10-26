@@ -2,6 +2,29 @@
 
 What exists and works, by release. The commit history has the detail.
 
+## Unreleased, on develop (2026-10-26)
+
+Brought level with the server's develop after 0.12.0, agreed with the server session.
+
+- **Trunks.** A screen under SIP for `manage-trunks`: add, change and remove trunks, set or
+  remove a password, see each trunk's registration as its node reports it, and mark a trunk a
+  conference focus with its prefix and realms. Key presses and the full attributes beside.
+- **Conferencing.** Calls, Conferences lists the rooms in use and who is in each, and removes
+  a participant with `manage-cluster`. A call that is a leg of a room says so.
+- **A conference client.** The Phone learns its realm's rooms from its client configuration,
+  joins one with audio or video, and shows who the node routed to the room.
+- **The event stream.** One `GET /events` per tab, shared by every screen, reopened after a
+  drop; Overview, Calls, Conferences, Trunks, Presence and the Phone's roster follow it, and
+  poll while it is down.
+- **Control.** Hang up an answered call from Calls, and reload the routing scripts from
+  Overview, both with `manage-cluster`.
+- **The cluster.** Overview shows each node's routing scripts and its peer address, and flags
+  nodes that disagree on their scripts.
+- **History and presence.** Calls, History lists ended calls. SIP, Presence lists who watches
+  whom and looks up one subscriber's presence.
+- **Key presses and attributes.** Realms and subscribers set how phones send key presses, sent
+  only to a node that has the setting, and edit the attributes the routing scripts read.
+
 ## 0.4.2 (2026-10-13)
 
 - **No call without a microphone.** On a page that is not a secure context the phone fails a

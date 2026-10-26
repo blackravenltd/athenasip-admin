@@ -21,8 +21,9 @@ on both. 10.44.1.50 is the address to deploy to; `macnessa.macha.network` refuse
 **Decided by Tom (2026-10-11), in this order of work:**
 
 1. Milestone 5 now: Trunks screen, attributes, the policy fingerprint flag, trunk per leg.
-2. The event stream (`GET /events`) now, alongside, in place of polling.
-3. A Hang up button on Calls (`manage-cluster`).
+   Built 2026-10-26, uncommitted on `develop`.
+2. The event stream (`GET /events`) now, alongside, in place of polling. Built 2026-10-26.
+3. A Hang up button on Calls (`manage-cluster`). Built 2026-10-26.
 4. The Phone unregisters on tab close.
 5. The Phone registers with the realm's `registration.expires` and keeps `outbound.flows`
    flows to different nodes.
@@ -79,14 +80,32 @@ The server's `docs/api/openapi.yaml` and `docs/authentication.md` are the refere
   registration, outbound and push policy), `/subscriber/{realm}/registrations`,
   `PUT /subscriber/{realm}/password`. Signed with HTTP Digest using the subscriber's SIP
   credentials (HTTP realm = SIP realm); a Bearer token is refused there.
-- **Not in the console yet:** `/trunks` (`manage-trunks`), `POST /policy/reload`
-  (`manage-cluster`, gives the driver and the scripts' fingerprint), `DELETE /calls/{call}`
-  (`manage-cluster`), `GET /events`, and `attributes` on realms, subscribers and trunks
-  (replaced whole when given; the console never sends them), and presence (node 0.12.0):
-  `GET /realms/{realm}/subscribers/{user}/presence` (`manage-realm-subscribers`, 404
-  `presence_off`), `GET /presence/subscriptions` (`view-cluster-status`), and
-  `presence/<aor>/changed` on `/events`. The server's `docs/presence.md` is the reference.
-- **Status** (`view-cluster-status`): `/nodes`, `/registrations`, `/calls`, `/calls/{call}`, `/call-records`, `/media`, `/media/reoffers`,
+- **Trunks** (`manage-trunks`): `/trunks` CRUD, password never returned (`password_set`),
+  `registration` {node, state registering|registered|failed, detail (the carrier's response
+  line, or the reason), expires_at (Unix seconds, 0 while not registered), at (ISO 8601)}.
+  `attributes` the standard scripts read: `prefixes`, `numbers`, `codes`, `dtmf`, `focus`.
+- **Attributes** on realms, subscribers and trunks are replaced whole when given; the console
+  sends them only when edited.
+- **Key presses:** `behaviour.dtmf` (auto, rfc4733, info, inband) on realms and subscribers,
+  after 0.12.0. An older node refuses it with a 400, so the console sends it only when the
+  node gave `dtmf` in `behaviour_default` or `behaviour_effective`.
+- **Control** (`manage-cluster`): `DELETE /calls/{call}` (202; 409 `not_answered`),
+  `POST /policy/reload` (the answering node only; 422 when the scripts do not load).
+- **Events:** `GET /events` (`view-cluster-status`) carries `nodes/#`, `subscribers/#`,
+  `calls/#`, `trunks/#` and `presence/#`; 503 `too_many_streams` past 32 per node.
+- **Presence** (node 0.12.0): `GET /realms/{realm}/subscribers/{user}/presence`
+  (`manage-realm-subscribers`, 404 `presence_off`), `GET /presence/subscriptions`
+  (`view-cluster-status`). The server's `docs/presence.md` is the reference.
+- **Conferencing** (server develop after 0.12.0, RFC 4579): a focus is a trunk with
+  `attributes.focus` {prefix, realms, profile}; routed by `lua://` only, never `builtin://`.
+  `GET /conferences` and `/conferences/{uri}` (`view-cluster-status`; the URI percent-encoded
+  as one segment): {uri, focus (trunk, null until answered), participants [{call, identity,
+  subscriber, state, joined_at, node}]}. `DELETE /conferences/{uri}/calls/{call}`
+  (`manage-cluster`; 404, 409 `not_answered`). `focus` on each call. `realm.conferences`
+  [{prefix, trunk}] in `/subscriber/{realm}/config`. No create, delete, mute or lock: those are
+  the focus's. The server's `docs/design/conferencing.md` is the reference.
+- **Status** (`view-cluster-status`): `/nodes` (with each node's `policy` and `cluster`),
+  `/registrations`, `/calls`, `/calls/{call}`, `/call-records`, `/media`, `/media/reoffers`,
   `/qualify`. Call counters are cumulative; a direction the engine does not count is absent.
 
 ## Rules
@@ -144,38 +163,33 @@ Not reopened without asking Tom.
 - [ ] Generate `src/api/types.ts` from the OpenAPI document; the contract test does not check
       fields.
 - [ ] Server-side paging in place of `usePagination`, once the server pages.
-- [ ] A screen for `manage-cluster`, once the server has routes for it.
 
 ## Live view
 
-- [ ] Replace polling of `/nodes` and `/calls` with `GET /events` (on server develop): a
-      `text/event-stream` with one event per message on `nodes/#`, `subscribers/#` and
-      `calls/#` (event name is the topic, data the message JSON), keep-alives every 15 s,
-      `retry: 5000`. Needs `view-cluster-status` and the Bearer header, so fetch with a
-      streaming reader, not `EventSource`. 503 `too_many_streams` past 32 per node: fall back
-      to polling.
-- [ ] Finished calls from `/call-records` on the Calls screen.
-- [ ] The cluster entry from `/nodes` on Overview.
-- [ ] Hang up a call from the Calls screen with `DELETE /calls/{call}` (server ed9141f), shown
-      only with `manage-cluster`. 202 means BYEs sent and the call leaves `/calls` as the ends
-      answer; 404 no such live call; 409 `not_answered` for a ringing call, which only its
-      caller can CANCEL. The Call-ID is percent-encoded, as for GET.
 - [ ] Match legs to participants, once the node fills `participant`.
+- [ ] Watch the event stream against corvus-fi-1: one stream per tab, reconnects, and the
+      fallback to polling on a 503.
 - [ ] The media engine's settings, once the server exposes them.
 
-## Trunks and scripts (server Milestone 5)
+## Conferencing
 
-- [ ] A Trunks screen over `/trunks` (`manage-trunks`): list, add, change, remove, and set a
-      password (never returned; `password_set` says whether one is held). Show each trunk's
-      `registration` (`node`, `state` registering, registered or failed, `detail`,
-      `expires_at`, `at`, or null).
-- [ ] Attributes on realms, subscribers and trunks: show them and edit them as a whole, since
-      the node replaces `attributes` whole when given.
-- [ ] Flag a policy fingerprint mismatch on Overview: nodes of one cluster should agree on
-      `policy.fingerprint` on `GET /nodes` (server 5fbf3f3), each node's own entry included.
-      `policy` is absent for a node that reported none; `builtin 1.0.0` has no fingerprint.
-- [ ] The trunk a call leg ran over on Calls and in call records: each participant's `trunk`
-      (string or null).
+Built 2026-10-26 against the server's develop: Trunks edits a focus, Calls, Conferences lists
+the rooms in use and removes a participant, and the Phone joins a room and shows who the node
+routed to it.
+
+- [ ] The focus's own roster and mute state (server step 6): `users` on `Conference`, and
+      `conferences/<uri>/changed` on `/events`, which the server will announce.
+- [ ] `/focuses`, a read view of the focus trunks, once the server builds it.
+- [ ] A call the focus places to the Phone is not recognised as a room; only one dialled is.
+- [ ] Nothing to change here: the server will canonicalise a room (`sip:`, user as dialled,
+      host lowercased, no port or parameters) on the call and on `{uri}`, so the Phone keeps
+      asking with the target as dialled. Check once the server's conference commit lands.
+- [ ] The server is moving conference routing and the REGISTER refusal out of `builtin://`,
+      and canonicalising rooms; it will say when that is pushed. (What `""` clears on a trunk,
+      the stateless nonces and `trunks/#` on `/events` landed in server e3231a8; the contract
+      test passes against it.)
+- [ ] Try it against a node with FreeSWITCH as the focus (server step 5), video included
+      (step 7).
 
 ## Settings and security
 

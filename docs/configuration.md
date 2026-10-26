@@ -31,12 +31,12 @@ user has none.
 
 | Role | What it permits |
 | --- | --- |
-| View cluster status | Read nodes, registrations, calls and the media engine. |
-| Manage realms | Create, change and remove realms and their behaviour. |
-| Manage subscribers | Create, change and remove a realm's subscribers. |
+| View cluster status | Read nodes, registrations, live calls, conferences, call history, presence and the media engine. Opens the event stream that keeps those screens current. |
+| Manage realms | Create, change and remove realms, their behaviour and their attributes. |
+| Manage subscribers | Create, change and remove a realm's subscribers and their attributes, and look up one's presence. |
 | Manage users | Create, change and remove users and their roles. |
-| Manage cluster | End live calls and reload the routing scripts. No screen uses it yet. |
-| Manage trunks | Create, change and remove trunks and set their passwords. No screen uses it yet. |
+| Manage cluster | Hang up a live call, remove someone from a conference, and reload the routing scripts of the node the console talks to. |
+| Manage trunks | Create, change and remove trunks, conference foci among them, and set their passwords. |
 
 A trunk's password is kept as given, not hashed, so give Manage trunks to as few users as
 possible.
@@ -44,24 +44,41 @@ possible.
 The console hides what a user's roles do not allow; the node's 403 is what enforces it. The
 model is the server's, in its `docs/authentication.md`.
 
+## Conferencing
+
+A conference room is a name dialled in a realm, such as `conf-sales`, that a conference focus
+answers to (RFC 4579). The focus, FreeSWITCH or another, mixes the media; the node routes each
+participant's call to it. To set one up:
+
+1. Add the focus as a trunk under **SIP, Trunks**, and tick **Conference focus**: the prefix
+   that makes a name a room, and the realms whose rooms it serves (every realm when none is
+   named). A numeric prefix such as `8` suits phones that cannot dial letters.
+2. Run the node with the standard Lua scripts (`lua://`). `builtin://` does not route rooms.
+
+There is nothing to create per room: it exists while somebody is in it. **Calls,
+Conferences** lists the rooms in use and who is in each, and with Manage cluster removes
+someone. The Phone joins a room from its **Conferences** panel, or by dialling the name. A desk
+phone's busy lamp key for a room lights while anyone is in it.
+
+Muting someone and locking a room belong to the focus and are not offered. The participants
+listed are the calls the node routed; the focus's own roster, with who is muted, comes with
+the server's next conferencing step.
+
 ## What the console does not manage
 
-The node can do more than the console shows. Until it does, use the admin API
+The node can do more than the console shows. For the rest, use the admin API
 (`docs/api/openapi.yaml` in the server) or the server's own tools:
 
 | On the node | How | Role |
 | --- | --- | --- |
 | Routing and authorisation scripts (`lua://`) | The server's [scripting guide](https://github.com/blackravenltd/athenasip/blob/main/docs/scripting.md) | none, on the host |
-| Reloading the scripts | `POST /api/v1/policy/reload`, or `SIGHUP` on each node | Manage cluster |
-| Trunks | `/api/v1/trunks` | Manage trunks |
-| Attributes on a realm, subscriber or trunk | `attributes` on create or update | as for the record |
-| Ending a live call | `DELETE /api/v1/calls/{call}` | Manage cluster |
-| The event stream | `GET /api/v1/events` | View cluster status |
-| A subscriber's presence and dialogs | `GET /api/v1/realms/{realm}/subscribers/{user}/presence` | Manage subscribers |
-| Who is watching whom (presence and BLF) | `GET /api/v1/presence/subscriptions` | View cluster status |
+| Reloading the scripts of a node other than the one the console talks to | `POST /api/v1/policy/reload` on that node, or `SIGHUP` | Manage cluster |
+| Muting or locking a conference | The focus's own tools | none |
+| Metrics, for a monitoring system | `GET /metrics`, outside `/api/v1` | as the API says |
 
-The console never sends `attributes`, and the node replaces them only when they are given,
-so changing a realm or subscriber here leaves what a script reads alone.
+A realm, subscriber or trunk's `attributes` are replaced whole when given, so the console
+sends them only when they were edited, and then all of them. Its media and key press settings
+go only to a node that has them.
 
 ## Rate limits
 

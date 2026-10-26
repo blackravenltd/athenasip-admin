@@ -7,14 +7,17 @@ src/
   main.tsx      Mounts the app and chooses the AdminApi: HTTP, or the in-memory fake.
   App.tsx       The shell: top bar, section bar, routes, and the phone it holds.
   app/          routes.ts (every path, named once) and navigation.ts.
-  api/          AdminApi, its HTTP implementation, the fake, types and errors.
+  api/          AdminApi, its HTTP implementation, the fake, types and errors; the event
+                stream's parser (sse.ts) and the one feed every screen shares (EventFeed.ts).
   auth/         The session, roles, and the sign-in screens.
   screens/      One file per screen. Each takes its AdminApi as a prop.
   realms/       A realm's behaviour settings, as form fields and as words.
-  phone/        The Phone section: host, screen, dial pad, ringing, devices, settings.
+  trunks/       A trunk as form state: the focus and key press fields beside its attributes.
+  phone/        The Phone section: host, screen, dial pad, ringing, devices, settings, and
+                the Conferences panel that joins a room and shows who is in it.
   softphone/    The JsSIP controller, the harness page and its contract.
-  components/   SectionNav, Modal, Status, VolumeMeter.
-  hooks/        useRefreshableAsync, useSubmit, usePagination.
+  components/   SectionNav, Modal, Status, VolumeMeter, AttributesField.
+  hooks/        useRefreshableAsync, useSubmit, usePagination, useEvents.
   styles/       tokens.css (palette), base.css (shell), admin.css (surfaces).
 e2e/            Playwright specs, run against a real node.
 ```
@@ -33,6 +36,34 @@ is the server's `docs/api/openapi.yaml`.
 
 Components never call `fetch`. A realm is addressed by name and a subscriber by user, never
 by id: the server's ids are 64-bit and would arrive rounded.
+
+## The event stream
+
+`GET /events` is the node's bus as Server-Sent Events, one event per message, named by its
+topic. `EventSource` cannot send a bearer token, so `HttpAdminApi.events` reads the stream with
+`fetch` and `EventStreamParser`.
+
+A node serves at most 32 streams, so a tab opens one, however many screens listen:
+`EventFeed` opens it with the first listener, closes it with the last, and reopens it after a
+drop. A screen listens through `useEventRefresh`, which reads its data again once a burst of
+events settles. The stream is a speed-up, never a dependency: a screen keeps a poll while the
+feed is not live, and a user without View cluster status never opens it.
+
+| Screen | Listens to | Without the stream |
+| --- | --- | --- |
+| Overview | `nodes/`, `subscribers/` | Refresh by hand |
+| Calls | `calls/` | Its two-second poll, which it keeps anyway: the media counters only move by reading them |
+| Conferences, the Phone's roster | `calls/` | Every five seconds |
+| Trunks | `trunks/` | Every ten seconds |
+| Presence | `presence/` | Refresh by hand |
+
+## Conferencing
+
+A room is a name a focus answers to (RFC 4579), and the node is not the focus: it routes each
+participant's call to a trunk whose `attributes.focus` names a prefix. So the console has no
+room records to manage. The Trunks screen edits the focus; Conferences lists
+`GET /conferences`, the live calls grouped by room; the Phone joins a room with one ordinary
+call, learning the realm's prefixes from `/subscriber/{realm}/config`.
 
 ## Authentication
 
