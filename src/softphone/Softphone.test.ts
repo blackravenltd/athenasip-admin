@@ -558,3 +558,45 @@ describe('Softphone flows', () => {
     expect(old.stopped).toBe(1);
   });
 });
+
+describe('Softphone refusals', () => {
+  const forbidden = (seconds?: number) => ({
+    status_code: 403,
+    getHeader: (name: string) => (name === 'Retry-After' && seconds !== undefined ? String(seconds) : undefined),
+  });
+
+  it('says how long the node is shutting the line out after repeated wrong passwords', () => {
+    const sip = stack();
+    const phone = new Softphone(sip);
+    phone.register(CONFIG);
+    sip.agents[0].emit('registrationFailed', { cause: 'Rejected', response: forbidden(120) });
+    expect(phone.state.notice).toBe('Registration failed: Rejected. The node is refusing this line for now, after too many failed attempts to sign in to it. Try again in 120 seconds.');
+  });
+
+  it('keeps JsSIP’s words alone for a plain 403', () => {
+    const sip = stack();
+    const phone = new Softphone(sip);
+    phone.register(CONFIG);
+    sip.agents[0].emit('registrationFailed', { cause: 'Rejected', response: forbidden() });
+    expect(phone.state.notice).toBe('Registration failed: Rejected');
+  });
+
+  it('says an unanswered registration may be a ban on this address', () => {
+    const sip = stack();
+    const phone = new Softphone(sip);
+    phone.register(CONFIG);
+    sip.agents[0].emit('registrationFailed', { cause: 'Request Timeout' });
+    expect(phone.state.notice).toMatch(/^Registration failed: Request Timeout\. The node did not answer\. .* up to 15 minutes\.$/);
+  });
+
+  it('says so when a call is refused with Retry-After', () => {
+    const sip = stack();
+    const phone = new Softphone(sip);
+    phone.register(CONFIG);
+    const [agent] = sip.agents;
+    agent.emit('registered', {});
+    phone.call('sip:1002@example.com');
+    lastSession(agent).emit('failed', { originator: 'remote', cause: 'Rejected', message: forbidden(30) });
+    expect(phone.state.notice).toMatch(/^Call failed: Rejected\. .*Try again in 30 seconds\.$/);
+  });
+});

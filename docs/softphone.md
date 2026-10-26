@@ -25,6 +25,11 @@ screens are used, until the user signs out of the console or closes the tab.
   stops. The line counts as registered while either flow is, and the page says how many nodes
   it is reachable through. JsSIP always registers `reg-id=1`; the console sets the second
   flow's `reg-id` itself (`src/softphone/jssip.ts`), and keeps one flow if JsSIP changes.
+- **Shut out.** After repeated wrong passwords the node refuses a line for a while with 403
+  and Retry-After, and the phone says for how long; an address with too many of its own may
+  get no answer for up to 15 minutes, which the phone says may be the reason when a request
+  times out. An address that signed in to the line in the last two hours is never shut out
+  by others' guessing.
 - **Closing the tab** unregisters, and ends a call in progress with a BYE. Both are sent as
   the page goes, so a browser that closes the socket first leaves the binding to expire. A
   page kept in the back-forward cache registers again when shown.

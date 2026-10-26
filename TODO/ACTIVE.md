@@ -190,6 +190,11 @@ fake does the same. Rooms need `lua://`.
 
 ## Settings and security
 
+- [ ] **For Tom:** the node publishes `security/auth_failed` {source, aor, reason, node, at}
+      and `security/banned` {source, seconds, node, at} (server 03033e2), and will put
+      `security/#` on `/events` if the console wants it. A live feed on Security shows only
+      what happens while it is open; a list of the bans in force, or lifting one, would need a
+      route the server does not have. Not asked for yet.
 - [ ] Read and edit the server's config, saying what applies live and what needs a restart.
 - [ ] TLS: certificate subject, issuer and expiry, cipher policy, `allow_unencrypted`.
 - [ ] "Terminate all calls" and "Restart server", with confirmation, once the server has them.

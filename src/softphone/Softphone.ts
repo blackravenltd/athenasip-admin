@@ -147,6 +147,25 @@ export function newInstanceId(): string {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
+/**
+ * Why the node refused, in words, when its answer says more than JsSIP's
+ * cause. A 403 with Retry-After is the node shutting the line out for a
+ * while after repeated wrong passwords, or this address past its allowance
+ * of challenges; no answer at all may be this address banned for its own.
+ * Undefined when there is nothing to add.
+ */
+export function refusal(message: unknown, cause: string | undefined): string | undefined {
+  const response = message as { status_code?: number; getHeader?: (name: string) => string | undefined } | undefined;
+  const after = Number(response?.getHeader?.('Retry-After'));
+  if (response?.status_code === 403 && Number.isFinite(after) && after > 0) {
+    return `The node is refusing this line for now, after too many failed attempts to sign in to it. Try again in ${after} seconds.`;
+  }
+  if (cause === 'Request Timeout') {
+    return 'The node did not answer. If wrong passwords were tried from this address, the node may be ignoring it for up to 15 minutes.';
+  }
+  return undefined;
+}
+
 /** `list` started from its `by`th entry and wrapped round, so each flow prefers a different node. */
 function rotate<T>(list: readonly T[], by: number): T[] {
   return [...list.slice(by), ...list.slice(0, by)];
@@ -311,7 +330,8 @@ export class Softphone {
       // Another flow still registered keeps the line up.
       if (flows > 0) { this.update({ flows }); return; }
       const cause = event.cause ?? 'no reason given';
-      this.update({ registration: 'failed', cause, notice: `Registration failed: ${cause}`, flows });
+      const why = refusal(event.response, event.cause);
+      this.update({ registration: 'failed', cause, notice: `Registration failed: ${cause}${why ? `. ${why}` : ''}`, flows });
     });
     // A dropped socket ends that flow's registration, whatever the registrar still holds.
     agent.on('disconnected', () => { if (mine()) lost(); });
@@ -450,7 +470,7 @@ export class Softphone {
     session.on('accepted', connected);
     session.on('confirmed', connected);
     session.on('ended', (event: EndEvent) => this.finish('ended', event.cause));
-    session.on('failed', (event: EndEvent) => this.finish('failed', event.cause));
+    session.on('failed', (event: EndEvent) => this.finish('failed', event.cause, refusal(event.message, event.cause)));
   }
 
   private observe(peer: RTCPeerConnection): void {
@@ -478,12 +498,12 @@ export class Softphone {
     snapshot();
   }
 
-  private finish(call: 'ended' | 'failed', cause: string | undefined): void {
+  private finish(call: 'ended' | 'failed', cause: string | undefined, why?: string): void {
     this.session = undefined;
     this.peer = undefined;
     this.remote = undefined;
     this.local = undefined;
-    const notice = call === 'failed' && cause ? `Call failed: ${cause}` : undefined;
+    const notice = call === 'failed' && cause ? `Call failed: ${cause}${why ? `. ${why}` : ''}` : undefined;
     this.update({ call, cause, notice });
   }
 
