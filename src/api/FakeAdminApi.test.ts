@@ -272,3 +272,12 @@ describe('FakeAdminApi conferencing, trunks and the bus', () => {
     await expect(api.updateSubscriber('blackraven.co.nz', 'reception', { behaviour: { dtmf: 'morse' as never } })).rejects.toMatchObject({ status: 400 });
   });
 });
+
+describe('FakeAdminApi rooms, named as the node names them', () => {
+  it('finds a room however its host was spelt, with whatever parameters were dialled', async () => {
+    const api = new FakeAdminApi();
+    const room = await api.getConference('sip:conf-sales@SIP.athenasip.org:5060;transport=ws');
+    expect(room.uri).toBe('sip:conf-sales@sip.athenasip.org');
+    await expect(api.getConference('sip:CONF-SALES@sip.athenasip.org')).rejects.toMatchObject({ status: 404 });
+  });
+});

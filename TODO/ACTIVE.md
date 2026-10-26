@@ -178,18 +178,13 @@ Not reopened without asking Tom.
 
 Built 2026-10-26 against the server's develop: Trunks edits a focus, Calls, Conferences lists
 the rooms in use and removes a participant, and the Phone joins a room and shows who the node
-routed to it.
+routed to it. The server names a room `sip:user@host`, host lowercased, no port or
+parameters, on the call and on `{uri}` (server 7cee716), so the Phone asks as dialled; the
+fake does the same. Rooms need `lua://`.
 
 - [ ] The focus's own roster and mute state (server step 6): `users` on `Conference`, and
       `conferences/<uri>/changed` on `/events`, which the server will announce.
 - [ ] `/focuses`, a read view of the focus trunks, once the server builds it.
-- [ ] Nothing to change here: the server will canonicalise a room (`sip:`, user as dialled,
-      host lowercased, no port or parameters) on the call and on `{uri}`, so the Phone keeps
-      asking with the target as dialled. Check once the server's conference commit lands.
-- [ ] The server is moving conference routing and the REGISTER refusal out of `builtin://`,
-      and canonicalising rooms; it will say when that is pushed. (What `""` clears on a trunk,
-      the stateless nonces and `trunks/#` on `/events` landed in server e3231a8; the contract
-      test passes against it.)
 - [ ] Try it against a node with FreeSWITCH as the focus (server step 5), video included
       (step 7).
 

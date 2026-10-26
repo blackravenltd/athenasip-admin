@@ -783,7 +783,7 @@ export class FakeAdminApi implements AdminApi {
 
   getConference(uri: string, signal?: AbortSignal): Promise<Conference> {
     return this.settle(STATUS, () => {
-      const room = this.rooms().find((candidate) => candidate.uri === uri);
+      const room = this.rooms().find((candidate) => candidate.uri === canonicalRoom(uri));
       if (!room) throw new ApiError('nobody is in that room', 404, 'not_found');
       return room;
     }, signal);
@@ -791,7 +791,7 @@ export class FakeAdminApi implements AdminApi {
 
   removeConferenceParticipant(uri: string, call: string, signal?: AbortSignal): Promise<void> {
     return this.settle(CLUSTER, () => {
-      const leg = this.calls.find((candidate) => candidate.id === call && candidate.focus === uri);
+      const leg = this.calls.find((candidate) => candidate.id === call && candidate.focus === canonicalRoom(uri));
       if (!leg) throw new ApiError('no live call with that Call-ID in that room', 404, 'not_found');
       if (leg.answered_age_s === null) {
         throw new ApiError('the focus has not answered yet; the caller ends it with a CANCEL', 409, 'not_answered');
@@ -1074,6 +1074,16 @@ type Caller = SessionInfo;
 const OPEN: Caller = { username: '', display_name: '', roles: [] };
 /** What an unsecured node treats every request as. */
 const EVERYTHING: Caller = { username: 'admin', display_name: 'Administrator', roles: [...ROLES] };
+
+/**
+ * A room as the node names it: `sip:` + the user part as dialled + `@` + the
+ * host lowercased, with no port, parameters or headers. The node records a
+ * call's room so and reads a `{uri}` so, whatever was dialled.
+ */
+export function canonicalRoom(uri: string): string {
+  const match = /^sips?:([^@;?>]+)@([^:;?>]+)/i.exec(uri.trim());
+  return match ? `sip:${match[1]}@${match[2].toLowerCase()}` : uri;
+}
 
 /** Usernames are compared case-insensitively and stored as given. */
 function same(a: string, b: string): boolean {
