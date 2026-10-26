@@ -150,6 +150,8 @@ export interface ClientConfig {
   websocket_uri?: string;
   /** Every node's secure WebSocket, this node first, to fail over to. */
   websocket_uris?: string[];
+  /** The nodes to fail over to, this one first, then the others that are up. */
+  nodes?: ClusterNode[];
   /** The same list `/nodes` gives. */
   transports: NodeTransport[];
   ice_servers: IceServer[];

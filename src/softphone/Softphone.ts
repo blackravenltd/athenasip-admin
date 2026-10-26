@@ -88,6 +88,8 @@ export interface SoftphoneState {
   heldByFarEnd?: boolean;
   /** A message for the person at the keyboard. */
   notice?: string;
+  /** How many flows (RFC 5626) the registrar holds for the line; absent before the first registers. */
+  flows?: number;
 }
 
 /** What a call sends. Devices are `deviceId`s; omitted means the default. */
@@ -104,6 +106,16 @@ export interface SoftphoneConfig {
   socket: string;
   uri: string;
   password: string;
+  /** Further WebSockets, other nodes', to fail over to, in order after `socket`. */
+  fallbacks?: string[];
+  /** Seconds to ask the registrar for; JsSIP's 600 when absent. */
+  expires?: number;
+  /**
+   * RFC 5626 flows to keep, each to a different node first, so the line
+   * stays reachable when one node goes; 1 when absent, and never more than
+   * there are sockets.
+   */
+  flows?: number;
 }
 
 /** One entry in the state history. */
@@ -118,8 +130,26 @@ export interface Transition {
 
 /** The part of JsSIP the controller uses; tests supply a fake. */
 export interface SipStack {
-  createUserAgent(configuration: UAConfiguration): UA;
+  /**
+   * A user agent for flow `flow` (RFC 5626 `reg-id`), 1 when absent. Throws
+   * when the stack cannot register a flow other than the first.
+   */
+  createUserAgent(configuration: UAConfiguration, flow?: number): UA;
   createSocket(url: string): UAConfiguration['sockets'];
+}
+
+/** A version 4 UUID from `getRandomValues`, which, unlike `randomUUID`, a page that is not a secure context has. */
+export function newInstanceId(): string {
+  const bytes = globalThis.crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+/** `list` started from its `by`th entry and wrapped round, so each flow prefers a different node. */
+function rotate<T>(list: readonly T[], by: number): T[] {
+  return [...list.slice(by), ...list.slice(0, by)];
 }
 
 export type Listener = (state: SoftphoneState) => void;
@@ -159,7 +189,10 @@ export class Softphone {
   private current: SoftphoneState = INITIAL;
   private readonly listeners = new Set<Listener>();
   private readonly transitions: Transition[] = [];
-  private agent?: UA;
+  /** One per flow, the first preferred for placing calls. */
+  private agents: UA[] = [];
+  /** The flows the registrar has accepted. */
+  private readonly registered = new Set<UA>();
   private session?: RTCSession;
   private peer?: RTCPeerConnection;
   private remote?: MediaStream;
@@ -211,31 +244,78 @@ export class Softphone {
     });
   }
 
+  /** How many flows the registrar holds for this line now. */
+  get flows(): number {
+    return this.registered.size;
+  }
+
+  /**
+   * Registers, over one flow or several. Each flow is its own JsSIP user
+   * agent with the same instance and its own `reg-id`, failing over across
+   * every socket given, starting from a different one. The line counts as
+   * registered while any flow is, and takes a call arriving on any.
+   */
   register(config: SoftphoneConfig): void {
     this.stopAgent();
     this.reset({ registration: 'connecting' });
-    try {
-      const agent = this.sip.createUserAgent({
-        sockets: this.sip.createSocket(config.socket),
-        uri: config.uri,
-        password: config.password,
-      });
-      agent.on('registered', () => this.update({ registration: 'registered', notice: undefined }));
-      agent.on('unregistered', () => this.update({ registration: 'unregistered' }));
-      agent.on('registrationFailed', (event: UnRegisteredEvent) => {
-        const cause = event.cause ?? 'no reason given';
-        this.update({ registration: 'failed', cause, notice: `Registration failed: ${cause}` });
-      });
-      agent.on('disconnected', () => {
-        // A dropped socket ends the registration, whatever the registrar still holds.
-        if (this.current.registration !== 'failed') this.update({ registration: 'unregistered' });
-      });
-      agent.on('newRTCSession', (event: RTCSessionEvent) => this.adopt(event));
+    const urls = [...new Set([config.socket, ...(config.fallbacks ?? [])].filter(Boolean))];
+    const wanted = Math.max(1, Math.min(Math.floor(config.flows ?? 1), urls.length));
+    const instance = wanted > 1 ? newInstanceId() : undefined;
+    for (let flow = 1; flow <= wanted; flow += 1) {
+      const order = rotate(urls, flow - 1);
+      // One socket is given as itself, as before; several with falling weights, the first preferred.
+      const sockets = order.length === 1
+        ? this.sip.createSocket(order[0])
+        : order.map((url, index) => ({ socket: this.sip.createSocket(url), weight: order.length - index })) as unknown as UAConfiguration['sockets'];
+      let agent: UA;
+      try {
+        agent = this.sip.createUserAgent({
+          sockets,
+          uri: config.uri,
+          password: config.password,
+          ...(config.expires ? { register_expires: config.expires } : {}),
+          ...(instance ? { instance_id: instance } : {}),
+        }, flow);
+      } catch (cause) {
+        // A further flow the stack cannot keep leaves the line with those it has.
+        if (flow > 1) break;
+        this.update({ registration: 'failed', notice: `Could not start: ${String(cause)}` });
+        return;
+      }
+      this.watch(agent);
+      this.agents.push(agent);
       agent.start();
-      this.agent = agent;
-    } catch (cause) {
-      this.update({ registration: 'failed', notice: `Could not start: ${String(cause)}` });
     }
+  }
+
+  /** Follows one flow's registration, and takes the calls that arrive on it. */
+  private watch(agent: UA): void {
+    // An agent of an earlier registration may still report as it stops; it no longer counts.
+    const mine = () => this.agents.includes(agent);
+    const lost = () => {
+      this.registered.delete(agent);
+      const flows = this.registered.size;
+      if (flows === 0 && this.current.registration !== 'failed') this.update({ registration: 'unregistered', flows });
+      else this.update({ flows });
+    };
+    agent.on('registered', () => {
+      if (!mine()) return;
+      this.registered.add(agent);
+      this.update({ registration: 'registered', notice: undefined, flows: this.registered.size });
+    });
+    agent.on('unregistered', () => { if (mine()) lost(); });
+    agent.on('registrationFailed', (event: UnRegisteredEvent) => {
+      if (!mine()) return;
+      this.registered.delete(agent);
+      const flows = this.registered.size;
+      // Another flow still registered keeps the line up.
+      if (flows > 0) { this.update({ flows }); return; }
+      const cause = event.cause ?? 'no reason given';
+      this.update({ registration: 'failed', cause, notice: `Registration failed: ${cause}`, flows });
+    });
+    // A dropped socket ends that flow's registration, whatever the registrar still holds.
+    agent.on('disconnected', () => { if (mine()) lost(); });
+    agent.on('newRTCSession', (event: RTCSessionEvent) => { if (mine()) this.adopt(event); });
   }
 
   unregister(): void {
@@ -250,14 +330,16 @@ export class Softphone {
 
   /** Audio only unless `media.video` is set. */
   call(target: string, ice: IceOptions = this.ice, media: CallMedia = {}): void {
-    if (!this.agent || this.session) return;
+    // A registered flow, the first preferred; with none registered, the first, which may still reach the node.
+    const agent = this.agents.find((candidate) => this.registered.has(candidate)) ?? this.agents[0];
+    if (!agent || this.session) return;
     if (insecure()) {
       this.update({ call: 'failed', notice: `Could not call: ${INSECURE}` });
       return;
     }
     this.update({ notice: undefined, cause: undefined });
     try {
-      this.agent.call(target, {
+      agent.call(target, {
         mediaConstraints: constraints(media),
         pcConfig: peerConfiguration(ice.servers, ice.relayOnly ?? false),
         rtcOfferConstraints: { offerToReceiveAudio: true, offerToReceiveVideo: media.video ?? false },
@@ -411,8 +493,10 @@ export class Softphone {
     this.peer = undefined;
     this.remote = undefined;
     this.local = undefined;
-    this.agent?.stop();
-    this.agent = undefined;
+    const agents = this.agents;
+    this.agents = [];
+    this.registered.clear();
+    for (const agent of agents) agent.stop();
   }
 
   private reset(patch: Partial<SoftphoneState>): void {

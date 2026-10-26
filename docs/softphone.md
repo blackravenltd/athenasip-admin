@@ -17,7 +17,17 @@ declined with 488.
 
 Any signed-in user can open it. It signs in to a line as a subscriber, separately from the
 console: SIP address and password. It stays registered, and keeps a call up, while other
-screens are used, until the user signs out of the console.
+screens are used, until the user signs out of the console or closes the tab.
+
+- **Registering.** For the lifetime the realm grants (`realm.registration.expires`), failing
+  over across every node's WebSocket, and on a cluster over two flows at once (RFC 5626,
+  `realm.outbound.flows`), each to a different node first, so calls still arrive when one node
+  stops. The line counts as registered while either flow is, and the page says how many nodes
+  it is reachable through. JsSIP always registers `reg-id=1`; the console sets the second
+  flow's `reg-id` itself (`src/softphone/jssip.ts`), and keeps one flow if JsSIP changes.
+- **Closing the tab** unregisters, and ends a call in progress with a BYE. Both are sent as
+  the page goes, so a browser that closes the socket first leaves the binding to expire. A
+  page kept in the back-forward cache registers again when shown.
 
 - **Calling.** A bare number or name dials that user in the line's own realm. Audio or video,
   answer or decline, mute, hold, and dial pad tones sent as RFC 4733 events in the media.
@@ -37,10 +47,12 @@ screens are used, until the user signs out of the console.
 
 Where to connect and what to use for ICE come from `GET /subscriber/{realm}/config`, signed
 with HTTP Digest using the line's own SIP address and password, so the console user needs no
-role for them. The phone asks when it registers, for where to connect when the WebSocket field
-is left empty and for the realm's conference prefixes (`realm.conferences`) either way, and
-again as each call is placed or answered, because TURN credentials expire. A failed request
-never stops registering or calling; it leaves the phone with no rooms. The password is held in
+role for them. The phone asks when it registers, for how to register and for the realm's
+conference prefixes (`realm.conferences`), and again as each call is placed or answered,
+because TURN credentials expire. With the WebSocket field filled in, the answer is waited for
+four seconds at most, and the typed WebSocket is used as given; the other nodes are added for
+failover only when it is one of the cluster's. A failed request never stops registering or
+calling; it leaves the phone on the one WebSocket, with no rooms. The password is held in
 memory while the line is in use. The request is sent with `credentials: 'omit'`, so the
 browser does not offer its own login box on the challenge. A console served over plain http
 answers with MD5, because a browser gives WebCrypto's SHA-256 only to a secure context.
@@ -86,7 +98,7 @@ While mounted, the page sets `window.__athenaSoftphone`:
 | Member | Gives |
 | --- | --- |
 | `version` | `1`. Bumped when a field changes meaning. |
-| `state()` | `registration`, `call`, `direction`, `remoteIdentity`, `cause`, `localSdp`, `remoteSdp`, the signalling, ICE and connection states, `notice`. |
+| `state()` | `registration`, `call`, `direction`, `remoteIdentity`, `cause`, `localSdp`, `remoteSdp`, the signalling, ICE and connection states, `notice`, and `flows`, how many flows the registrar holds. |
 | `history()` | Every state change since load, oldest first, with timestamps. |
 | `stats()` | A promise of the browser's counters. Top level is audio: packets and bytes each way, packets lost, the far end's level and accumulated energy, codec, DTLS state, and the selected candidate pair. `video`, when the call has any: `packetsSent`, `packetsReceived`, `framesDecoded`, `codec`. |
 | `video()` | Each end's video m-line (`port`, `direction`, `bundled`) and `outcome`: `accepted`, `bundled`, `declined` (port 0) or `absent`. |

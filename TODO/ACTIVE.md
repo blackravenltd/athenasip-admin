@@ -24,9 +24,10 @@ on both. 10.44.1.50 is the address to deploy to; `macnessa.macha.network` refuse
    Built 2026-10-26, uncommitted on `develop`.
 2. The event stream (`GET /events`) now, alongside, in place of polling. Built 2026-10-26.
 3. A Hang up button on Calls (`manage-cluster`). Built 2026-10-26.
-4. The Phone unregisters on tab close.
+4. The Phone unregisters on tab close. Built 2026-10-26.
 5. The Phone registers with the realm's `registration.expires` and keeps `outbound.flows`
-   flows to different nodes.
+   flows to different nodes. Built 2026-10-26: two JsSIP agents, the second's `reg-id` set
+   by a guarded shim.
 6. TURN on the nodes: asked of the server session.
 7. The phone spec reruns against macnessa over https when Tom lends the A85.
 8. Tom tries the Phone on corvus-fi-1 himself.
@@ -137,14 +138,13 @@ Not reopened without asking Tom.
 
 ## The phone
 
+- [ ] Prove two flows against a two-node cluster: both bindings at the registrar with one
+      instance and reg-ids 1 and 2, a call arriving with one node stopped.
+- [ ] Prove the un-REGISTER on tab close reaches a node in Chrome, Firefox and Safari.
 - [ ] Drive it against corvus-fi-1 from `https://10.35.1.20:8443`: register, call
       `athenaphone` and another subscriber, receive a call (ring, and a notification on a
       hidden tab), tones into something that listens, hold both ways, a device change, the
       silence warning. Everything past registration has only met fakes.
-- [ ] Unregister on tab close (waiting on Tom, above).
-- [ ] Failover across `websocket_uris` when a socket fails.
-- [ ] Register with the realm's `registration.expires` and keep `outbound.flows` flows, from
-      `/subscriber/{realm}/config`. `push` waits for push support.
 - [ ] Try the Digest-signed config in Chrome, Firefox and Safari against a node that has it:
       no browser login box on the 401 (`credentials: 'omit'`), MD5 over http, SHA-256 over https.
 - [ ] Use `/subscriber/{realm}/registrations` and `PUT /subscriber/{realm}/password`, if the
@@ -180,7 +180,6 @@ routed to it.
 - [ ] The focus's own roster and mute state (server step 6): `users` on `Conference`, and
       `conferences/<uri>/changed` on `/events`, which the server will announce.
 - [ ] `/focuses`, a read view of the focus trunks, once the server builds it.
-- [ ] A call the focus places to the Phone is not recognised as a room; only one dialled is.
 - [ ] Nothing to change here: the server will canonicalise a room (`sip:`, user as dialled,
       host lowercased, no port or parameters) on the call and on `{uri}`, so the Phone keeps
       asking with the target as dialled. Check once the server's conference commit lands.

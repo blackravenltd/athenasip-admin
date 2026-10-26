@@ -22,6 +22,9 @@ Brought level with the server's develop after 0.12.0, agreed with the server ses
   nodes that disagree on their scripts.
 - **History and presence.** Calls, History lists ended calls. SIP, Presence lists who watches
   whom and looks up one subscriber's presence.
+- **The Phone's registration.** It registers for the lifetime its realm grants, fails over
+  across every node's WebSocket, and on a cluster keeps two flows (RFC 5626), each to a
+  different node first. Closing the tab unregisters.
 - **Key presses and attributes.** Realms and subscribers set how phones send key presses, sent
   only to a node that has the setting, and edit the attributes the routing scripts read.
 

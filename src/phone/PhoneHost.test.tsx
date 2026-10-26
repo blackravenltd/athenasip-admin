@@ -16,8 +16,10 @@ class FakeAgent extends EventEmitter {
   sessions: FakeSession[] = [];
   calls: Array<{ target: string; options: { pcConfig?: RTCConfiguration; mediaConstraints?: MediaStreamConstraints } }> = [];
   constructor(readonly configuration: UAConfiguration) { super(); }
+  flow = 1;
+  stopped = 0;
   start() {}
-  stop() {}
+  stop() { this.stopped += 1; }
   call(target: string, options: { pcConfig?: RTCConfiguration; mediaConstraints?: MediaStreamConstraints }) {
     this.calls.push({ target, options });
     const session = new FakeSession();
@@ -42,8 +44,9 @@ function stack(): SipStack & { agents: FakeAgent[] } {
   const agents: FakeAgent[] = [];
   return {
     agents,
-    createUserAgent: (configuration) => {
+    createUserAgent: (configuration, flow = 1) => {
       const agent = new FakeAgent(configuration);
+      agent.flow = flow;
       agents.push(agent);
       return agent as unknown as UA;
     },
@@ -82,6 +85,8 @@ async function registered(sip = stack(), api: AdminApi = node(), roles: readonly
   const shown = show(sip, true, api, roles);
   fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'pw' } });
   fireEvent.click(screen.getByRole('button', { name: 'Register' }));
+  // The node's configuration is asked for first, which says how to register.
+  await vi.waitFor(() => expect(sip.agents.length).toBeGreaterThan(0));
   act(() => { sip.agents[0].emit('registered', {}); });
   await screen.findByText('Registered as 1001');
   return shown;
@@ -209,6 +214,7 @@ describe('PhoneHost', () => {
 
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'pw' } });
     fireEvent.click(screen.getByRole('button', { name: 'Register' }));
+    await vi.waitFor(() => expect(sip.agents.length).toBeGreaterThan(0));
     act(() => { sip.agents[0].emit('registered', {}); });
     fireEvent.change(await screen.findByLabelText('Number or address'), { target: { value: '1002' } });
     fireEvent.click(screen.getByRole('button', { name: 'Call' }));
@@ -285,6 +291,7 @@ describe('PhoneHost conferences', () => {
     show(sip, true, api, roles);
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'pw' } });
     fireEvent.click(screen.getByRole('button', { name: 'Register' }));
+    await vi.waitFor(() => expect(sip.agents.length).toBeGreaterThan(0));
     act(() => { sip.agents[0].emit('registered', {}); });
     await screen.findByText(/^Registered as /);
     await vi.waitFor(() => expect(config).toHaveBeenCalled());
@@ -334,6 +341,15 @@ describe('PhoneHost conferences', () => {
     expect(roster.textContent).toMatch(/In the room, joined 4 min ago/);
   });
 
+  it('shows a call from a room’s focus as that conference', async () => {
+    const { sip } = await on('sip:tomweb@sip.athenasip.org');
+    const session = new FakeSession();
+    session.remote_identity = { uri: { toString: () => 'sip:conf-sales@sip.athenasip.org' } };
+    act(() => { sip.agents[0].emit('newRTCSession', { originator: 'remote', session, request: {} }); });
+    act(() => { session.emit('accepted', {}); });
+    expect(await screen.findByRole('heading', { name: 'In conference conf-sales' })).toBeTruthy();
+  });
+
   it('says nobody else is in yet when the node knows no one in the room', async () => {
     const { sip } = await on('sip:tomweb@sip.athenasip.org');
     await dialByHand(sip, 'conf-support');
@@ -350,5 +366,48 @@ describe('PhoneHost conferences', () => {
     expect(screen.getByRole('heading', { name: 'In conference conf-sales' })).toBeTruthy();
     expect(screen.getByText(/Who is in the room comes from the node.s live calls, which need the View cluster status role/)).toBeTruthy();
     expect(roster).not.toHaveBeenCalled();
+  });
+});
+
+describe('PhoneHost registration', () => {
+  /** A page event as the browser fires it; jsdom has no PageTransitionEvent. */
+  const page = (type: 'pagehide' | 'pageshow', persisted: boolean) => Object.assign(new Event(type), { persisted });
+
+  it('unregisters as the tab closes', async () => {
+    const { sip } = await registered();
+    act(() => { window.dispatchEvent(page('pagehide', false)); });
+    expect(sip.agents[0].stopped).toBe(1);
+    act(() => { window.dispatchEvent(page('pageshow', false)); });
+    expect(sip.agents).toHaveLength(1);
+  });
+
+  it('registers again when a page kept in the back-forward cache is shown', async () => {
+    const { sip } = await registered();
+    act(() => { window.dispatchEvent(page('pagehide', true)); });
+    act(() => { window.dispatchEvent(page('pageshow', true)); });
+    await vi.waitFor(() => expect(sip.agents).toHaveLength(2));
+    expect(sip.agents[1].configuration).toMatchObject({ uri: 'sip:1001@10.35.1.20', password: 'pw' });
+  });
+
+  it('keeps a flow to each of two nodes, for as long as the realm grants, when the cluster asks', async () => {
+    const sip = stack();
+    const cluster: ClientConfig = {
+      ...CONFIG,
+      nodes: [
+        { id: 'a', self: true, transports: [{ transport: 'ws', address: '10.35.1.20', port: 8088, uri: '' }] },
+        { id: 'b', self: false, transports: [{ transport: 'ws', address: '10.44.1.50', port: 8088, uri: '' }] },
+      ],
+      realm: { name: '10.35.1.20', registration: { expires: 3600, minimum: 0 }, outbound: { flows: 2 }, push: [], conferences: [] },
+    };
+    const api = { ...node(), subscriberConfig: async () => cluster } as unknown as AdminApi;
+    show(sip, true, api, []);
+    fireEvent.change(screen.getByLabelText('SIP address'), { target: { value: 'sip:1001@10.35.1.20' } });
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'secret' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Register' }));
+    await vi.waitFor(() => expect(sip.agents).toHaveLength(2));
+    expect(sip.agents.map((agent) => agent.flow)).toEqual([1, 2]);
+    expect(sip.agents[0].configuration.register_expires).toBe(3600);
+    act(() => { sip.agents[0].emit('registered', {}); sip.agents[1].emit('registered', {}); });
+    expect(await screen.findByText('Reachable through 2 nodes, so calls still arrive if one of them stops.')).toBeTruthy();
   });
 });

@@ -10,6 +10,7 @@ class FakeAgent extends EventEmitter {
   calls: string[] = [];
   callOptions: Array<Record<string, unknown>> = [];
   sessions: FakeSession[] = [];
+  flow = 1;
   constructor(readonly configuration: UAConfiguration) { super(); }
   start() { this.started += 1; }
   stop() { this.stopped += 1; }
@@ -51,12 +52,14 @@ class FakePeer extends EventTarget {
   getStats() { return Promise.resolve(this.report as unknown as RTCStatsReport); }
 }
 
-function stack(): SipStack & { agents: FakeAgent[] } {
+function stack({ flowsKept = Infinity }: { flowsKept?: number } = {}): SipStack & { agents: FakeAgent[] } {
   const agents: FakeAgent[] = [];
   return {
     agents,
-    createUserAgent: (configuration) => {
+    createUserAgent: (configuration, flow = 1) => {
+      if (flow > flowsKept) throw new Error('cannot keep that flow');
       const agent = new FakeAgent(configuration);
+      agent.flow = flow;
       agents.push(agent);
       return agent as unknown as UA;
     },
@@ -464,3 +467,94 @@ function lastSession(agent: FakeAgent): FakeSession {
   if (!session) throw new Error('No session was created');
   return session;
 }
+
+describe('Softphone flows', () => {
+  const NODES = { ...CONFIG, socket: 'wss://a:8089', fallbacks: ['wss://b:8089', 'wss://c:8089'] };
+  const urls = (agent: FakeAgent) => (agent.configuration.sockets as unknown as Array<{ socket: { url: string }; weight: number }>)
+    .map(({ socket, weight }) => `${socket.url} ${weight}`);
+
+  it('keeps one flow by default, failing over across every node in order', () => {
+    const sip = stack();
+    new Softphone(sip).register({ ...NODES, expires: 300 });
+    expect(sip.agents).toHaveLength(1);
+    expect(urls(sip.agents[0])).toEqual(['wss://a:8089 3', 'wss://b:8089 2', 'wss://c:8089 1']);
+    expect(sip.agents[0].configuration.register_expires).toBe(300);
+    expect(sip.agents[0].configuration.instance_id).toBeUndefined();
+  });
+
+  it('keeps two flows of one instance, each preferring a different node', () => {
+    const sip = stack();
+    new Softphone(sip).register({ ...NODES, flows: 2 });
+    const [first, second] = sip.agents;
+    expect([first.flow, second.flow]).toEqual([1, 2]);
+    expect(first.configuration.instance_id).toBeTruthy();
+    expect(second.configuration.instance_id).toBe(first.configuration.instance_id);
+    expect(urls(second)[0]).toBe('wss://b:8089 3');
+  });
+
+  it('never keeps more flows than there are nodes', () => {
+    const sip = stack();
+    new Softphone(sip).register({ ...CONFIG, flows: 2 });
+    expect(sip.agents).toHaveLength(1);
+  });
+
+  it('stays registered while any flow is, and calls over one that is', () => {
+    const sip = stack();
+    const phone = new Softphone(sip);
+    phone.register({ ...NODES, flows: 2 });
+    const [first, second] = sip.agents;
+    first.emit('registered', {});
+    second.emit('registered', {});
+    expect(phone.flows).toBe(2);
+    first.emit('disconnected', { error: true });
+    expect(phone.state.registration).toBe('registered');
+    expect(phone.flows).toBe(1);
+    phone.call('sip:1002@example.com');
+    expect(second.calls).toEqual(['sip:1002@example.com']);
+    expect(first.calls).toEqual([]);
+    second.emit('disconnected', { error: true });
+    expect(phone.state.registration).toBe('unregistered');
+  });
+
+  it('fails the line only when no flow is registered', () => {
+    const sip = stack();
+    const phone = new Softphone(sip);
+    phone.register({ ...NODES, flows: 2 });
+    sip.agents[1].emit('registered', {});
+    sip.agents[0].emit('registrationFailed', { cause: 'Request Timeout' });
+    expect(phone.state.registration).toBe('registered');
+    sip.agents[1].emit('registrationFailed', { cause: 'Unauthorized' });
+    expect(phone.state).toMatchObject({ registration: 'failed', notice: 'Registration failed: Unauthorized' });
+  });
+
+  it('takes a call arriving on the second flow', () => {
+    const sip = stack();
+    const phone = new Softphone(sip);
+    phone.register({ ...NODES, flows: 2 });
+    sip.agents[1].emit('registered', {});
+    sip.agents[1].emit('newRTCSession', { originator: 'remote', session: new FakeSession(), request: {} });
+    expect(phone.state.call).toBe('incoming');
+  });
+
+  it('keeps the flows it can when the stack cannot keep another', () => {
+    const sip = stack({ flowsKept: 1 });
+    const phone = new Softphone(sip);
+    phone.register({ ...NODES, flows: 2 });
+    expect(sip.agents).toHaveLength(1);
+    sip.agents[0].emit('registered', {});
+    expect(phone.state.registration).toBe('registered');
+  });
+
+  it('pays no heed to an agent of an earlier registration as it stops', () => {
+    const sip = stack();
+    const phone = new Softphone(sip);
+    phone.register(CONFIG);
+    const old = sip.agents[0];
+    phone.register(CONFIG);
+    sip.agents[1].emit('registered', {});
+    old.emit('unregistered', {});
+    old.emit('disconnected', {});
+    expect(phone.state.registration).toBe('registered');
+    expect(old.stopped).toBe(1);
+  });
+});

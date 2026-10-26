@@ -57,6 +57,21 @@ export function signallingUri(config: ClientConfig, https: boolean): string | un
 }
 
 /**
+ * Every node's signalling WebSocket, this node's first, for a phone to fail
+ * over across and to keep a flow to each of: `websocket_uris` on an https
+ * page, and each node's `ws` listener on an http one, by the rule above.
+ */
+export function signallingUris(config: ClientConfig, https: boolean): string[] {
+  const first = signallingUri(config, https);
+  const others = https
+    ? config.websocket_uris ?? []
+    : (config.nodes ?? []).flatMap((node) => node.transports
+      .filter((entry) => entry.transport === 'ws')
+      .map((entry) => `ws://${entry.address}:${entry.port}`));
+  return [...new Set([first, ...others].filter((uri): uri is string => Boolean(uri)))];
+}
+
+/**
  * One end's video m-line in words. A bundled section at port 9, the discard
  * port, takes its address from the bundle's transport, so no port is shown.
  */

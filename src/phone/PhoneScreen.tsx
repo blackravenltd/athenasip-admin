@@ -100,6 +100,9 @@ export function PhoneScreen({ handle, settings, onSettings, aside }: {
               way a desk phone does. That is separate from your console sign-in. The address and
               connection are remembered here; the password never is.
             </p>
+            {registered && handle.flows > 1 && (
+              <p className="field-hint">Reachable through {handle.flows} nodes, so calls still arrive if one of them stops.</p>
+            )}
           </div>
           {registered && (
             <button className="secondary-button" type="button" onClick={handle.unregister}>Sign out of the line</button>
