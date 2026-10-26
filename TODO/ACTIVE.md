@@ -138,8 +138,11 @@ Not reopened without asking Tom.
 
 ## The phone
 
-- [ ] Prove two flows against a two-node cluster: both bindings at the registrar with one
-      instance and reg-ids 1 and 2, a call arriving with one node stopped.
+- [ ] Prove two flows against a two-node cluster: a call arriving at node A while flow 2 is
+      held by node B, and with one node stopped. The server has it planned as an interop case
+      under Docker and will report. On one node the server already proves two bindings side by
+      side, removal by instance and reg-id, and a call moved to the other flow on 408, 430 or a
+      closed flow; `jssip.test.ts` proves the REGISTER JsSIP sends for flow 2.
 - [ ] Prove the un-REGISTER on tab close reaches a node in Chrome, Firefox and Safari.
 - [ ] Drive it against corvus-fi-1 from `https://10.35.1.20:8443`: register, call
       `athenaphone` and another subscriber, receive a call (ring, and a notification on a
