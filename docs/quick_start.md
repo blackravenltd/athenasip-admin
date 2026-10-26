@@ -23,7 +23,9 @@ VITE_ATHENASIP_LIVE=true npm run dev
 ```
 
 The dev server proxies `/api` to `http://127.0.0.1:8080`; set `ATHENASIP_API` to point
-elsewhere. Sign in as a user of that node (see [configuration.md](configuration.md)).
+elsewhere. A node on another host answers plain HTTP only when its config sets
+`http.address`; otherwise use its HTTPS listener, such as `https://host:8443`, and for a
+snakeoil certificate run with `NODE_EXTRA_CA_CERTS` naming the server's CA. Sign in as a user of that node (see [configuration.md](configuration.md)).
 
 ## The screens
 
@@ -34,6 +36,6 @@ elsewhere. Sign in as a user of that node (see [configuration.md](configuration.
 | SIP | Realms and their behaviour, subscribers, registrations and probed clients. |
 | Calls | Live calls with per-leg packet rates, and a flag for one-way audio. |
 | Media | The media engine, each realm's media policy, and phones that refused an offer. |
-| Security | Which listeners are encrypted and which are not. |
+| Security | Which listeners are encrypted, and the addresses banned for guessing passwords. |
 | Users | Who can sign in, and their roles. |
 | Diagnostics | The softphone as the end-to-end run sees it, with the full negotiation. |

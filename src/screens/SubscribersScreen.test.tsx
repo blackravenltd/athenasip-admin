@@ -37,6 +37,15 @@ describe('SubscribersScreen', () => {
     expect(await screen.findByRole('group', { name: 'sales' })).toBeTruthy();
   });
 
+  it('will not submit a user that is not a SIP user part, and says why', async () => {
+    show(realmSubscribers('blackraven.co.nz'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Add a subscriber' }));
+    fireEvent.change(within(dialogue()).getByLabelText('User'), { target: { value: 'tom@home' } });
+    fireEvent.change(within(dialogue()).getByLabelText('Password'), { target: { value: 'x' } });
+    expect(within(dialogue()).getByRole('button', { name: 'Add subscriber' })).toHaveProperty('disabled', true);
+    expect(within(dialogue()).getByText(/cannot hold @/)).toBeTruthy();
+  });
+
   it('shows a taken user against the user field', async () => {
     show(realmSubscribers('blackraven.co.nz'));
     fireEvent.click(await screen.findByRole('button', { name: 'Add a subscriber' }));

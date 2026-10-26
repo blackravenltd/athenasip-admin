@@ -137,7 +137,7 @@ export default function App({ api, session, loginHint }: { api: AdminApi; sessio
 
               <Route path={routes.media} element={guard(['manage-realms', 'view-cluster-status'], <MediaScreen api={api} />)} />
 
-              <Route path={routes.security} element={guard(['view-cluster-status'], <SecurityScreen api={api} />)} />
+              <Route path={routes.security} element={guard(['view-cluster-status'], <SecurityScreen api={api} roles={roles} />)} />
               <Route path={routes.securityTls} element={guard(['view-cluster-status'], <TlsScreen api={api} />)} />
 
               <Route path={routes.users} element={guard(['manage-admin-users'], <UsersScreen api={api} username={info.username} />)} />

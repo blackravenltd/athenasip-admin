@@ -5,6 +5,7 @@ import { isConflict } from '../api/errors';
 import type { DtmfMode, Subscriber, MediaProfile } from '../api/types';
 import { DTMF_TEXT, MEDIA_PROFILE_TEXT } from '../realms/policy';
 import { DtmfField, SubscriberMediaField } from '../realms/PolicyFields';
+import { isSipUser, SIP_USER_RULE } from '../realms/names';
 import { AttributesField, attributesText, parseAttributes } from '../components/AttributesField';
 import { useRefreshableAsync } from '../hooks/useRefreshableAsync';
 import { useSubmit } from '../hooks/useSubmit';
@@ -23,6 +24,7 @@ function NewSubscriberDialogue({ api, realm, realmProfile, onClose, onSaved }: {
   const [profile, setProfile] = useState<MediaProfile | null>(null);
   const { busy, error, failure, clearError, run } = useSubmit();
   const taken = isConflict(failure);
+  const userWrong = user.trim() !== '' && !isSipUser(user.trim());
 
   const submit = () => {
     void run(() => api.createSubscriber(realm, { user: user.trim(), password, behaviour: { media_profile: profile } })).then((saved) => {
@@ -38,7 +40,7 @@ function NewSubscriberDialogue({ api, realm, realmProfile, onClose, onSaved }: {
       title={`Add a subscriber to ${realm}`}
       submitLabel="Add subscriber"
       busy={busy}
-      submitDisabled={!user.trim() || !password}
+      submitDisabled={!user.trim() || userWrong || !password}
       error={taken ? undefined : error}
       onSubmit={submit}
       onCancel={() => { clearError(); onClose(); }}
@@ -51,10 +53,11 @@ function NewSubscriberDialogue({ api, realm, realmProfile, onClose, onSaved }: {
           disabled={busy}
           autoComplete="off"
           spellCheck={false}
-          aria-invalid={taken || undefined}
+          aria-invalid={taken || userWrong || undefined}
           onChange={(event) => { setUser(event.target.value); if (taken) clearError(); }}
         />
         {taken && <span className="field-error" role="alert">{user.trim()}@{realm} already exists.</span>}
+        {userWrong && <span className="field-error">{SIP_USER_RULE}</span>}
       </label>
       <p className="field-hint">
         The part before the @. The subscriber&apos;s address is{' '}

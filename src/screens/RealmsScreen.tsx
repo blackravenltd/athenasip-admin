@@ -11,6 +11,7 @@ import { Empty, ErrorMessage, Loading } from '../components/Status';
 import { realmSubscribers } from '../app/routes';
 import { DEFAULT_POLICY, DTMF_TEXT, describeBehaviour, describeSeconds, policyForm, policySettings, serverDefaults } from '../realms/policy';
 import { MediaFields, RegistrationFields } from '../realms/PolicyFields';
+import { isRealmName, REALM_NAME_RULE } from '../realms/names';
 import { AttributesField, attributesText, parseAttributes } from '../components/AttributesField';
 
 const PAGE_SIZE = 10;
@@ -32,6 +33,7 @@ function RealmDialogue({ api, realm, defaults, onClose, onSaved }: {
   const checked = policySettings(form, defaults.dtmf !== undefined);
   const parsed = parseAttributes(attributes);
   const problem = 'problem' in checked ? checked.problem : 'problem' in parsed ? parsed.problem : undefined;
+  const nameWrong = !realm && name.trim() !== '' && !isRealmName(name.trim());
   // A taken name belongs beside the name, not in the dialogue's general slot.
   const nameTaken = !realm && isConflict(failure);
 
@@ -55,7 +57,7 @@ function RealmDialogue({ api, realm, defaults, onClose, onSaved }: {
       title={realm ? `Edit ${realm.name}` : 'Add a realm'}
       submitLabel={realm ? 'Save realm' : 'Add realm'}
       busy={busy}
-      submitDisabled={(!realm && !name.trim()) || Boolean(problem)}
+      submitDisabled={(!realm && !name.trim()) || nameWrong || Boolean(problem)}
       error={nameTaken ? undefined : error}
       onSubmit={submit}
       onCancel={() => { clearError(); onClose(); }}
@@ -70,10 +72,11 @@ function RealmDialogue({ api, realm, defaults, onClose, onSaved }: {
             autoComplete="off"
             spellCheck={false}
             placeholder="sip.example.org"
-            aria-invalid={nameTaken || undefined}
+            aria-invalid={nameTaken || nameWrong || undefined}
             onChange={(event) => { setName(event.target.value); if (nameTaken) clearError(); }}
           />
           {nameTaken && <span className="field-error" role="alert">{error}</span>}
+          {nameWrong && <span className="field-error">{REALM_NAME_RULE}</span>}
         </label>
       )}
       {!realm && (

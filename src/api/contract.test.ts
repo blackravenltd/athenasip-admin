@@ -84,6 +84,10 @@ describe.skipIf(!present)('HttpAdminApi against the server OpenAPI document', ()
     await api.listConferences();
     await api.getConference('sip:conf-sales@example.com');
     await api.removeConferenceParticipant('sip:conf-sales@example.com', 'a84b4c76e66710@pc33.atlanta.com');
+    await api.listBans();
+    await api.liftBan('2001:db8::5');
+    await api.listClosedAors();
+    await api.reopenAor('sip:alice@example.com');
     await api.listTrunks();
     await api.createTrunk({ name: 't', uri: 'sip:t.example' });
     await api.updateTrunk('t', { attributes: { focus: { prefix: 'conf-' } } });

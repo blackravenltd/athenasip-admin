@@ -25,6 +25,9 @@ Brought level with the server's develop after 0.12.0, agreed with the server ses
 - **The Phone's registration.** It registers for the lifetime its realm grants, fails over
   across every node's WebSocket, and on a cluster keeps two flows (RFC 5626), each to a
   different node first. Closing the tab unregisters.
+- **Guessing passwords.** Security lists the addresses banned and the SIP addresses closed for
+  guessing, and Manage cluster lifts them. The Phone says why the node refuses its line. Realm
+  and user names are checked against the node's rules before sending.
 - **Key presses and attributes.** Realms and subscribers set how phones send key presses, sent
   only to a node that has the setting, and edit the attributes the routing scripts read.
 

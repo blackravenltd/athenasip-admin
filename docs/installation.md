@@ -34,6 +34,10 @@ http:
     path: "../admin/"
 ```
 
+`http.address` matters: a node that leaves it out serves plain HTTP on 127.0.0.1 only, and its
+HTTPS listener on every interface. From another host, use HTTPS on such a node, or set
+`http.address: 0.0.0.0` as above (the node then warns that plain HTTP is exposed).
+
 The node needs no restart when the files change, and by default answers a client-side route
 such as `/phone` with `index.html` (`http.files.spa`). Serving the bundle from anywhere else
 makes the API cross-origin, which is not supported.

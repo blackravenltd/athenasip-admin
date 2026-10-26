@@ -3,6 +3,8 @@ import type {
   BusEvent,
   Call,
   CallRecord,
+  Ban,
+  ClosedAor,
   Conference,
   Presence,
   PresenceSubscription,
@@ -97,6 +99,19 @@ export interface AdminApi {
   getConference(uri: string, signal?: AbortSignal): Promise<Conference>;
   /** Ends one participant's call in a room (`manage-cluster`); 409 `not_answered` before the focus answers. */
   removeConferenceParticipant(uri: string, call: string, signal?: AbortSignal): Promise<void>;
+
+  /** The addresses banned for guessing passwords over SIP, soonest to end first. */
+  listBans(signal?: AbortSignal): Promise<Ban[]>;
+  /**
+   * Lifts a ban on every node and forgets the address's failures
+   * (`manage-cluster`). A 404 is a ban this node did not hold; the others are
+   * still told.
+   */
+  liftBan(source: string, signal?: AbortSignal): Promise<void>;
+  /** The addresses of record closed to strangers for guessing, soonest to end first. */
+  listClosedAors(signal?: AbortSignal): Promise<ClosedAor[]>;
+  /** Reopens an address of record on every node, as `liftBan` does an address (`manage-cluster`). */
+  reopenAor(aor: string, signal?: AbortSignal): Promise<void>;
 
   /** Every trunk (`manage-trunks`). Passwords are never returned. */
   listTrunks(signal?: AbortSignal): Promise<Trunk[]>;

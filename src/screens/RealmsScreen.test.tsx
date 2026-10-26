@@ -97,6 +97,16 @@ describe('RealmsScreen', () => {
     expect(within(dialogue()).getByText(/every phone would be refused/)).toBeTruthy();
   });
 
+  it('will not submit a realm that is not a host name, and says why', async () => {
+    show();
+    fireEvent.click(await screen.findByRole('button', { name: 'Add a realm' }));
+    const name = within(dialogue()).getByLabelText('Domain');
+    fireEvent.change(name, { target: { value: 'sip_example.org' } });
+    expect(within(dialogue()).getByRole('button', { name: 'Add realm' })).toHaveProperty('disabled', true);
+    expect(name.getAttribute('aria-invalid')).toBe('true');
+    expect(within(dialogue()).getByText(/A realm is a host name/)).toBeTruthy();
+  });
+
   it('shows a taken name against the name field, and keeps the dialogue open', async () => {
     show();
     fireEvent.click(await screen.findByRole('button', { name: 'Add a realm' }));

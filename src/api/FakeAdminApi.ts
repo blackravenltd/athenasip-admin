@@ -6,6 +6,8 @@ import type {
   Subscriber,
   Call,
   CallRecord,
+  Ban,
+  ClosedAor,
   Conference,
   FocusAttribute,
   Presence,
@@ -39,6 +41,7 @@ import type {
   UpdateAdminUser,
   UpdateRealm,
 } from './types';
+import { isRealmName, isSipUser } from '../realms/names';
 import { DTMF_MODES, MEDIA_PROFILES, QUALIFY_MAX, QUALIFY_MIN, ROLES, TRUNK_EXPIRES_MAX, TRUNK_EXPIRES_MIN } from './types';
 
 /** The server's shipped `behaviour:` defaults, which a realm inherits where it sets nothing. */
@@ -117,6 +120,9 @@ export class FakeAdminApi implements AdminApi {
   private records: StoredRecord[] = RECORDS;
   private trunks: Trunk[];
   private policy: PolicyReload = { ...POLICY };
+  /** Bans and closures, each ending at an instant in milliseconds. */
+  private bans: Array<Omit<Ban, 'seconds_left' | 'until'> & { ends: number }>;
+  private closed: Array<Omit<ClosedAor, 'seconds_left' | 'until'> & { ends: number }>;
   /** Who is listening on `events`, each with the topics it hears. */
   private listeners = new Set<(event: BusEvent) => void>();
   private reoffers: Array<Omit<MediaReoffer, 'last_at'> & { age_s: number }> = [{
@@ -171,6 +177,13 @@ export class FakeAdminApi implements AdminApi {
     this.subscribers[2].behaviour.dtmf = 'info';
     this.subscribers[2].attributes = { group: 'front-desk' };
     this.realms[1].attributes = { default_room: 'conf-sales' };
+    // Somebody guessing at the realms' passwords, banned on both nodes; and the line they were after.
+    const at = (seconds: number) => new Date(Date.now() + seconds * 1000).toISOString();
+    this.bans = [
+      { source: '198.51.100.23', node: 'sip-0001', since: at(-120), ends: Date.now() + 780_000 },
+      { source: '2001:db8::5', node: 'sip-0002', since: at(-40), ends: Date.now() + 860_000 },
+    ];
+    this.closed = [{ aor: 'sip:reception@blackraven.co.nz', node: 'sip-0001', since: at(-90), ends: Date.now() + 810_000 }];
     // A carrier that registers, and a FreeSWITCH conference focus for the first realm's rooms.
     this.trunks = [
       {
@@ -595,6 +608,7 @@ export class FakeAdminApi implements AdminApi {
     return this.settle(REALMS, () => {
       const name = realm.name?.trim();
       if (!name) throw new ApiError('name is required', 400, 'invalid_request');
+      if (!isRealmName(name)) throw new ApiError('name is a host name: letters, digits, hyphens and dots', 400, 'invalid_request');
       if (this.realms.some((candidate) => candidate.name === name)) {
         throw new ApiError(`realm ${name} already exists`, 409, 'conflict');
       }
@@ -637,6 +651,7 @@ export class FakeAdminApi implements AdminApi {
       this.find(realm);
       const user = subscriber.user?.trim();
       if (!user) throw new ApiError('user is required', 400, 'invalid_request');
+      if (!isSipUser(user)) throw new ApiError('user is a SIP user part: no @, colon, space or control character', 400, 'invalid_request');
       if (!subscriber.password) throw new ApiError('password or ha1 is required', 400, 'invalid_request');
       const behaviour = this.subscriberBehaviour(subscriber.behaviour);
       if (this.subscribers.some((candidate) => candidate.realm === realm && candidate.user === user)) {
@@ -775,6 +790,43 @@ export class FakeAdminApi implements AdminApi {
     this.calls = this.calls.filter((candidate) => candidate !== call);
     this.publish(`calls/${id}/state`, 'Closed');
     this.publish(`calls/${id}/unregister`, id);
+  }
+
+  listBans(signal?: AbortSignal): Promise<Ban[]> {
+    return this.settle(STATUS, () => this.inForce(this.bans), signal);
+  }
+
+  liftBan(source: string, signal?: AbortSignal): Promise<void> {
+    return this.settle(CLUSTER, () => {
+      const held = this.inForce(this.bans).some((ban) => ban.source === source);
+      this.bans = this.bans.filter((ban) => ban.source !== source);
+      if (!held) throw new ApiError('this node holds no ban on that address', 404, 'not_found');
+      return undefined;
+    }, signal);
+  }
+
+  listClosedAors(signal?: AbortSignal): Promise<ClosedAor[]> {
+    return this.settle(STATUS, () => this.inForce(this.closed), signal);
+  }
+
+  reopenAor(aor: string, signal?: AbortSignal): Promise<void> {
+    // Matched as sip:user@host with the host lowercased, as the node does.
+    const key = aor.replace(/@([^;>]*)$/, (_, host: string) => `@${host.toLowerCase()}`);
+    return this.settle(CLUSTER, () => {
+      const held = this.inForce(this.closed).some((closure) => closure.aor === key);
+      this.closed = this.closed.filter((closure) => closure.aor !== key);
+      if (!held) throw new ApiError('this node holds no closure of that address of record', 404, 'not_found');
+      return undefined;
+    }, signal);
+  }
+
+  /** What has not ended yet, soonest to end first, as the node lists it. */
+  private inForce<T extends { ends: number }>(held: T[]): Array<Omit<T, 'ends'> & { until: string; seconds_left: number }> {
+    const now = Date.now();
+    return held
+      .filter((entry) => entry.ends > now)
+      .sort((a, b) => a.ends - b.ends)
+      .map(({ ends, ...entry }) => ({ ...entry, until: new Date(ends).toISOString(), seconds_left: Math.ceil((ends - now) / 1000) }));
   }
 
   listConferences(signal?: AbortSignal): Promise<Conference[]> {

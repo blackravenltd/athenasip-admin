@@ -35,7 +35,7 @@ user has none.
 | Manage realms | Create, change and remove realms, their behaviour and their attributes. |
 | Manage subscribers | Create, change and remove a realm's subscribers and their attributes, and look up one's presence. |
 | Manage users | Create, change and remove users and their roles. |
-| Manage cluster | Hang up a live call, remove someone from a conference, and reload the routing scripts of the node the console talks to. |
+| Manage cluster | Hang up a live call, remove someone from a conference, reload the routing scripts of the node the console talks to, and lift a ban for guessing passwords. |
 | Manage trunks | Create, change and remove trunks, conference foci among them, and set their passwords. |
 
 A trunk's password is kept as given, not hashed, so give Manage trunks to as few users as
@@ -79,6 +79,18 @@ The node can do more than the console shows. For the rest, use the admin API
 A realm, subscriber or trunk's `attributes` are replaced whole when given, so the console
 sends them only when they were edited, and then all of them. Its media and key press settings
 go only to a node that has them.
+
+## Guessing passwords
+
+The node bans an address that answers too many SIP sign-in challenges wrongly, and closes a
+SIP address whose password is guessed at too often from anywhere to everyone but the phones
+already signed in as it. Security lists both across the cluster, read every 30 seconds, and
+Manage cluster lifts either, which also forgets the wrong passwords counted. A node that
+started after a ban was made does not have it. The Phone says when its line is shut out and
+for how long.
+
+A realm must be a host name and a subscriber's user an RFC 3261 user part; the console says
+so before sending, and the node refuses anything else.
 
 ## Rate limits
 

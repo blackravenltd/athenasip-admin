@@ -7,6 +7,8 @@ import type {
   Subscriber,
   Call,
   CallRecord,
+  Ban,
+  ClosedAor,
   Conference,
   Presence,
   PresenceSubscription,
@@ -219,6 +221,16 @@ export class HttpAdminApi implements AdminApi {
   }
   async removeConferenceParticipant(uri: string, call: string, signal?: AbortSignal) {
     await this.request<unknown>('DELETE', `/conferences/${segment(uri)}/calls/${segment(call)}`, { signal });
+  }
+
+  listBans(signal?: AbortSignal) { return this.request<Ban[]>('GET', '/security/bans', { signal }); }
+  /** An IPv6 address holds `:`; encoded, it is one segment. */
+  async liftBan(source: string, signal?: AbortSignal) {
+    await this.request<unknown>('DELETE', `/security/bans/${segment(source)}`, { signal });
+  }
+  listClosedAors(signal?: AbortSignal) { return this.request<ClosedAor[]>('GET', '/security/closed-aors', { signal }); }
+  async reopenAor(aor: string, signal?: AbortSignal) {
+    await this.request<unknown>('DELETE', `/security/closed-aors/${segment(aor)}`, { signal });
   }
 
   listTrunks(signal?: AbortSignal) { return this.request<Trunk[]>('GET', '/trunks', { signal }); }

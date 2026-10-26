@@ -494,6 +494,35 @@ export interface Conference {
   participants: ConferenceParticipant[];
 }
 
+/**
+ * An address the node ignores for answering too many Digest challenges
+ * wrongly. Every node holds the bans the others make, so any node's list is
+ * the cluster's, less those made before it started.
+ */
+export interface Ban {
+  source: string;
+  /** The node that banned it. */
+  node: string;
+  /** When this node began to hold it. */
+  since: string;
+  until: string;
+  seconds_left: number;
+}
+
+/**
+ * An address of record whose password was guessed at too often from
+ * anywhere: closed, with a 403 and Retry-After, to every address that has not
+ * lately authenticated as it. Its own phones go on registering.
+ */
+export interface ClosedAor {
+  /** As `sip:user@host`. */
+  aor: string;
+  node: string;
+  since: string;
+  until: string;
+  seconds_left: number;
+}
+
 /** What a trunk's `attributes.focus` says: the trunk is a conference focus for these rooms. */
 export interface FocusAttribute {
   /** A URI whose user part starts with this is a room, such as `conf-`. */

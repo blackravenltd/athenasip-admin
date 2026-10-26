@@ -49,7 +49,9 @@ Without the live flag the bundle talks to the fake. `--no-owner --no-group` keep
 root-owned. The node serves the console at `http://10.35.1.20:8080/` and
 `https://10.35.1.20:8443/` (wss on 8089), with a certificate from the server's snakeoil CA
 (`tls/ca/snakeca.crt` there), which a browser must trust before the phone works. No restart.
-Then tell the server session, and update the hash above.
+Then tell the server session, and update the hash above. From server 5921d41 a node whose
+config leaves out `http.address` answers plain HTTP on 127.0.0.1 only: if the curl above stops
+answering after a server upgrade, check against `https://10.35.1.20:8443/` (`-k`, or `--cacert`).
 
 **The end-to-end runs.** `browser-call.spec.ts` is run by the server's
 `test/interop/browser.sh`, which owns the fixture; on this machine it needs alternate ports
@@ -190,11 +192,6 @@ fake does the same. Rooms need `lua://`.
 
 ## Settings and security
 
-- [ ] **For Tom:** the node publishes `security/auth_failed` {source, aor, reason, node, at}
-      and `security/banned` {source, seconds, node, at} (server 03033e2), and will put
-      `security/#` on `/events` if the console wants it. A live feed on Security shows only
-      what happens while it is open; a list of the bans in force, or lifting one, would need a
-      route the server does not have. Not asked for yet.
 - [ ] Read and edit the server's config, saying what applies live and what needs a restart.
 - [ ] TLS: certificate subject, issuer and expiry, cipher policy, `allow_unencrypted`.
 - [ ] "Terminate all calls" and "Restart server", with confirmation, once the server has them.
